@@ -7,9 +7,10 @@ def get_optimizer(params, conf, model):
 
     if optimizer_choice == 'Adam':
         lr = optimizer_conf['Adam']['lr']
+        weight_decay=optimizer_conf['Adam']['weight_decay']
         print('optimizer:', optimizer_conf['optimizer_choice'], 'lr:', lr)
         print(params)
-        return torch.optim.Adam(params, lr)
+        return torch.optim.Adam(params, lr,weight_decay=weight_decay)
     elif optimizer_choice == 'AdamW':
         lr = optimizer_conf['AdamW']['lr']
         print('optimizer:', optimizer_conf['optimizer_choice'], 'lr:', lr)

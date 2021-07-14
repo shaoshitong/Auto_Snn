@@ -52,7 +52,7 @@ class Avgupdate(object):
 
     def update(self, val, n=1):
         self.sum += val
-        self.avg = (self.avg * self.count + val) / (self.count + n)
+        self.avg = (self.sum) / (self.count + n)
         self.count += n
 
 
@@ -75,8 +75,9 @@ def yaml_config_get(args):
 
 def set_random_seed(conf):
     torch.manual_seed(conf['pytorch_seed'])
-def test(path,data,yaml,criterion_loss,shape=[3,3,3]):
+def test(path,data,yaml,criterion_loss):
     torch.cuda.empty_cache()
+    shape = yaml['shape']
     the_model = merge_layer(set_device(),shape=shape)
     the_model.initiate_data(torch.randn(yaml['parameters']['batch_size'], 28 * 28), 0, yaml['parameters']['epoch'],
                         option=False)
@@ -87,6 +88,9 @@ def test(path,data,yaml,criterion_loss,shape=[3,3,3]):
     all_loss = Avgupdate()
     all_prec1 = Avgupdate()
     all_prec5 = Avgupdate()
+    it_loss = Avgupdate()
+    it_prec1 = Avgupdate()
+    it_prec5 = Avgupdate()
     the_model.eval()
     with torch.no_grad():
         for i, (input, target) in enumerate(data):
@@ -96,19 +100,25 @@ def test(path,data,yaml,criterion_loss,shape=[3,3,3]):
             input.requires_grad_()
             the_model.initiate_data(input,0, yaml['parameters']['epoch'], option=False)
             torch.cuda.synchronize()
-            output, preData = the_model(input)
+            output = the_model(input)
             torch.cuda.synchronize()
             loss = criterion(criterion_loss, output, target)
             prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
             all_loss.update(loss.item())
             all_prec1.update(prec1.item())
             all_prec5.update(prec5.item())
-            if i % 10 == 0:
+            it_loss.update(loss.item())
+            it_prec1.update(prec1.item())
+            it_prec5.update(prec5.item())
+            if i % 100 == 0:
                 print(
-                    "batch_size_num:{} top1:{:.3f}% top5:{:.3f}% loss:{:.3f} time:{}".format(i, prec1.item(),
-                                                                                             prec5.item(),
-                                                                                             loss.item(),
+                    "batch_size_num:{} top1:{:.3f}% top5:{:.3f}% loss:{:.3f} time:{}".format(i,it_prec1.avg
+                                                                                             ,it_prec5.avg,
+                                                                                             it_loss.avg,
                                                                                              batch_time_stamp))
+                it_loss.reset()
+                it_prec1.reset()
+                it_prec5.reset()
         print("====================================>  ths test: top1:{:.3f}% top5:{:.3f}% loss:{:.3f}".format(
             all_prec1.avg,
             all_prec5.avg,
@@ -121,30 +131,41 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
     all_loss = Avgupdate()
     all_prec1 = Avgupdate()
     all_prec5 = Avgupdate()
+    it_loss = Avgupdate()
+    it_prec1 = Avgupdate()
+    it_prec5 = Avgupdate()
     for i, (input, target) in enumerate(data):
         batch_time_stamp = time.strftime("%Y%m%d-%H%M%S")
         input = input.float().to(device)
         target = target.to(device)
         input.requires_grad_()
         model.initiate_data(input, epoch, yaml['parameters']['epoch'], option=False)
-        output, preData = model(input)
+        output = model(input)
         loss = criterion(criterion_loss, output, target)
         model.zero_grad()
         loss.backward()
         # linearSubUpdate(model)
         # parametersgradCheck(model)
         model.subWeightGrad(epoch, yaml['parameters']['epoch'], 1)
-        # parametersgradCheck(model)
         # pd_save(model.three_dim_layer.point_layerg+_module[str(0) + '_' + str(0) + '_' + str(0)].tensor_tau_m1.view(28,-1),"tau_m2/"+str(i))
         optimizer.step()
         prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
         all_loss.update(loss.item())
         all_prec1.update(prec1.item())
         all_prec5.update(prec5.item())
-        if i % 10 == 0:
+        it_loss.update(loss.item())
+        it_prec1.update(prec1.item())
+        it_prec5.update(prec5.item())
+        if i % 100 == 0:
+            # parametersgradCheck(model)
             print(
-                "batch_size_num:{} top1:{:.3f}% top5:{:.3f}% loss:{:.3f} time:{}".format(i, prec1.item(), prec5.item(),
-                                                                                         loss.item(), batch_time_stamp))
+                "batch_size_num:{} top1:{:.3f}% top5:{:.3f}% loss:{:.3f} time:{}".format(i,it_prec1.avg
+                                                                                          ,it_prec5.avg
+                                                                                          ,it_loss.avg
+                                                                                          ,batch_time_stamp))
+            it_loss.reset()
+            it_prec1.reset()
+            it_prec5.reset()
         if isinstance(scheduler, torch.optim.lr_scheduler.CyclicLR):
             scheduler.step()
     print("====================================>  ths epoch {}: top1:{:.3f}% top5:{:.3f}% loss:{:.3f}".format(epoch,
@@ -160,7 +181,7 @@ if __name__ == "__main__":
     torch.cuda.empty_cache()
     yaml = yaml_config_get(args)
     # set_random_seed(yaml)
-    model = merge_layer(set_device(),shape=[3,3,3])
+    model = merge_layer(set_device(),shape=yaml['shape'])
     writer = SummaryWriter()
     rand_transform = get_rand_transform(yaml['transform'])
     mnist_trainset = datasets.MNIST(root='./data', train=True, download=True, transform=rand_transform)
@@ -195,6 +216,6 @@ if __name__ == "__main__":
                     'loss': loss,
                 }, checkpoint_path)
                 path =checkpoint_path
+            if args.test == True:
+                test(path, test_dataloader, yaml, criterion_loss)
         print("best_acc:{:.3f}%".format(best_acc))
-    if args.test==True:
-        test("./output/54_20210704-164542",test_dataloader,yaml,criterion_loss)

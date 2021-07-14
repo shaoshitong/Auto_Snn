@@ -41,8 +41,10 @@ class threshold(torch.autograd.Function):
         grad = erfc_grad * grad_output
         return grad, None
 class Trinomial_operation(object):
-    def __init__(self, max_n):
+    def __init__(self, max_n,tau_m=1.,tau_s=4.):
         self.max_n = max_n
+        self.tau_s=tau_s
+        self.tau_m=tau_m
         self.Trinomial_list()
 
     def Trinomial_list(self):
@@ -54,22 +56,13 @@ class Trinomial_operation(object):
         for i in range(self.max_n):
             for j in range(self.max_n):
                 for k in range(self.max_n):
-                    self.diag_T[i][j][k] = self.diag[i + j + k] / (self.diag[i] * self.diag[j] * self.diag[k])
+                    self.diag_T[i][j][k] =self.diag[i + j + k] / (self.diag[i] * self.diag[j] * self.diag[k])
 
     def get_value(self, i, j, k):
         if i >= self.max_n or j >= self.max_n or k >= self.max_n:
             exit(-1)
         return self.diag_T[i][j][k]
 
-class utilMask(nn.Module):
-    def __init__(self, in_feature, out_feature):
-        super(utilMask, self).__init__()
-        self.in_feature = in_feature
-        self.out_feature = out_feature
-        self.sigmoid = nn.Sigmoid()
-
-    def forward(self, x):
-        return self.sigmoid(x)
 
 
 """
@@ -185,7 +178,7 @@ class axonLimit(torch.autograd.Function):
 
 class point_cul_Layer(nn.Module):
     def __init__(self, in_feature, out_feature, tau_m=4., tau_s=1., grad_small=False, weight_require_grad=False,
-                 weight_rand=False, device=None, STuning=True,grad_lr=0.1):
+                 weight_rand=False, device=None, STuning=True,grad_lr=0.1,p=0.2):
         """
         该模型中任何层当前假定都将高维张量拉伸至一维
         因此输入的张量维度为（batch_size,in_feature）
@@ -207,10 +200,10 @@ class point_cul_Layer(nn.Module):
                                         requires_grad=self.weight_require_grad)
 
         self.gaussbur = guassNet(1, 1, kernel_size=3, requires_grad=True)
-        self.fineTuning = utilMask(in_feature, out_feature)
         self.STuning = STuning
         self.grad_lr = grad_lr
         self.sigma=1
+        self.relu=nn.LeakyReLU(p)
     def forward(self, x,weight):
         x1, x2, x3 ,tensor_reset= x.unbind(dim=-1)
         if self.STuning:
@@ -221,17 +214,15 @@ class point_cul_Layer(nn.Module):
         if self.weight_rand:
             m = self.gaussbur(x.unsqueeze(1).view(x.shape[0], 1, int(math.sqrt(x.shape[1])), -1)).squeeze(1).view(
                 x.shape[0], -1)
-            m = F.relu(m)
+            m = self.relu(m)
             x = m
         return x
-
     def subWeightGrad(self, epoch, epochs, sigma, diag_num, path_num_x, path_num_y, path_num_z):
         # weight = max(.8,float(sigma) * diag_num /( (math.exp(-1. / self.tau_s - 1. / self.tau_m)/3+math.exp(-1. / self.tau_s )/3+math.exp(-1. / self.tau_m )/3)**(path_num )))
         if weight_button == True:
-            weight = float(sigma) * diag_num * (
-                    (math.exp(-1. / self.tau_s - 1. / self.tau_m) ** path_num_z)
-                    * (math.exp(-1. / self.tau_s) ** path_num_y)
-                    * (math.exp(-1. / self.tau_m) ** path_num_x))
+            weight = float(sigma) * diag_num * math.pow((self.tensor_tau_m1.mean().clone().detach().cpu()),path_num_x)\
+                                             * math.pow((self.tensor_tau_s1.mean().clone().detach().cpu()),path_num_y)\
+                                             * math.pow((self.tensor_tau_sm1.mean().clone().detach().cpu()),path_num_z)
         else:
             weight = sigma
         if not weight_button:
@@ -239,14 +230,14 @@ class point_cul_Layer(nn.Module):
         for name, param in self.named_parameters():
             if param.requires_grad == True and param.grad != None:
                 param.grad /= weight
-                if epoch <= epochs // 5:
+                if epoch <= epochs // 4:
                     param.grad.data = param.grad.data.clamp_(-1, 1)
                 else:
                     param.grad.data = param.grad.data.clamp_(-0.1, 0.1)
 
 
 class three_dim_Layer(nn.Module):
-    def __init__(self, shape, device, weight_require_grad=False, weight_rand=False, grad_lr=0.0001):
+    def __init__(self, shape, device, weight_require_grad=False, weight_rand=False, grad_lr=0.0001,p=0.3):
         super(three_dim_Layer, self).__init__()
         """
         x是基于输入
@@ -261,10 +252,10 @@ class three_dim_Layer(nn.Module):
         self.data_y = []
         self.diag_T = Trinomial_operation(max(max(self.x, self.y), self.z))
         self.grad_lr = grad_lr
-
+        self.dropout=nn.Dropout(p)
     def forward(self, x):
         tensor_reset=x
-        tensor_prev = [[x.clone() for i in range(self.y)] for j in range(self.x)]
+        tensor_prev = [[x.clone() for i in range(self.x)] for j in range(self.y)]
         for i in range(self.z):
             for j in range(self.y):
                 for k in range(self.x):
@@ -276,18 +267,19 @@ class three_dim_Layer(nn.Module):
                     else:
                         zz = tensor_prev[j][k]
                     if j == 0:
-                        yy = self.data_y[k]
+                        xx = self.data_x[k]
                     else:
-                        yy = tensor_prev[j - 1][k]
+                        xx = tensor_prev[j - 1][k]
                     if k == 0:
-                        xx = self.data_x[j]
+                        yy = self.data_y[j]
                     else:
-                        xx = tensor_prev[j][k - 1]
-
+                        yy = tensor_prev[j][k - 1]
                     tensor_prev[j][k] = self.point_layer_module[str(i) + '_' + str(j) + '_' + str(k)](
                         torch.stack([xx, yy, zz,tensor_reset], dim=-1),i+j+k)
-                    tensor_reset=tensor_reset if torch.eq(torch.randn(1),torch.zeros(1)).item() else tensor_prev[j][k]
+                    tensor_reset=tensor_reset if torch.ge(torch.randn(1),torch.zeros(1)).item() else tensor_prev[j][k]
                     tensor_prev[j][k] = axonLimit.apply(tensor_prev[j][k])
+                    if i==j and j==k :
+                        tensor_prev[j][k]=self.dropout(tensor_prev[j][k])
         return tensor_prev[-1][-1]
 
     def initiate_data(self, data, epoch=0, epochs=100, require_grad=True, init_option=True):
@@ -344,7 +336,7 @@ class merge_layer(nn.Module):
 
     def forward(self, x):
         x = self.three_dim_layer(x)
-        return self.linear(x), x
+        return self.linear(x)
 
     def initiate_data(self, input, epoch=0, epochs=100, option=False):
         if len(input.shape) != 2:
@@ -366,7 +358,7 @@ class merge_layer(nn.Module):
             self.second = input.numel() / self.first
         self.three_dim_layer.initiate_layer(input.to(self.device))
         self.linear = nn.Linear(int(self.second), classes, bias=True)
-        stdv = 1. / math.sqrt(self.linear.weight.data.size(1) + self.linear.weight.data.size(0))
+        stdv = 6. / math.sqrt(self.linear.weight.data.size(1) + self.linear.weight.data.size(0))
         self.linear.weight.data.uniform_(-stdv, stdv)
         self.linear.bias.data.fill_(0.)
     def subWeightGrad(self, epoch, epochs, sigma=1):
