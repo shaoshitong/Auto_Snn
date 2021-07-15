@@ -4,7 +4,8 @@ experiment_name:
 
 pytorch_seed:
   12
-
+data:
+  cifar10
 parameters:
   # default parameters
   length:
@@ -12,7 +13,7 @@ parameters:
   batch_size:
     64
   epoch:
-    5
+    40
   droupout:
     0.3
   filter_tau_m:
@@ -26,14 +27,14 @@ parameters:
   membrane_filer:
     False
 shape:
-  - 2
-  - 2
-  - 2
+  - 3
+  - 3
+  - 3
 optimizer:
   optimizer_choice:
     'Adam'
   Adam:
-    lr: 0.001
+    lr: 0.02
     weight_decay: 0
   AdamW:
     lr: 0.0001
@@ -54,9 +55,10 @@ scheduler:
     'MultiStepLR'
   MultiStepLR:
     milestones:
-      - 40
+      - 25
+      - 35
     gamma:
-      0.1
+      0.2
   CosineAnnealingWarmRestarts:
     T_0:
       1000

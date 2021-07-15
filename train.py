@@ -13,7 +13,7 @@ import time
 import sys
 from Snn_Auto_master.lib.parameters_check import parametersCheck, linearSubUpdate, parametersNameCheck, \
     parametersgradCheck, pd_save
-from Snn_Auto_master.lib.data_loaders import MNISTDataset, get_rand_transform
+from Snn_Auto_master.lib.data_loaders import MNISTDataset, get_rand_transform, load_data
 from Snn_Auto_master.lib.three_dsnn import merge_layer
 from Snn_Auto_master.lib.optimizer import get_optimizer
 from Snn_Auto_master.lib.scheduler import get_scheduler
@@ -75,15 +75,22 @@ def yaml_config_get(args):
 
 def set_random_seed(conf):
     torch.manual_seed(conf['pytorch_seed'])
-def test(path,data,yaml,criterion_loss):
+
+
+def test(path, data, yaml, criterion_loss):
     torch.cuda.empty_cache()
-    shape = yaml['shape']
-    the_model = merge_layer(set_device(),shape=shape)
-    the_model.initiate_data(torch.randn(yaml['parameters']['batch_size'], 28 * 28), 0, yaml['parameters']['epoch'],
-                        option=False)
-    the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 28 * 28),int(10))
+    the_model = merge_layer(set_device(), shape=yaml['shape'], dropout=yaml['parameters']['droupout'], test=True)
+    if yaml['data'] == 'mnist':
+        the_model.initiate_data(torch.randn(yaml['parameters']['batch_size'], 28 * 28), 0, yaml['parameters']['epoch'],
+                                option=False)
+        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 28 * 28), int(10))
+    elif yaml['data'] == 'cifar10':
+        the_model.initiate_data(torch.randn(yaml['parameters']['batch_size'], 32 * 32 * 3), 0,
+                                yaml['parameters']['epoch'],
+                                option=False)
+        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 32 * 32 * 3), int(10))
     the_model.load_state_dict(torch.load(path)['snn_state_dict'])
-    device=set_device()
+    device = set_device()
     the_model.to(device)
     all_loss = Avgupdate()
     all_prec1 = Avgupdate()
@@ -95,10 +102,15 @@ def test(path,data,yaml,criterion_loss):
     with torch.no_grad():
         for i, (input, target) in enumerate(data):
             batch_time_stamp = time.strftime("%Y%m%d-%H%M%S")
-            input = input.float().to(device)
+            if yaml['data']=='mnist':
+                input = input.float().to(device)
+            elif yaml['data']=='cifar10':
+                input = input.float().to(device).view(input.shape[0],-1)
+            else:
+                raise KeyError()
             target = target.to(device)
             input.requires_grad_()
-            the_model.initiate_data(input,0, yaml['parameters']['epoch'], option=False)
+            the_model.initiate_data(input, 0, yaml['parameters']['epoch'], option=False)
             torch.cuda.synchronize()
             output = the_model(input)
             torch.cuda.synchronize()
@@ -110,10 +122,10 @@ def test(path,data,yaml,criterion_loss):
             it_loss.update(loss.item())
             it_prec1.update(prec1.item())
             it_prec5.update(prec5.item())
-            if i % 100 == 0:
+            if i % 100 == 0 and i != 0:
                 print(
-                    "batch_size_num:{} top1:{:.3f}% top5:{:.3f}% loss:{:.3f} time:{}".format(i,it_prec1.avg
-                                                                                             ,it_prec5.avg,
+                    "batch_size_num:{} top1:{:.3f}% top5:{:.3f}% loss:{:.3f} time:{}".format(i, it_prec1.avg
+                                                                                             , it_prec5.avg,
                                                                                              it_loss.avg,
                                                                                              batch_time_stamp))
                 it_loss.reset()
@@ -136,7 +148,12 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
     it_prec5 = Avgupdate()
     for i, (input, target) in enumerate(data):
         batch_time_stamp = time.strftime("%Y%m%d-%H%M%S")
-        input = input.float().to(device)
+        if yaml['data'] == 'mnist':
+            input = input.float().to(device)
+        elif yaml['data'] == 'cifar10':
+            input = input.float().to(device).view(input.shape[0], -1)
+        else:
+            raise KeyError()
         target = target.to(device)
         input.requires_grad_()
         model.initiate_data(input, epoch, yaml['parameters']['epoch'], option=False)
@@ -156,13 +173,13 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
         it_loss.update(loss.item())
         it_prec1.update(prec1.item())
         it_prec5.update(prec5.item())
-        if i % 100 == 0:
+        if i % 100 == 0 and i != 0:
             # parametersgradCheck(model)
             print(
-                "batch_size_num:{} top1:{:.3f}% top5:{:.3f}% loss:{:.3f} time:{}".format(i,it_prec1.avg
-                                                                                          ,it_prec5.avg
-                                                                                          ,it_loss.avg
-                                                                                          ,batch_time_stamp))
+                "batch_size_num:{} top1:{:.3f}% top5:{:.3f}% loss:{:.3f} time:{}".format(i, it_prec1.avg
+                                                                                         , it_prec5.avg
+                                                                                         , it_loss.avg
+                                                                                         , batch_time_stamp))
             it_loss.reset()
             it_prec1.reset()
             it_prec5.reset()
@@ -181,18 +198,29 @@ if __name__ == "__main__":
     torch.cuda.empty_cache()
     yaml = yaml_config_get(args)
     # set_random_seed(yaml)
-    model = merge_layer(set_device(),shape=yaml['shape'])
+    model = merge_layer(set_device(), shape=yaml['shape'], dropout=yaml['parameters']['droupout'])
     writer = SummaryWriter()
     rand_transform = get_rand_transform(yaml['transform'])
-    mnist_trainset = datasets.MNIST(root='./data', train=True, download=True, transform=rand_transform)
-    mnist_testset = datasets.MNIST(root='./data', train=False, download=True, transform=None)
-    train_data = MNISTDataset(mnist_trainset, max_rate=1, length=yaml['parameters']['length'], flatten=True)
-    train_dataloader = DataLoader(train_data, batch_size=yaml['parameters']['batch_size'], shuffle=True, drop_last=True)
-    test_data = MNISTDataset(mnist_testset, max_rate=1, length=yaml['parameters']['length'], flatten=True)
-    test_dataloader = DataLoader(test_data, batch_size=yaml['parameters']['batch_size'], shuffle=True, drop_last=True)
-    model.initiate_data(torch.randn(yaml['parameters']['batch_size'], 28 * 28), 0, yaml['parameters']['epoch'],
+    if yaml['data'] == 'mnist':
+        mnist_trainset = datasets.MNIST(root='./data', train=True, download=True, transform=rand_transform)
+        mnist_testset = datasets.MNIST(root='./data', train=False, download=True, transform=None)
+        train_data = MNISTDataset(mnist_trainset, max_rate=1, length=yaml['parameters']['length'], flatten=True)
+        train_dataloader = DataLoader(train_data, batch_size=yaml['parameters']['batch_size'], shuffle=True,
+                                      drop_last=True)
+        test_data = MNISTDataset(mnist_testset, max_rate=1, length=yaml['parameters']['length'], flatten=True)
+        test_dataloader = DataLoader(test_data, batch_size=yaml['parameters']['batch_size'], shuffle=True,
+                                     drop_last=True)
+        model.initiate_data(torch.randn(yaml['parameters']['batch_size'], 28 * 28), 0, yaml['parameters']['epoch'],
                             option=False)
-    model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 28 * 28), int(10))
+        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 28 * 28), int(10))
+    elif yaml['data'] == 'cifar10':
+        train_dataloader, test_dataloader = load_data(yaml['parameters']['batch_size'],
+                                                      yaml['parameters']['batch_size'])
+        model.initiate_data(torch.randn(yaml['parameters']['batch_size'], 32 * 32 * 3), 0, yaml['parameters']['epoch'],
+                            option=False)
+        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 32 * 32 * 3), int(10))
+    else:
+        raise KeyError('There is no corresponding dataset')
     params = list(model.parameters())
     params2 = filter(lambda i: i.requires_grad, model.parameters())
     optimizer = get_optimizer(params2, yaml, model)
@@ -206,7 +234,7 @@ if __name__ == "__main__":
             model.train()
             epoch_time_stamp = time.strftime("%Y%m%d-%H%M%S")
             prec1, loss = train(model, optimizer, scheduler, train_dataloader, yaml, j, criterion_loss)
-            checkpoint_path = os.path.join(yaml['output'], str(j) + '_' + epoch_time_stamp+str(best_acc))
+            checkpoint_path = os.path.join(yaml['output'], str(j) + '_' + epoch_time_stamp + str(best_acc))
             if best_acc < prec1:
                 best_acc = prec1
                 torch.save({
@@ -214,8 +242,16 @@ if __name__ == "__main__":
                     'snn_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
                     'loss': loss,
+                }, checkpoint_path + 'best')
+                path = checkpoint_path + 'best'
+            else:
+                torch.save({
+                    'epoch': j,
+                    'snn_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'loss': loss,
                 }, checkpoint_path)
-                path =checkpoint_path
+                path = checkpoint_path
             if args.test == True:
                 test(path, test_dataloader, yaml, criterion_loss)
         print("best_acc:{:.3f}%".format(best_acc))
