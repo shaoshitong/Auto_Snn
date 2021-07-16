@@ -10,12 +10,12 @@ from torch.autograd.variable import Variable
 import torch.nn.init as init
 import copy
 from Snn_Auto_master.lib.plt_analyze import vis_img
-from matplotlib import pyplot as plt
 from Snn_Auto_master.lib.parameters_check import pd_save, parametersgradCheck
 import math
 import pandas as pd
 from torch.nn import Parameter
 from omegaconf import OmegaConf
+import matplotlib.pyplot as plt
 def yaml_config_get():
     conf = OmegaConf.load('./train.yaml')
     return conf
@@ -38,7 +38,7 @@ class threshold(torch.autograd.Function):
         if dataoption=='mnist':
             output = torch.max(torch.tensor(0.0, device=output.device), torch.sign(output - 0.5))
         elif dataoption=='cifar10':
-            output = torch.max(torch.tensor(0.0, device=output.device), torch.sign(output))
+            output = torch.max(torch.tensor(0.0, device=output.device), torch.sign(output-0.977))
         else:
             raise KeyError()
         return output
@@ -50,10 +50,9 @@ class threshold(torch.autograd.Function):
         if dataoption=='mnist':
             exponent = -torch.pow((0.5 - input), 2) / (2.0 * sigma ** 2)
         elif dataoption=='cifar10':
-            exponent = -torch.pow((input), 2) / (2.0 * sigma ** 2)
+            exponent = -torch.pow((input-0.977), 2) / (2.0 * sigma ** 2)
         else:
             raise KeyError()
-        exponent = -torch.pow((0.5 - input), 2) / (2.0 * sigma ** 2)
         exp = torch.exp(exponent)
         erfc_grad = exp / (2.506628 * sigma)
         grad = erfc_grad * grad_output
@@ -148,6 +147,7 @@ class guassNet(nn.Module):
 """
 
 
+
 def DiffInitial(data, shape, in_feature, out_feature, group=1):
     """
     K_{GX} = [-1 0 1 ; -2 0 2 ; -1 0 1], K_{GY} = {-1 -2 -1 ; 0 0 0 ; 1 2 1}
@@ -169,7 +169,7 @@ def DiffInitial(data, shape, in_feature, out_feature, group=1):
     if dataoption=='mnist':
         kernel_gauss = guassNet(1, 1, kernel_size=5, requires_grad=False).cuda()
     elif dataoption=='cifar10':
-        kernel_gauss = guassNet(3, 3, kernel_size=5, requires_grad=False,group=1).cuda()
+        kernel_gauss = guassNet(3, 3, kernel_size=5, requires_grad=False,group=3).cuda()
     else:
         raise KeyError("error shape")
     tmp = kernel_gauss(tmp).cuda()
@@ -182,13 +182,16 @@ def DiffInitial(data, shape, in_feature, out_feature, group=1):
                        groups=group,
                        padding=(3 - 1) // 2)
     grad = -torch.sqrt(tmp_col ** 2 + tmp_row ** 2).float()
-    min = torch.min(grad)
-    max = torch.max(grad)
     if dataoption=='mnist':
-        return ((grad - min) / (max - min)).view_as(data)
+        grad = grad.view(-1, 1,28*28)
+        min, _ = torch.min(grad, dim=-1, keepdim=True)
+        max, _ = torch.max(grad, dim=-1, keepdim=True)
+        return ((grad - min) / (max - min)).view_as(data),max,min
     elif dataoption=='cifar10':
         grad=grad.view(-1,3,32*32)
-        return ((grad-grad.mean(dim=-1,keepdim=True))/(grad.std(dim=-1,keepdim=True)+1e-6)).view_as(data)
+        mean=grad.mean(dim=-1, keepdim=True)
+        std=grad.std(dim=-1,keepdim=True)
+        return ((grad-mean)/(std+1e-6)).view_as(data),mean,std
 
 
 class axonLimit(torch.autograd.Function):
@@ -249,6 +252,7 @@ class point_cul_Layer(nn.Module):
             self.gaussbur = guassNet(1, 1, kernel_size=3, requires_grad=True)
         elif dataoption=='cifar10':
             self.gaussbur = guassNet(3, 3, kernel_size=3, requires_grad=True)
+            self.bn1=nn.BatchNorm2d(3)
         self.STuning = STuning
         self.grad_lr = grad_lr
         self.sigma = 1
@@ -270,7 +274,7 @@ class point_cul_Layer(nn.Module):
                 m = self.gaussbur(x.unsqueeze(1).view(x.shape[0], 1, int(math.sqrt(x.shape[1])), -1)).squeeze(1).view(
                     x.shape[0], -1)
             elif dataoption=='cifar10':
-                m = self.gaussbur(x.view(x.shape[0], 3, int(math.sqrt(x.shape[1]//3)), -1)).view(
+                m = self.bn1(self.gaussbur(x.view(x.shape[0], 3, int(math.sqrt(x.shape[1]//3)), -1))).view(
                     x.shape[0], -1)
             else:
                 raise KeyError()
@@ -313,6 +317,7 @@ class three_dim_Layer(nn.Module):
         self.diag_T = Trinomial_operation(max(max(self.x, self.y), self.z))
         self.grad_lr = grad_lr
         self.dropout = nn.Dropout(p)
+
         self.test=test
     def forward(self, x):
         tensor_reset = x
@@ -340,19 +345,46 @@ class three_dim_Layer(nn.Module):
                     tensor_reset = tensor_reset if torch.ge(torch.randn(1), torch.zeros(1)).item() else tensor_prev[j][
                         k]
                     tensor_prev[j][k] = axonLimit.apply(tensor_prev[j][k])
-                    if np.random.rand(1) > np.array([.7]) and k != self.x - 1 and j != self.y - 1 and i != self.z - 1 and self.test==False:
+                    if np.random.rand(1) > np.array([.6666666]) and k != self.x - 1 and j != self.y - 1 and i != self.z - 1 and self.test==False:
                         tensor_prev[j][k] = self.dropout(tensor_prev[j][k])
         return tensor_prev[-1][-1]
 
-    def initiate_data(self, data, epoch=0, epochs=100, require_grad=True, init_option=True):
+    def initiate_data(self, data, epoch=0, epochs=100, require_grad=True, init_option=True,real_img=False):
         self.data_x = []
         self.data_y = []
         if dataoption=='mnist':
-            grad_data = lambda x: Parameter(DiffInitial(x, [64, 28, 28], 1, 1), requires_grad=require_grad)
+            grad_data = lambda x: Parameter(DiffInitial(x, [data.shape[0], 28, 28], 1, 1)[0], requires_grad=require_grad)
         elif dataoption=='cifar10':
-            grad_data = lambda x: Parameter(DiffInitial(x, [64,3, 32, 32], 3, 3,group=1), requires_grad=require_grad)
+            grad_data = lambda x: Parameter(DiffInitial(x, [data.shape[0],3, 32, 32], 3, 3,group=3)[0], requires_grad=require_grad)
         else:
             raise KeyError('NOT THIS DATA')
+        """plt
+        if real_img==True:
+            plt.subplot(121)
+            a = data.clone().detach().cpu()[0, :].view(3,32*32).permute(1,0)
+            a = ((a - torch.min(a, dim=0, keepdim=True)[0]) / (
+                        torch.max(a, dim=0, keepdim=True)[0] - torch.min(a, dim=0, keepdim=True)[0])).view(32, 32, 3)*255
+            a=a.int()-+
+                        plt.imshow(a.numpy(), 'viridis')
+            plt.xticks([])
+            plt.yticks([])
+            plt.axis('off')
+
+            plt.subplot(122)
+            grad,mean,std=DiffInitial(data, [64, 3, 32, 32], 3, 3, group=1)
+            a = (grad*std+mean).clone().detach().cpu()[0, :].view(3,32*32).permute(1,0)
+            a = ((a - torch.min(a, dim=0, keepdim=True)[0]) / (
+                        torch.max(a, dim=0, keepdim=True)[0] - torch.min(a, dim=0, keepdim=True)[0])).view(32, 32, 3)*255
+            a=a.int()
+            plt.imshow(a.numpy(), 'viridis')
+            plt.xticks([])
+            plt.yticks([])
+            plt.axis('off')
+            plt.savefig("grad.png")
+            plt.show()
+            exit()
+        """
+
         for i in range(self.y):
             self.data_y.append(
                 Parameter(data=torch.rand(data.shape, dtype=torch.float32).to(self.device) / math.sqrt(1.),
@@ -406,7 +438,7 @@ class merge_layer(nn.Module):
         x = self.three_dim_layer(x)
         return self.linear(x)
 
-    def initiate_data(self, input, epoch=0, epochs=100, option=False):
+    def initiate_data(self, input, epoch=0, epochs=100, option=False,real_img=False):
         if len(input.shape) != 2:
             input = input.view(input.shape[0], -1)
             self.first = input.shape[0]
@@ -414,7 +446,7 @@ class merge_layer(nn.Module):
         else:
             self.first = input.shape[0]
             self.second = input.numel() / self.first
-        self.three_dim_layer.initiate_data(input.to(self.device), epoch, epochs, True, option)
+        self.three_dim_layer.initiate_data(input.to(self.device), epoch, epochs, True, option,real_img=real_img)
 
     def initiate_layer(self, input, classes):
         if len(input.shape) != 2:

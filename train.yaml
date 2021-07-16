@@ -5,7 +5,7 @@ experiment_name:
 pytorch_seed:
   12
 data:
-  cifar10
+  mnist
 parameters:
   # default parameters
   length:
@@ -27,14 +27,14 @@ parameters:
   membrane_filer:
     False
 shape:
-  - 3
-  - 3
-  - 3
+  - 2
+  - 2
+  - 2
 optimizer:
   optimizer_choice:
     'Adam'
   Adam:
-    lr: 0.02
+    lr: 0.01
     weight_decay: 0
   AdamW:
     lr: 0.0001
