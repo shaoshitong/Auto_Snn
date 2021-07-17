@@ -160,6 +160,29 @@ class guassNet(nn.Module):
 
 """
 高斯卷积
+输出卷积核大小:output=[(input+padding*2-kernel_size)/stride]+1
+group是需要根据通道进行调整的，三通道的卷积操作如果group为1则虽然输出三通道，但其实三通道信息是相同的，当然根据group能够做到通道之间的信息交互
+如果是反卷积则output=[(input-1)*stride+kernel_size-padding*2]
+如果需要自己实现卷积操作则需要通过torch.unfold将input进行分片，对于卷积操作中的卷积核而言，其尺寸为（输出通道数，输入通道数，卷积核长，卷积核宽）
+对于输入数据而言通常为（数据批次数，特征数，点状图高，点状图宽），对于每个输出通道数维度，其（输入通道数，卷积核长，卷积核宽）和（特征数，点状图高，点状图宽）进行卷积操作，然后将输出通道数维度的结果进行拼接得到输出
+其中特别要注意group,如果group不为一，那么其实卷积核尺寸为(输出通道数，输入通道数/groups,卷积核长，卷积核宽)，这时候其实卷积操作对通道的整合性减弱，而对输入信息所具备的特征信息增强
+以下为实现卷积操作的函数：
+def conv2d(x, weight, bias, stride, pad): 
+    n, c, h_in, w_in = x.shape
+    d, c, k, j = weight.shape
+    x_pad = torch.zeros(n, c, h_in+2*pad, w_in+2*pad)   # 对输入进行补零操作
+    if pad>0:
+        x_pad[:, :, pad:-pad, pad:-pad] = x
+    else:
+        x_pad = x
+
+    x_pad = x_pad.unfold(2, k, stride)
+    x_pad = x_pad.unfold(3, j, stride)        # 按照滑动窗展开
+    out = torch.einsum(                          # 按照滑动窗相乘，
+        'nchwkj,dckj->ndhw',                    # 并将所有输入通道卷积结果累加
+        x_pad, weight)
+    out = out + bias.view(1, -1, 1, 1)          # 添加偏置值
+    return out
 """
 
 
@@ -497,7 +520,7 @@ class merge_layer(nn.Module):
 
     def forward(self, x):
         x = self.three_dim_layer(x)
-        return self.linear(x)
+        return self.linear2(F.leaky_relu(self.linear1(x)))
 
     def initiate_data(self, input, epoch=0, epochs=100, option=False,real_img=False):
         if len(input.shape) != 2:
@@ -518,10 +541,15 @@ class merge_layer(nn.Module):
             self.first = input.shape[0]
             self.second = input.numel() / self.first
         self.three_dim_layer.initiate_layer(input.to(self.device),tau_m=tau_m,tau_s=tau_s,use_gauss=use_gauss)
-        self.linear = nn.Linear(int(self.second), classes, bias=True)
-        stdv = 6. / math.sqrt(self.linear.weight.data.size(1) + self.linear.weight.data.size(0))
-        self.linear.weight.data.uniform_(-stdv, stdv)
-        self.linear.bias.data.fill_(0.)
+        self.tmp_channel=int(math.sqrt(self.second*classes))
+        self.linear1 = nn.Linear(int(self.second), self.tmp_channel, bias=True)
+        self.linear2 = nn.Linear(self.tmp_channel, classes, bias=True)
+        stdv = 6. / math.sqrt(self.linear2.weight.data.size(1) + self.linear2.weight.data.size(0))
+        self.linear2.weight.data.uniform_(-stdv, stdv)
+        self.linear2.bias.data.fill_(0.)
+        stdv = 1. / math.sqrt(self.linear1.weight.data.size(1) + self.linear1.weight.data.size(0))
+        self.linear1.weight.data.uniform_(-stdv, stdv)
+        self.linear1.bias.data.fill_(0.)
 
     def subWeightGrad(self, epoch, epochs, sigma=1):
         self.three_dim_layer.subWeightGrad(epoch, epochs, sigma)
