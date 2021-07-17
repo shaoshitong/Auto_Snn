@@ -5,9 +5,11 @@ experiment_name:
 pytorch_seed:
   12
 data:
-  mnist
+  fashionmnist
 parameters:
   # default parameters
+  sigma:
+    0.1
   length:
     25
   batch_size:

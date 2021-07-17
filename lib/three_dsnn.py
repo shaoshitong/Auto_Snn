@@ -39,6 +39,8 @@ class threshold(torch.autograd.Function):
             output = torch.max(torch.tensor(0.0, device=output.device), torch.sign(output))
         elif dataoption=='cifar10':
             output = torch.max(torch.tensor(0.0, device=output.device), torch.sign(output))
+        elif dataoption=='fashionmnist':
+            output = torch.max(torch.tensor(0.0, device=output.device), torch.sign(output))
         else:
             raise KeyError()
         return output
@@ -50,6 +52,8 @@ class threshold(torch.autograd.Function):
         if dataoption=='mnist':
             exponent = -torch.pow((input), 2) / (2.0 * sigma ** 2)
         elif dataoption=='cifar10':
+            exponent = -torch.pow((input), 2) / (2.0 * sigma ** 2)
+        elif dataoption=='fashionmnist':
             exponent = -torch.pow((input), 2) / (2.0 * sigma ** 2)
         else:
             raise KeyError()
@@ -89,15 +93,20 @@ class Trinomial_operation(object):
 
 
 class guassNet(nn.Module):
-    def __init__(self, in_channel, out_channel, kernel_size=5, sigma=1, group=1, requires_grad=True):
+    def __init__(self, in_channel, out_channel, kernel_size=5, sigma=1., group=1, requires_grad=True,use_gauss=True):
         super(guassNet, self).__init__()
         self.in_channel = in_channel
         self.out_channel = out_channel
         self.kernel_size = kernel_size
         self.sigma = sigma
         self.group = group
+        self.use_gauss=use_gauss
         self.requires_grad = requires_grad
-        self.gauss_kernel = self._gauss2D(self.kernel_size, self.sigma, self.group, self.in_channel,
+        if use_gauss==True:
+            self.gauss_kernel = self._gauss2D(self.kernel_size, self.sigma, self.group, self.in_channel,
+                                          self.out_channel, self.requires_grad)
+        else:
+            self.gauss_kernel = self._conv2D(self.kernel_size, self.sigma, self.group, self.in_channel,
                                           self.out_channel, self.requires_grad)
         self.gauss_bias = Parameter(torch.zeros(self.in_channel), requires_grad=self.requires_grad)
         self.GaussianBlur = lambda x: F.conv1d(x, weight=self.gauss_kernel, bias=self.gauss_bias, stride=1,
@@ -140,6 +149,13 @@ class guassNet(nn.Module):
         kernel = ((kernel / sum_val).unsqueeze(0)).repeat(out_channel, 1, 1)
         kernel = Parameter((kernel.unsqueeze(0)).repeat(in_channel, 1, 1, 1), requires_grad == requires_grad)
         return kernel
+    def _conv2D(self, kernel_size, sigma, group, in_channel, out_channel, requires_grad=False,):
+        kernel=torch.normal(.0,sigma,(kernel_size,kernel_size)).float()
+        kernel.clamp_(-2*sigma,2*sigma)
+        out_channel = out_channel // group
+        kernel = ((kernel).unsqueeze(0)).repeat(out_channel, 1, 1)
+        kernel = Parameter((kernel.unsqueeze(0)).repeat(in_channel, 1, 1, 1), requires_grad == requires_grad)
+        return kernel
 
 
 """
@@ -170,6 +186,8 @@ def DiffInitial(data, shape, in_feature, out_feature, group=1):
         kernel_gauss = guassNet(1, 1, kernel_size=5, requires_grad=False).cuda()
     elif dataoption=='cifar10':
         kernel_gauss = guassNet(3, 3, kernel_size=5, requires_grad=False,group=3).cuda()
+    elif dataoption=='fashionmnist':
+        kernel_gauss = guassNet(1, 1, kernel_size=5, requires_grad=False).cuda()
     else:
         raise KeyError("error shape")
     tmp = kernel_gauss(tmp).cuda()
@@ -196,6 +214,13 @@ def DiffInitial(data, shape, in_feature, out_feature, group=1):
         mean=grad.mean(dim=-1, keepdim=True)
         std=grad.std(dim=-1,keepdim=True)
         return ((grad-mean)/(std+1e-6)).view_as(data),mean,std
+    elif dataoption=='fashionmnist':
+        grad = grad.view(-1, 1, 28 * 28)
+        mean = grad.mean(dim=-1, keepdim=True)
+        std = grad.std(dim=-1, keepdim=True)
+        return ((grad - mean) / (std + 1e-6)).view_as(data), mean, std
+    else:
+        raise KeyError("not have this dataset")
 
 
 class axonLimit(torch.autograd.Function):
@@ -208,6 +233,8 @@ class axonLimit(torch.autograd.Function):
             return torch.min(torch.max(v1, torch.Tensor([-1.]).cuda()), torch.Tensor([1.]).cuda())
         elif dataoption=='cifar10':
             return torch.min(torch.max(v1, torch.Tensor([-.7]).cuda()), torch.Tensor([.7]).cuda())
+        elif dataoption=='fashionmnist':
+            return torch.min(torch.max(v1, torch.Tensor([-1.]).cuda()), torch.Tensor([1.]).cuda())
         else:
             raise KeyError()
 
@@ -226,11 +253,19 @@ class axonLimit(torch.autograd.Function):
             exponent = torch.where((input > .7) | (input < -.7),
                                    (torch.exp(-((input.float()) ** 2) / 2) / 2.506628).cuda(), exponent)
             return exponent * grad_output
+        elif dataoption=='fashionmnist':
+            exponent = torch.where((input > -1.1) & (input < 1.1), torch.ones_like(input).cuda(),
+                                   torch.zeros_like(input).cuda())
+            exponent = torch.where((input > 1.1) | (input < -1.1),
+                                   (torch.exp(-((input.float()) ** 2) / 2) / 2.506628).cuda(), exponent)
+            return exponent * grad_output
+        else:
+            raise KeyError('not have this dataset')
 
 
 class point_cul_Layer(nn.Module):
     def __init__(self, in_feature, out_feature, tau_m=4., tau_s=1., grad_small=False, weight_require_grad=False,
-                 weight_rand=False, device=None, STuning=True, grad_lr=0.1, p=0.2):
+                 weight_rand=False, device=None, STuning=True, grad_lr=0.1, p=0.2,use_gauss=True):
         """
         该模型中任何层当前假定都将高维张量拉伸至一维
         因此输入的张量维度为（batch_size,in_feature）
@@ -253,11 +288,23 @@ class point_cul_Layer(nn.Module):
         self.activation = [Activation(["elu"], transform=False), Activation(["negative"], transform=False),
                            Activation(["leakyrelu"], transform=False)]
         if dataoption=='mnist':
-            self.gaussbur = guassNet(1, 1, kernel_size=3, requires_grad=True)
+            if use_gauss==True:
+                self.gaussbur = guassNet(1, 1, kernel_size=3, requires_grad=True)
+            else:
+                self.gaussbur= guassNet(1, 1, kernel_size=3, requires_grad=True,use_gauss=False)
             self.bn1 = nn.BatchNorm2d(1)
         elif dataoption=='cifar10':
-            self.gaussbur = guassNet(3, 3, kernel_size=3, requires_grad=True)
+            if use_gauss==True:
+                self.gaussbur= guassNet(1, 1, kernel_size=3, requires_grad=True)
+            else:
+                self.gaussbur = guassNet(3, 3, kernel_size=3, requires_grad=True,use_gauss=False)
             self.bn1=nn.BatchNorm2d(3)
+        elif dataoption == 'fashionmnist':
+            if use_gauss == True:
+                self.gaussbur = guassNet(1, 1, kernel_size=3, requires_grad=True)
+            else:
+                self.gaussbur = guassNet(1, 1, kernel_size=3, requires_grad=True, use_gauss=False)
+            self.bn1 = nn.BatchNorm2d(1)
         self.STuning = STuning
         self.grad_lr = grad_lr
         self.sigma = 1
@@ -281,8 +328,11 @@ class point_cul_Layer(nn.Module):
             elif dataoption=='cifar10':
                 m = self.bn1(self.gaussbur(x.view(x.shape[0], 3, int(math.sqrt(x.shape[1]//3)), -1))).view(
                     x.shape[0], -1)
+            elif dataoption=='fashionmnist':
+                m = self.bn1(self.gaussbur(x.unsqueeze(1).view(x.shape[0], 1, int(math.sqrt(x.shape[1])), -1))).view(
+                    x.shape[0], -1)
             else:
-                raise KeyError()
+                raise KeyError('not have this dataset')
             x = m
         return x
 
@@ -306,7 +356,7 @@ class point_cul_Layer(nn.Module):
 
 
 class three_dim_Layer(nn.Module):
-    def __init__(self, shape, device, weight_require_grad=False, weight_rand=False, grad_lr=0.0001, p=0.3,test=False):
+    def __init__(self, shape, device, weight_require_grad=False, weight_rand=False, grad_lr=0.0001, p=0.3,test=False,use_gauss=True):
         super(three_dim_Layer, self).__init__()
         """
         x是基于输入
@@ -315,6 +365,7 @@ class three_dim_Layer(nn.Module):
         """
         self.x, self.y, self.z = shape
         self.device = device
+        self.use_gauss=use_gauss
         self.weight_require_grad = weight_require_grad
         self.weight_rand = weight_rand
         self.data_x = []
@@ -362,6 +413,8 @@ class three_dim_Layer(nn.Module):
             grad_data = lambda x: Parameter(DiffInitial(x, [data.shape[0], 28, 28], 1, 1)[0], requires_grad=require_grad)
         elif dataoption=='cifar10':
             grad_data = lambda x: Parameter(DiffInitial(x, [data.shape[0],3, 32, 32], 3, 3,group=3)[0], requires_grad=require_grad)
+        elif dataoption=='fashionmnist':
+            grad_data = lambda x: Parameter(DiffInitial(x, [data.shape[0], 28, 28], 1, 1)[0], requires_grad=require_grad)
         else:
             raise KeyError('NOT THIS DATA')
         """plt
@@ -398,7 +451,8 @@ class three_dim_Layer(nn.Module):
 
         self.data_x = [data.to(self.device) for i in range(self.x)]
 
-    def initiate_layer(self, data,tau_m=4.,tau_s=1.):
+    def initiate_layer(self, data,tau_m=4.,tau_s=1.,use_gauss=True):
+        self.use_gauss=use_gauss
         self.point_layer = {}
         for i in range(self.z):
             for j in range(self.y):
@@ -414,7 +468,7 @@ class three_dim_Layer(nn.Module):
                                                                                              # bool((i+j+k)%2),False
                                                                                              STuning=bool(
                                                                                                  (i + j + k) % 2),
-                                                                                             grad_lr=self.grad_lr)
+                                                                                             grad_lr=self.grad_lr,use_gauss=self.use_gauss)
         self.point_layer_module = nn.ModuleDict(self.point_layer)
 
     def subWeightGrad(self, epoch, epochs, sigma=1):
@@ -455,7 +509,7 @@ class merge_layer(nn.Module):
             self.second = input.numel() / self.first
         self.three_dim_layer.initiate_data(input.to(self.device), epoch, epochs, True, option,real_img=real_img)
 
-    def initiate_layer(self, input, classes,tau_m=4.,tau_s=1.):
+    def initiate_layer(self, input, classes,tau_m=4.,tau_s=1.,use_gauss=True):
         if len(input.shape) != 2:
             input = input.view(input.shape[0], -1)
             self.first = input.shape[0]
@@ -463,7 +517,7 @@ class merge_layer(nn.Module):
         else:
             self.first = input.shape[0]
             self.second = input.numel() / self.first
-        self.three_dim_layer.initiate_layer(input.to(self.device),tau_m=tau_m,tau_s=tau_s)
+        self.three_dim_layer.initiate_layer(input.to(self.device),tau_m=tau_m,tau_s=tau_s,use_gauss=use_gauss)
         self.linear = nn.Linear(int(self.second), classes, bias=True)
         stdv = 6. / math.sqrt(self.linear.weight.data.size(1) + self.linear.weight.data.size(0))
         self.linear.weight.data.uniform_(-stdv, stdv)
