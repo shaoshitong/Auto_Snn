@@ -18,9 +18,10 @@ class Activation(nn.Module):
         self.requires_grad=require_grad
         self.transform=transform
         self.relu1=nn.LeakyReLU(LReLU)
+        self.lrelu=0.6
         self.relu2=nn.ReLU()
         self.relu3=nn.ELU()
-        self.relu4=nn.LeakyReLU(0.8)
+        self.relu4=nn.LeakyReLU(LReLU)
         self.relu5=nn.Hardtanh()
         self.relu6=nn.Sigmoid()
     def forward(self,x):
@@ -33,8 +34,8 @@ class Activation(nn.Module):
             x=self.relu3(x)
         if 'negative' in nDict:
             x=-self.relu4(-x)
-        if 'relu' in nDict:
-            x=self.relu2(x)
+        if 'tworelu' in nDict:
+            x=self.relu2(x)*(self.lrelu)-self.relu2(-x)*(self.lrelu)
         if 'leakyrelu' in nDict:
             x=self.relu1(x)
         if self.transform==True:

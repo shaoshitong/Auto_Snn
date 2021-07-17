@@ -76,19 +76,77 @@ def yaml_config_get(args):
 def set_random_seed(conf):
     torch.manual_seed(conf['pytorch_seed'])
 
+def test2(model, data, yaml, criterion_loss):
+    the_model = model
+    the_model.settest(True)
+    if yaml['data'] == 'mnist':
+        the_model.initiate_data(torch.randn(yaml['parameters']['batch_size'], 28 * 28 * 1), 0,
+                                yaml['parameters']['epoch'],
+                                option=False)
+    elif yaml['data'] == 'cifar10':
+        the_model.initiate_data(torch.randn(yaml['parameters']['batch_size'], 32 * 32 * 3), 0,
+                                yaml['parameters']['epoch'],
+                                option=False)
+    device = set_device()
+    the_model.to(device)
+    all_loss = Avgupdate()
+    all_prec1 = Avgupdate()
+    all_prec5 = Avgupdate()
+    it_loss = Avgupdate()
+    it_prec1 = Avgupdate()
+    it_prec5 = Avgupdate()
+    the_model.eval()
+    with torch.no_grad():
+        for i, (input, target) in enumerate(data):
+            batch_time_stamp = time.strftime("%Y%m%d-%H%M%S")
+            if yaml['data'] == 'mnist':
+                input = input.float().to(device)
+            elif yaml['data'] == 'cifar10':
+                input = input.float().to(device).view(input.shape[0], -1)
+            else:
+                raise KeyError()
+            target = target.to(device)
+            input.requires_grad_()
+            the_model.initiate_data(input, 0, yaml['parameters']['epoch'], option=False)
+            torch.cuda.synchronize()
+            output = the_model(input)
+            torch.cuda.synchronize()
+            loss = criterion(criterion_loss, output, target)
+            prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
+            all_loss.update(loss.item())
+            all_prec1.update(prec1.item())
+            all_prec5.update(prec5.item())
+            it_loss.update(loss.item())
+            it_prec1.update(prec1.item())
+            it_prec5.update(prec5.item())
+            if i % 100 == 0 and i != 0:
+                print(
+                    "batch_size_num:{} top1:{:.3f}% top5:{:.3f}% loss:{:.3f} time:{}".format(i, it_prec1.avg
+                                                                                             , it_prec5.avg,
+                                                                                             it_loss.avg,
+                                                                                             batch_time_stamp))
+                it_loss.reset()
+                it_prec1.reset()
+                it_prec5.reset()
+        print("====================================>  ths test: top1:{:.3f}% top5:{:.3f}% loss:{:.3f}".format(
+            all_prec1.avg,
+            all_prec5.avg,
+            all_loss.avg))
+
 
 def test(path, data, yaml, criterion_loss):
     torch.cuda.empty_cache()
     the_model = merge_layer(set_device(), shape=yaml['shape'], dropout=yaml['parameters']['droupout'], test=True)
     if yaml['data'] == 'mnist':
-        the_model.initiate_data(torch.randn(yaml['parameters']['batch_size'], 28 * 28), 0, yaml['parameters']['epoch'],
+        the_model.initiate_data(torch.randn(yaml['parameters']['batch_size'], 28 * 28 * 1), 0,
+                                yaml['parameters']['epoch'],
                                 option=False)
-        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 28 * 28), int(10))
+        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 28 * 28 * 1), int(10),tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'])
     elif yaml['data'] == 'cifar10':
         the_model.initiate_data(torch.randn(yaml['parameters']['batch_size'], 32 * 32 * 3), 0,
                                 yaml['parameters']['epoch'],
                                 option=False)
-        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 32 * 32 * 3), int(10))
+        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 32 * 32 * 3), int(10),tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'])
     the_model.load_state_dict(torch.load(path)['snn_state_dict'])
     device = set_device()
     the_model.to(device)
@@ -102,10 +160,10 @@ def test(path, data, yaml, criterion_loss):
     with torch.no_grad():
         for i, (input, target) in enumerate(data):
             batch_time_stamp = time.strftime("%Y%m%d-%H%M%S")
-            if yaml['data']=='mnist':
+            if yaml['data'] == 'mnist':
                 input = input.float().to(device)
-            elif yaml['data']=='cifar10':
-                input = input.float().to(device).view(input.shape[0],-1)
+            elif yaml['data'] == 'cifar10':
+                input = input.float().to(device).view(input.shape[0], -1)
             else:
                 raise KeyError()
             target = target.to(device)
@@ -146,6 +204,7 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
     it_loss = Avgupdate()
     it_prec1 = Avgupdate()
     it_prec5 = Avgupdate()
+    model.settest(False)
     for i, (input, target) in enumerate(data):
         batch_time_stamp = time.strftime("%Y%m%d-%H%M%S")
         if yaml['data'] == 'mnist':
@@ -156,7 +215,7 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
             raise KeyError()
         target = target.to(device)
         input.requires_grad_()
-        model.initiate_data(input, epoch, yaml['parameters']['epoch'], option=False,real_img=True)
+        model.initiate_data(input, epoch, yaml['parameters']['epoch'], option=False, real_img=True)
         output = model(input)
         loss = criterion(criterion_loss, output, target)
         model.zero_grad()
@@ -198,8 +257,8 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
 if __name__ == "__main__":
     torch.cuda.empty_cache()
     yaml = yaml_config_get(args)
-    # set_random_seed(yaml)
-    model = merge_layer(set_device(), shape=yaml['shape'], dropout=yaml['parameters']['droupout'])
+    set_random_seed(yaml)
+    model = merge_layer(set_device(), shape=yaml['shape'], dropout=yaml['parameters']['droupout'],test=False)
     writer = SummaryWriter()
     rand_transform = get_rand_transform(yaml['transform'])
     if yaml['data'] == 'mnist':
@@ -207,19 +266,21 @@ if __name__ == "__main__":
         mnist_testset = datasets.MNIST(root='./data', train=False, download=True, transform=None)
         train_data = MNISTDataset(mnist_trainset, max_rate=1, length=yaml['parameters']['length'], flatten=True)
         train_dataloader = DataLoader(train_data, batch_size=yaml['parameters']['batch_size'], shuffle=True,
+                                      num_workers=4,
                                       drop_last=True)
         test_data = MNISTDataset(mnist_testset, max_rate=1, length=yaml['parameters']['length'], flatten=True)
         test_dataloader = DataLoader(test_data, batch_size=yaml['parameters']['batch_size'], shuffle=True,
+                                     num_workers=4,
                                      drop_last=True)
-        model.initiate_data(torch.randn(yaml['parameters']['batch_size'], 28 * 28), 0, yaml['parameters']['epoch'],
+        model.initiate_data(torch.randn(yaml['parameters']['batch_size'], 28 * 28 * 1), 0, yaml['parameters']['epoch'],
                             option=False)
-        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 28 * 28), int(10))
+        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 28 * 28 * 1), int(10),tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'])
     elif yaml['data'] == 'cifar10':
         train_dataloader, test_dataloader = load_data(yaml['parameters']['batch_size'],
                                                       yaml['parameters']['batch_size'])
         model.initiate_data(torch.randn(yaml['parameters']['batch_size'], 32 * 32 * 3), 0, yaml['parameters']['epoch'],
                             option=False)
-        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 32 * 32 * 3), int(10))
+        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 32 * 32 * 3), int(10),tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'])
     else:
         raise KeyError('There is no corresponding dataset')
     params = list(model.parameters())
@@ -254,5 +315,5 @@ if __name__ == "__main__":
                 }, checkpoint_path)
                 path = checkpoint_path
             if args.test == True:
-                test(path, test_dataloader, yaml, criterion_loss)
+                test2(model, test_dataloader, yaml, criterion_loss)
         print("best_acc:{:.3f}%".format(best_acc))

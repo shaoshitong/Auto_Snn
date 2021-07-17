@@ -36,9 +36,9 @@ class threshold(torch.autograd.Function):
         ctx.sigma = sigma
         output = input.clone()
         if dataoption=='mnist':
-            output = torch.max(torch.tensor(0.0, device=output.device), torch.sign(output - 0.5))
+            output = torch.max(torch.tensor(0.0, device=output.device), torch.sign(output))
         elif dataoption=='cifar10':
-            output = torch.max(torch.tensor(0.0, device=output.device), torch.sign(output-0.977))
+            output = torch.max(torch.tensor(0.0, device=output.device), torch.sign(output))
         else:
             raise KeyError()
         return output
@@ -48,9 +48,9 @@ class threshold(torch.autograd.Function):
         input, = ctx.saved_tensors
         sigma = ctx.sigma
         if dataoption=='mnist':
-            exponent = -torch.pow((0.5 - input), 2) / (2.0 * sigma ** 2)
+            exponent = -torch.pow((input), 2) / (2.0 * sigma ** 2)
         elif dataoption=='cifar10':
-            exponent = -torch.pow((input-0.977), 2) / (2.0 * sigma ** 2)
+            exponent = -torch.pow((input), 2) / (2.0 * sigma ** 2)
         else:
             raise KeyError()
         exp = torch.exp(exponent)
@@ -183,10 +183,14 @@ def DiffInitial(data, shape, in_feature, out_feature, group=1):
                        padding=(3 - 1) // 2)
     grad = -torch.sqrt(tmp_col ** 2 + tmp_row ** 2).float()
     if dataoption=='mnist':
-        grad = grad.view(-1, 1,28*28)
-        min, _ = torch.min(grad, dim=-1, keepdim=True)
-        max, _ = torch.max(grad, dim=-1, keepdim=True)
-        return ((grad - min) / (max - min)).view_as(data),max,min
+        # grad = grad.view(-1, 1,28*28)
+        # min, _ = torch.min(grad, dim=-1, keepdim=True)
+        # max, _ = torch.max(grad, dim=-1, keepdim=True)
+        # return ((grad - min) / (max - min)).view_as(data),max,min
+        grad = grad.view(-1, 1, 28 * 28)
+        mean = grad.mean(dim=-1, keepdim=True)
+        std = grad.std(dim=-1, keepdim=True)
+        return ((grad - mean) / (std + 1e-6)).view_as(data), mean, std
     elif dataoption=='cifar10':
         grad=grad.view(-1,3,32*32)
         mean=grad.mean(dim=-1, keepdim=True)
@@ -201,7 +205,7 @@ class axonLimit(torch.autograd.Function):
         # v1 = 1.3 * torch.sigmoid(v1) - 0.2
         # return v1
         if dataoption=='mnist':
-            return torch.min(torch.max(v1, torch.Tensor([-.3]).cuda()), torch.Tensor([1]).cuda())
+            return torch.min(torch.max(v1, torch.Tensor([-1.]).cuda()), torch.Tensor([1.]).cuda())
         elif dataoption=='cifar10':
             return torch.min(torch.max(v1, torch.Tensor([-.7]).cuda()), torch.Tensor([.7]).cuda())
         else:
@@ -211,9 +215,9 @@ class axonLimit(torch.autograd.Function):
     def backward(ctx, grad_output):
         input, = ctx.saved_tensors
         if dataoption=='mnist':
-            exponent = torch.where((input > -0.4) & (input < 1.1), torch.ones_like(input).cuda(),
+            exponent = torch.where((input > -1.1) & (input < 1.1), torch.ones_like(input).cuda(),
                                    torch.zeros_like(input).cuda())
-            exponent = torch.where((input > 1.1) | (input < -0.4),
+            exponent = torch.where((input > 1.1) | (input < -1.1),
                                    (torch.exp(-((input.float()) ** 2) / 2) / 2.506628).cuda(), exponent)
             return exponent * grad_output
         elif dataoption=='cifar10':
@@ -250,6 +254,7 @@ class point_cul_Layer(nn.Module):
                            Activation(["leakyrelu"], transform=False)]
         if dataoption=='mnist':
             self.gaussbur = guassNet(1, 1, kernel_size=3, requires_grad=True)
+            self.bn1 = nn.BatchNorm2d(1)
         elif dataoption=='cifar10':
             self.gaussbur = guassNet(3, 3, kernel_size=3, requires_grad=True)
             self.bn1=nn.BatchNorm2d(3)
@@ -271,7 +276,7 @@ class point_cul_Layer(nn.Module):
             x = x - threshold.apply(tensor_reset, 1) / float(2 ** weight)
         if self.weight_rand:
             if dataoption=='mnist':
-                m = self.gaussbur(x.unsqueeze(1).view(x.shape[0], 1, int(math.sqrt(x.shape[1])), -1)).squeeze(1).view(
+                m = self.bn1(self.gaussbur(x.unsqueeze(1).view(x.shape[0], 1, int(math.sqrt(x.shape[1])), -1))).view(
                     x.shape[0], -1)
             elif dataoption=='cifar10':
                 m = self.bn1(self.gaussbur(x.view(x.shape[0], 3, int(math.sqrt(x.shape[1]//3)), -1))).view(
@@ -317,7 +322,8 @@ class three_dim_Layer(nn.Module):
         self.diag_T = Trinomial_operation(max(max(self.x, self.y), self.z))
         self.grad_lr = grad_lr
         self.dropout = nn.Dropout(p)
-
+        self.test=test
+    def settest(self,test=True):
         self.test=test
     def forward(self, x):
         tensor_reset = x
@@ -369,7 +375,6 @@ class three_dim_Layer(nn.Module):
             plt.xticks([])
             plt.yticks([])
             plt.axis('off')
-
             plt.subplot(122)
             grad,mean,std=DiffInitial(data, [64, 3, 32, 32], 3, 3, group=1)
             a = (grad*std+mean).clone().detach().cpu()[0, :].view(3,32*32).permute(1,0)
@@ -393,13 +398,15 @@ class three_dim_Layer(nn.Module):
 
         self.data_x = [data.to(self.device) for i in range(self.x)]
 
-    def initiate_layer(self, data):
+    def initiate_layer(self, data,tau_m=4.,tau_s=1.):
         self.point_layer = {}
         for i in range(self.z):
             for j in range(self.y):
                 for k in range(self.x):
                     self.point_layer[str(i) + '_' + str(j) + '_' + str(k)] = point_cul_Layer(data.shape[1],
                                                                                              data.shape[1],
+                                                                                             tau_m=tau_m,
+                                                                                             tau_s=tau_s,
                                                                                              grad_small=False,
                                                                                              weight_require_grad=self.weight_require_grad,
                                                                                              weight_rand=self.weight_rand,
@@ -448,7 +455,7 @@ class merge_layer(nn.Module):
             self.second = input.numel() / self.first
         self.three_dim_layer.initiate_data(input.to(self.device), epoch, epochs, True, option,real_img=real_img)
 
-    def initiate_layer(self, input, classes):
+    def initiate_layer(self, input, classes,tau_m=4.,tau_s=1.):
         if len(input.shape) != 2:
             input = input.view(input.shape[0], -1)
             self.first = input.shape[0]
@@ -456,7 +463,7 @@ class merge_layer(nn.Module):
         else:
             self.first = input.shape[0]
             self.second = input.numel() / self.first
-        self.three_dim_layer.initiate_layer(input.to(self.device))
+        self.three_dim_layer.initiate_layer(input.to(self.device),tau_m=tau_m,tau_s=tau_s)
         self.linear = nn.Linear(int(self.second), classes, bias=True)
         stdv = 6. / math.sqrt(self.linear.weight.data.size(1) + self.linear.weight.data.size(0))
         self.linear.weight.data.uniform_(-stdv, stdv)
@@ -464,3 +471,5 @@ class merge_layer(nn.Module):
 
     def subWeightGrad(self, epoch, epochs, sigma=1):
         self.three_dim_layer.subWeightGrad(epoch, epochs, sigma)
+    def settest(self,test=True):
+        self.three_dim_layer.settest(test)

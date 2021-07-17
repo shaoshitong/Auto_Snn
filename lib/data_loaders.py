@@ -41,12 +41,10 @@ class MNISTDataset(Dataset):
         img = self.dataset[idx][0]
         if self.transform:
             img = self.transform(img)
-
-        img = np.array(self.dataset[idx][0], dtype=np.float32) / 255.0 * self.max_rate
-        shape = img.shape
-        img_spike = None
+        img=transforms.ToTensor()(img)
+        img=transforms.Normalize((0.1307,), (0.3081,))(img).float()
         if self.flatten == True:
-            img = img.reshape(-1)
+            img = img.view(-1)
         return img, self.dataset[idx][1]
 
 
