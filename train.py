@@ -27,6 +27,7 @@ from torchvision import transforms, utils
 import omegaconf
 from omegaconf import OmegaConf
 
+
 parser = argparse.ArgumentParser(description='SNN AUTO MASTER')
 parser.add_argument('--config_file', type=str, default='train.yaml',
                     help='path to configuration file')
@@ -276,7 +277,7 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
 if __name__ == "__main__":
     torch.cuda.empty_cache()
     yaml = yaml_config_get(args)
-    set_random_seed(yaml)
+    # set_random_seed(yaml)
     model = merge_layer(set_device(), shape=yaml['shape'], dropout=yaml['parameters']['droupout'],test=False)
     writer = SummaryWriter()
     rand_transform = get_rand_transform(yaml['transform'])
