@@ -5,7 +5,7 @@ experiment_name:
 pytorch_seed:
   12
 data:
-  fashionmnist
+  cifar10
 parameters:
   # default parameters
   sigma:
@@ -19,9 +19,9 @@ parameters:
   droupout:
     0.3
   filter_tau_m:
-    1
-  filter_tau_s:
     4
+  filter_tau_s:
+    1
   train_coefficients:
     True
   train_bias:
@@ -36,13 +36,13 @@ optimizer:
   optimizer_choice:
     'Adam'
   Adam:
-    lr: 0.01
+    lr: 0.005
     weight_decay: 0
   AdamW:
-    lr: 0.0001
+    lr: 0.005
   SGD:
     momentum: 0.9
-    lr: 0.001
+    lr: 0.0005
     weight_decay: 1e-4
   ASGD:
     lr: 0.0001
@@ -60,7 +60,7 @@ scheduler:
       - 25
       - 35
     gamma:
-      0.2
+      0.1
   CosineAnnealingWarmRestarts:
     T_0:
       1000

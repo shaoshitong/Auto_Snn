@@ -64,7 +64,9 @@ def get_rand_transform(transform_config):
 """
 CIFAR10
 """
-def load_data(train_batch_size, test_batch_size):
+def load_data(train_batch_size, test_batch_size,data_url=None):
+    if data_url==None:
+        data_url='./data'
     train_transform = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
@@ -77,14 +79,26 @@ def load_data(train_batch_size, test_batch_size):
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
     ])
 
-    train_set = torchvision.datasets.CIFAR10(root='./data', train=True,
+    train_set = torchvision.datasets.CIFAR10(root=data_url, train=True,
                                             download=True, transform=train_transform)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=train_batch_size,
                                               shuffle=True, num_workers=4,drop_last=False)
 
-    test_set = torchvision.datasets.CIFAR10(root='./data', train=False,
+    test_set = torchvision.datasets.CIFAR10(root=data_url, train=False,
                                            download=True, transform=test_trainsform)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=test_batch_size,
                                              shuffle=False, num_workers=4,drop_last=False)
 
     return train_loader, test_loader
+def revertNoramlImgae(image):
+    image:torch.Tensor
+    if image.shape[-1]==1:
+        mean1 = torch.Tensor([0.1307]).unsqueeze(0).unsqueeze(0)
+        std1 = torch.Tensor([0.3081]).unsqueeze(0).unsqueeze(0)
+        image=image*std1+mean1
+        return image
+    else:
+        mean1 = torch.Tensor([0.4914, 0.4822, 0.4465]).unsqueeze(0).unsqueeze(0)
+        std1 = torch.Tensor([0.2023, 0.1994, 0.2010]).unsqueeze(0).unsqueeze(0)
+        image = image * std1 + mean1
+        return image
