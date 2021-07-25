@@ -638,8 +638,8 @@ class merge_layer(nn.Module):
         else:
             raise KeyError()
         x1 = self.block_inx(x)
-        x2 = self.block_iny(x)
-        x3 = self.block_inz(x)
+        x2 = self.block_iny(x1)
+        x3 = self.block_inz(x2)
         x = self.three_dim_layer(x1, x2, x3)
         x = self.block_out(x)
         return x
@@ -656,9 +656,9 @@ class merge_layer(nn.Module):
             self.first = input.shape[0]
             self.second = input.numel() / self.first
 
-        self.block_inx = block_in(in_feature)
-        self.block_iny = block_in(in_feature)
-        self.block_inz = block_in(in_feature)
+        self.block_inx = block_in(in_feature,64)
+        self.block_iny = block_eq(64)
+        self.block_inz = block_eq(64)
         self.three_dim_layer.initiate_layer(torch.rand(batchsize, 64 * (input.shape[1] // (in_feature * 4))),
                                             in_feature, out_feature, tau_m=tau_m, tau_s=tau_s,
                                             use_gauss=use_gauss)

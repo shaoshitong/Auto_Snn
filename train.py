@@ -17,6 +17,7 @@ from Snn_Auto_master.lib.optimizer import get_optimizer
 from Snn_Auto_master.lib.scheduler import get_scheduler
 from Snn_Auto_master.lib.criterion import criterion
 from Snn_Auto_master.lib.accuracy import accuracy
+from Snn_Auto_master.lib.log import Log
 import matplotlib.pyplot as plt
 import torch
 import numpy as np
@@ -28,7 +29,6 @@ from torchvision import transforms, utils
 import omegaconf
 from omegaconf import OmegaConf
 
-
 parser = argparse.ArgumentParser(description='SNN AUTO MASTER')
 parser.add_argument('--config_file', type=str, default='train.yaml',
                     help='path to configuration file')
@@ -38,8 +38,10 @@ parser.add_argument('--test', dest='test', default=True, type=bool,
                     help='test model')
 parser.add_argument('--data_url', dest='data_url',default='./data', type=str,
                     help='test model')
+parser.add_argument('--log_each', dest='log_each',default=100, type=int,
+                    help='how many step log once')
 args = parser.parse_args()
-
+log = Log(log_each=100)
 
 class Avgupdate(object):
     def __init__(self):
@@ -79,16 +81,11 @@ def set_random_seed(conf):
     torch.manual_seed(conf['pytorch_seed'])
 
 def test2(model, data, yaml, criterion_loss):
+    log.eval(len_dataset=len(data))
     the_model = model
     the_model.settest(True)
     device = set_device()
     the_model.to(device)
-    all_loss = Avgupdate()
-    all_prec1 = Avgupdate()
-    all_prec5 = Avgupdate()
-    it_loss = Avgupdate()
-    it_prec1 = Avgupdate()
-    it_prec5 = Avgupdate()
     the_model.eval()
     with torch.no_grad():
         for i, (input, target) in enumerate(data):
@@ -108,28 +105,11 @@ def test2(model, data, yaml, criterion_loss):
             torch.cuda.synchronize()
             loss = criterion(criterion_loss, output, target)
             prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
-            all_loss.update(loss.item())
-            all_prec1.update(prec1.item())
-            all_prec5.update(prec5.item())
-            it_loss.update(loss.item())
-            it_prec1.update(prec1.item())
-            it_prec5.update(prec5.item())
-            if i % 100 == 0 and i != 0:
-                print(
-                    "batch_size_num:{} top1:{:.3f}% top5:{:.3f}% loss:{:.3f} time:{}".format(i, it_prec1.avg
-                                                                                             , it_prec5.avg,
-                                                                                             it_loss.avg,
-                                                                                             batch_time_stamp))
-                it_loss.reset()
-                it_prec1.reset()
-                it_prec5.reset()
-        print("====================================>  ths test: top1:{:.3f}% top5:{:.3f}% loss:{:.3f}".format(
-            all_prec1.avg,
-            all_prec5.avg,
-            all_loss.avg))
+            log(model, loss.cpu(), prec1.cpu(), prec5.cpu())
 
 
 def test(path, data, yaml, criterion_loss):
+    log.eval(len_dataset=len(data))
     torch.cuda.empty_cache()
     the_model = merge_layer(set_device(), shape=yaml['shape'], dropout=yaml['parameters']['droupout'], test=True)
     if yaml['data'] == 'mnist':
@@ -143,12 +123,6 @@ def test(path, data, yaml, criterion_loss):
     the_model.load_state_dict(torch.load(path)['snn_state_dict'])
     device = set_device()
     the_model.to(device)
-    all_loss = Avgupdate()
-    all_prec1 = Avgupdate()
-    all_prec5 = Avgupdate()
-    it_loss = Avgupdate()
-    it_prec1 = Avgupdate()
-    it_prec5 = Avgupdate()
     the_model.eval()
     with torch.no_grad():
         for i, (input, target) in enumerate(data):
@@ -168,28 +142,11 @@ def test(path, data, yaml, criterion_loss):
             torch.cuda.synchronize()
             loss = criterion(criterion_loss, output, target)
             prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
-            all_loss.update(loss.item())
-            all_prec1.update(prec1.item())
-            all_prec5.update(prec5.item())
-            it_loss.update(loss.item())
-            it_prec1.update(prec1.item())
-            it_prec5.update(prec5.item())
-            if i % 100 == 0 and i != 0:
-                print(
-                    "batch_size_num:{} top1:{:.3f}% top5:{:.3f}% loss:{:.3f} time:{}".format(i, it_prec1.avg
-                                                                                             , it_prec5.avg,
-                                                                                             it_loss.avg,
-                                                                                             batch_time_stamp))
-                it_loss.reset()
-                it_prec1.reset()
-                it_prec5.reset()
-        print("====================================>  ths test: top1:{:.3f}% top5:{:.3f}% loss:{:.3f}".format(
-            all_prec1.avg,
-            all_prec5.avg,
-            all_loss.avg))
+            log(model, loss.cpu(), prec1.cpu(), prec5.cpu())
 
 
 def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="./output"):
+    log.train(len_dataset=len(data))
     sigma=yaml['parameters']['sigma']
     device = set_device()
     model.to(device)
@@ -224,28 +181,9 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
         # pd_save(model.three_dim_layer.point_layerg+_module[str(0) + '_' + str(0) + '_' + str(0)].tensor_tau_m1.view(28,-1),"tau_m2/"+str(i))
         optimizer.step()
         prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
-        all_loss.update(loss.item())
-        all_prec1.update(prec1.item())
-        all_prec5.update(prec5.item())
-        it_loss.update(loss.item())
-        it_prec1.update(prec1.item())
-        it_prec5.update(prec5.item())
-        if i % 100 == 0 and i != 0:
-            # parametersgradCheck(model)
-            print(
-                "batch_size_num:{} top1:{:.3f}% top5:{:.3f}% loss:{:.3f} time:{}".format(i, it_prec1.avg
-                                                                                         , it_prec5.avg
-                                                                                         , it_loss.avg
-                                                                                         , batch_time_stamp))
-            it_loss.reset()
-            it_prec1.reset()
-            it_prec5.reset()
+        log(model, loss.cpu(), prec1.cpu(),prec5.cpu(),scheduler.get_last_lr()[0])
         if isinstance(scheduler, torch.optim.lr_scheduler.CyclicLR):
             scheduler.step()
-    print("====================================>  ths epoch {}: top1:{:.3f}% top5:{:.3f}% loss:{:.3f}".format(epoch,
-                                                                                                              all_prec1.avg,
-                                                                                                              all_prec5.avg,
-                                                                                                              all_loss.avg))
     if isinstance(scheduler, torch.optim.lr_scheduler.MultiStepLR):
         scheduler.step()
     return all_prec1.avg, all_loss.avg
@@ -322,3 +260,4 @@ if __name__ == "__main__":
             if args.test == True:
                 test2(model, test_dataloader, yaml, criterion_loss)
         print("best_acc:{:.3f}%".format(best_acc))
+        log.flush()
