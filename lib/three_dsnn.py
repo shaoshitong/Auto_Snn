@@ -73,18 +73,21 @@ class block_in(nn.Module):
 class block_out(nn.Module):
     def __init__(self, in_feature, out_feature, classes):
         super(block_out, self).__init__()
+        self.bn_out=nn.BatchNorm2d(in_feature)
         self.conv2 = nn.Conv2d(in_feature, 32, (2, 2), stride=2, padding=0, bias=True)
         self.bn2 = nn.BatchNorm2d(32)
         self.shortcut2 = Shortcut(in_feature, 32, )
         self.conv1 = nn.Conv2d(32, out_feature, (2, 2), stride=2, padding=0, bias=True)
         self.bn1 = nn.BatchNorm2d(out_feature)
-        self.linear = nn.Linear(out_feature * 4 * 4, classes)
-
+        self.linear = nn.Sequential(*[
+            nn.Flatten(),
+            nn.Linear(4*4*out_feature,classes)
+        ])
     def forward(self, x):
+        x = F.relu(self.bn_out(x),inplace=True)
         x_t = self.bn2(self.conv2(x))
         x = F.leaky_relu(self.shortcut2(x) + x_t,inplace=True)
         x = F.leaky_relu(self.bn1(self.conv1(x)),inplace=True)
-        x = x.view(x.shape[0], -1)
         x = self.linear(x)
         return x
 class block_eq(nn.Module):
@@ -341,11 +344,12 @@ class axonLimit(torch.autograd.Function):
 
 
 class DoorMechanism(nn.Module):
-    def __init__(self, in_pointnum, out_pointnum, in_feature, out_feature):
+    def __init__(self, in_pointnum, out_pointnum, in_feature, out_feature,lr=1):
         """
         门机制层，对三条路径传来的数据进行选择
         """
         super(DoorMechanism, self).__init__()
+        self.lr=lr
         self.in_pointnum = in_pointnum
         self.out_pointnum = out_pointnum
         self.in_feature = in_feature
@@ -372,7 +376,6 @@ class DoorMechanism(nn.Module):
         self.tau_m_bias = Parameter(torch.zeros((1, out_feature)).float(), requires_grad=True)
         self.tau_s_bias = Parameter(torch.zeros((1, out_feature)).float(), requires_grad=True)
         self.tau_sm_bias = Parameter(torch.zeros((1, out_feature)).float(), requires_grad=True)
-
     def forward(self, x1, x2, x3, tau_m, tau_s, tau_sm):
         """
         input==>[batchsize,64,x_pointnum//2,y_pointnum//2]
@@ -380,20 +383,19 @@ class DoorMechanism(nn.Module):
         x1: torch.Tensor
         x2: torch.Tensor
         x3: torch.Tensor
-        y1 = x1.view(x1.shape[0], x1.shape[1], -1).mean(dim=-1)
-        y2 = x2.view(x2.shape[0], x2.shape[1], -1).mean(dim=-1)
-        y3 = x3.view(x3.shape[0], x3.shape[1], -1).mean(dim=-1)
-        men_1 = torch.sigmoid(y1 @ self.tau_m_weight2 + tau_m @ self.tau_m_weight1 + self.tau_m_bias).mean(dim=0,
-                                                                                                           keepdim=True)
-        men_2 = torch.sigmoid(y2 @ self.tau_s_weight2 + tau_s @ self.tau_s_weight1 + self.tau_s_bias).mean(dim=0,
-                                                                                                           keepdim=True)
-        men_3 = torch.sigmoid(y3 @ self.tau_sm_weight2 + tau_sm @ self.tau_sm_weight1 + self.tau_sm_bias).mean(dim=0,
-                                                                                                               keepdim=True)
+        y1 = x1.view(x1.shape[0], x1.shape[1], -1).mean(dim=-1).mean(dim=0,keepdim=True)
+        y2 = x2.view(x2.shape[0], x2.shape[1], -1).mean(dim=-1).mean(dim=0,keepdim=True)
+        y3 = x3.view(x3.shape[0], x3.shape[1], -1).mean(dim=-1).mean(dim=0,keepdim=True)
+        men_1 = torch.sigmoid(y1 @ self.tau_m_weight2 + tau_m @ self.tau_m_weight1 + self.tau_m_bias)
+        men_2 = torch.sigmoid(y2 @ self.tau_s_weight2 + tau_s @ self.tau_s_weight1 + self.tau_s_bias)
+        men_3 = torch.sigmoid(y3 @ self.tau_sm_weight2 + tau_sm @ self.tau_sm_weight1 + self.tau_sm_bias)
         result = torch.tanh(
             men_1.unsqueeze(-1).unsqueeze(-1) * x1 + men_2.unsqueeze(-1).unsqueeze(-1) * x2 + men_3.unsqueeze(
                 -1).unsqueeze(-1) * x3)
-        return result, men_1.clone().detach(), men_2.clone().detach(), men_3.clone().detach()
-
+        return result, \
+               men_1.clone().detach()*self.lr+(1.-self.lr)*tau_m.clone().detach(),\
+               men_2.clone().detach()*self.lr+(1.-self.lr)*tau_s.clone().detach(),\
+               men_3.clone().detach()*self.lr+(1.-self.lr)*tau_sm.clone().detach()
 
 class point_cul_Layer(nn.Module):
     def __init__(self, in_pointnum, out_pointnum, in_feature, out_feature, tau_m=4., tau_s=1., grad_small=False,
@@ -420,8 +422,6 @@ class point_cul_Layer(nn.Module):
             self.device)
         self.tensor_tau_sm1 = torch.randn((1, 64), dtype=torch.float32, requires_grad=g).to(
             self.device)
-        self.activation = [Activation(["elu"], transform=False), Activation(["negative"], transform=False),
-                           Activation(["leakyrelu"], transform=False)]
         self.DoorMach = DoorMechanism(in_pointnum, out_pointnum, 64, 64)
         if dataoption == 'mnist':
             if use_gauss == True:
