@@ -367,6 +367,12 @@ class DoorMechanism(nn.Module):
         self.tau_sm_weight2 = Parameter(torch.Tensor(in_feature, out_feature),
                                         requires_grad=True)
         stdv = 6. / math.sqrt((in_pointnum // in_feature) * (out_pointnum // out_feature))
+        # nn.init.orthogonal_(self.tau_m_weight1, gain=1)
+        # nn.init.orthogonal_(self.tau_m_weight2, gain=1)
+        # nn.init.orthogonal_(self.tau_s_weight1, gain=1)
+        # nn.init.orthogonal_(self.tau_s_weight2, gain=1)
+        # nn.init.orthogonal_(self.tau_sm_weight1, gain=1)
+        # nn.init.orthogonal_(self.tau_sm_weight2, gain=1)
         self.tau_m_weight1.data.uniform_(-stdv, stdv)
         self.tau_m_weight2.data.uniform_(-stdv, stdv)
         self.tau_s_weight1.data.uniform_(-stdv, stdv)
@@ -447,6 +453,7 @@ class point_cul_Layer(nn.Module):
         self.x_index = random.randint(0, 2)
         self.y_index = random.randint(0, 2)
         self.z_index = random.randint(0, 2)
+        # self._initialize()
 
     def forward(self, x, weight):
         x1, x2, x3 = x.unbind(dim=-1)
@@ -471,7 +478,10 @@ class point_cul_Layer(nn.Module):
                 raise KeyError('not have this dataset')
             x = m
         return x
-
+    def _initialize(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight.data, mode="fan_in", nonlinearity="relu")
     def subWeightGrad(self, epoch, epochs, sigma, diag_num, path_num_x, path_num_y, path_num_z):
         """
         用三项式定理以及链式法则作为数学原理进行梯度修改

@@ -41,32 +41,13 @@ parser.add_argument('--data_url', dest='data_url',default='./data', type=str,
 parser.add_argument('--log_each', dest='log_each',default=100, type=int,
                     help='how many step log once')
 args = parser.parse_args()
-log = Log(log_each=100)
-
-class Avgupdate(object):
-    def __init__(self):
-        self.count = 0.
-        self.sum = 0.
-        self.avg = 0.
-
-    def reset(self):
-        self.count = 0.
-        self.sum = 0.
-        self.avg = 0.
-
-    def update(self, val, n=1):
-        self.sum += val
-        self.avg = (self.sum) / (self.count + n)
-        self.count += n
-
-
+log = Log(log_each=args.log_each)
 def set_device():
     if torch.cuda.is_available():
         device = torch.device("cuda:0")
     else:
         device = torch.device("cpu")
     return device
-
 
 def yaml_config_get(args):
     if args.config_file is None:
@@ -150,15 +131,8 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
     sigma=yaml['parameters']['sigma']
     device = set_device()
     model.to(device)
-    all_loss = Avgupdate()
-    all_prec1 = Avgupdate()
-    all_prec5 = Avgupdate()
-    it_loss = Avgupdate()
-    it_prec1 = Avgupdate()
-    it_prec5 = Avgupdate()
     model.settest(False)
     for i, (input, target) in enumerate(data):
-        batch_time_stamp = time.strftime("%Y%m%d-%H%M%S")
         if yaml['data'] == 'mnist':
             input = input.float().to(device)
         elif yaml['data'] == 'cifar10':
@@ -171,11 +145,8 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
         input.requires_grad_()
         output = model(input)
         loss = criterion(criterion_loss, output, target)
-        #l1,l2=Regularization(model)
         model.zero_grad()
         loss.backward(retain_graph=True)
-        # linearSubUpdate(model)
-        # parametersgradCheck(model)
         model.subWeightGrad(epoch, yaml['parameters']['epoch'], 1.)
         # parametersgradCheck(model)
         # pd_save(model.three_dim_layer.point_layerg+_module[str(0) + '_' + str(0) + '_' + str(0)].tensor_tau_m1.view(28,-1),"tau_m2/"+str(i))
@@ -186,7 +157,7 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
             scheduler.step()
     if isinstance(scheduler, torch.optim.lr_scheduler.MultiStepLR):
         scheduler.step()
-    return all_prec1.avg, all_loss.avg
+    return log.epoch_state["top_1"] / log.epoch_state["steps"],log.epoch_state["loss"] / log.epoch_state["steps"]
 
 
 if __name__ == "__main__":

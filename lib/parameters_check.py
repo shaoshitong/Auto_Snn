@@ -29,11 +29,14 @@ def parametersNameCheck(model):
 
 
 def parametersgradCheck(model):
+    paramdict={}
     for name, param in model.named_parameters():
         if type(param.grad) is not type(None):
+            paramdict[name]=max(abs(torch.max(param.grad).cpu().item()),abs(torch.min(param.grad).cpu().item()))
             print('=' * 120, '\n', name, torch.max(param.grad).item(), torch.min(param.grad).item(),
                   torch.max(param.data).item(), torch.min(param.data).item())
         else:
+            paramdict[name] = -1
             print(name, param.requires_grad, type(param.grad), torch.max(param.data).item(),
                   torch.min(param.data).item())
 
