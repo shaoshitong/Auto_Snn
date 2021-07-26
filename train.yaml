@@ -54,7 +54,14 @@ optimizer:
 
 scheduler:
   scheduler_choice:
-    'MultiStepLR'
+    'SchedulerLR'
+  SchedulerLR:
+    milestones:
+      - 1/3
+      - 2/3
+      - 4/5
+    gamma:
+      0.2
   MultiStepLR:
     milestones:
       - 25

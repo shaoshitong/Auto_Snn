@@ -14,7 +14,7 @@ from Snn_Auto_master.lib.parameters_check import parametersCheck, linearSubUpdat
 from Snn_Auto_master.lib.data_loaders import MNISTDataset, get_rand_transform, load_data
 from Snn_Auto_master.lib.three_dsnn import merge_layer
 from Snn_Auto_master.lib.optimizer import get_optimizer
-from Snn_Auto_master.lib.scheduler import get_scheduler
+from Snn_Auto_master.lib.scheduler import get_scheduler,SchedulerLR
 from Snn_Auto_master.lib.criterion import criterion
 from Snn_Auto_master.lib.accuracy import accuracy
 from Snn_Auto_master.lib.log import Log
@@ -152,11 +152,13 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
         # pd_save(model.three_dim_layer.point_layerg+_module[str(0) + '_' + str(0) + '_' + str(0)].tensor_tau_m1.view(28,-1),"tau_m2/"+str(i))
         optimizer.step()
         prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
-        log(model, loss.cpu(), prec1.cpu(),prec5.cpu(),scheduler.get_last_lr()[0])
+        log(model, loss.cpu(), prec1.cpu(),prec5.cpu(),scheduler.lr())
         if isinstance(scheduler, torch.optim.lr_scheduler.CyclicLR):
             scheduler.step()
     if isinstance(scheduler, torch.optim.lr_scheduler.MultiStepLR):
         scheduler.step()
+    elif isinstance(scheduler, SchedulerLR):
+        scheduler(epoch)
     return log.epoch_state["top_1"] / log.epoch_state["steps"],log.epoch_state["loss"] / log.epoch_state["steps"]
 
 
