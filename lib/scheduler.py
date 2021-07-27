@@ -53,12 +53,11 @@ class SchedulerLR(object):
         self.epochs = epochs
         self.base = learning_rate
         self.gamma=gamma
-        self.turnlist=turnlist
-
+        self.turnlist=[float(_) for _ in turnlist]
     def __call__(self, epoch):
         lr=self.base
         for i,nums in enumerate(self.turnlist):
-            if i==len(self.turnlist)-1:
+            if i==len(self.turnlist)-1 and self.epochs*self.turnlist[i]<=epoch:
                 lr=self.base*self.gamma**(i+1)
                 break
             if self.epochs*self.turnlist[i]<=epoch and epoch <self.epochs*self.turnlist[i+1]:

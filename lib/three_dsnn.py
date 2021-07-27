@@ -344,7 +344,7 @@ class axonLimit(torch.autograd.Function):
 
 
 class DoorMechanism(nn.Module):
-    def __init__(self, in_pointnum, out_pointnum, in_feature, out_feature,lr=1):
+    def __init__(self, in_pointnum, out_pointnum, in_feature, out_feature,lr=.9):
         """
         门机制层，对三条路径传来的数据进行选择
         """
@@ -398,15 +398,15 @@ class DoorMechanism(nn.Module):
         result = torch.tanh(
             men_1.unsqueeze(-1).unsqueeze(-1) * x1 + men_2.unsqueeze(-1).unsqueeze(-1) * x2 + men_3.unsqueeze(
                 -1).unsqueeze(-1) * x3)
-        return result, \
-               men_1.clone().detach()*self.lr+(1.-self.lr)*tau_m.clone().detach(),\
-               men_2.clone().detach()*self.lr+(1.-self.lr)*tau_s.clone().detach(),\
-               men_3.clone().detach()*self.lr+(1.-self.lr)*tau_sm.clone().detach()
+        men_1 = (men_1 * self.lr + (1. - self.lr) * tau_m).detach()
+        men_2 = (men_2 * self.lr + (1. - self.lr) * tau_s).detach()
+        men_3 = (men_3 * self.lr + (1. - self.lr) * tau_sm).detach()
+        return result,men_1,men_2,men_3
 
 class point_cul_Layer(nn.Module):
-    def __init__(self, in_pointnum, out_pointnum, in_feature, out_feature, tau_m=4., tau_s=1., grad_small=False,
+    def __init__(self, in_pointnum, out_pointnum, in_feature, out_feature, path_len,tau_m=4., tau_s=1., grad_small=False,
                  weight_require_grad=False,
-                 weight_rand=False, device=None, STuning=True, grad_lr=0.1, p=0.2, use_gauss=True):
+                 weight_rand=False, device=None, STuning=True, grad_lr=0.1, p=0.3, use_gauss=True):
         """
         输入的张量维度为（batch_size,64,x//2,y//2）
         该层通过门机制后进行卷积与归一化
@@ -450,9 +450,7 @@ class point_cul_Layer(nn.Module):
         self.STuning = STuning
         self.grad_lr = grad_lr
         self.sigma = 1
-        self.x_index = random.randint(0, 2)
-        self.y_index = random.randint(0, 2)
-        self.z_index = random.randint(0, 2)
+        self.index = random.randint(0, path_len)
         # self._initialize()
 
     def forward(self, x, weight):
@@ -486,6 +484,7 @@ class point_cul_Layer(nn.Module):
         """
         用三项式定理以及链式法则作为数学原理进行梯度修改
         """
+
         weight = float(sigma) * diag_num * math.pow((self.tensor_tau_m1.mean().clone().detach().cpu()), path_num_x) \
                  * math.pow((self.tensor_tau_s1.mean().clone().detach().cpu()), path_num_y) \
                  * math.pow((self.tensor_tau_sm1.mean().clone().detach().cpu()), path_num_z)
@@ -513,9 +512,6 @@ class three_dim_Layer(nn.Module):
         self.use_gauss = use_gauss
         self.weight_require_grad = weight_require_grad
         self.weight_rand = weight_rand
-        self.data_x = []
-        self.data_y = []
-        self.data_z = []
         self.diag_T = Trinomial_operation(max(max(self.x, self.y), self.z))
         self.grad_lr = grad_lr
         self.dropout = nn.Dropout(p)
@@ -528,26 +524,20 @@ class three_dim_Layer(nn.Module):
         """
         x,y=>[batchsize,64,x_pointnum//2,y_pointnum//2]
         """
-        self.data_y = [y for i in range(self.y)]
-        self.data_x = [x for i in range(self.x)]
-        self.data_z = z
-        tensor_prev = [[torch.zeros_like(x).to(self.device) for i in range(self.x)] for j in range(self.y)]
+        tensor_prev = [[z for i in range(self.x)] for j in range(self.y)]
         for i in range(self.z):
             for j in range(self.y):
                 for k in range(self.x):
                     """
                     push xx,yy,zz
                     """
-                    if i == 0:
-                        zz = self.data_z
-                    else:
-                        zz = tensor_prev[j][k]
+                    zz = tensor_prev[j][k]
                     if j == 0:
-                        xx = self.data_x[k]
+                        xx = x
                     else:
                         xx = tensor_prev[j - 1][k]
                     if k == 0:
-                        yy = self.data_y[j]
+                        yy = y
                     else:
                         yy = tensor_prev[j][k - 1]
                     tensor_prev[j][k] = self.point_layer_module[str(i) + '_' + str(j) + '_' + str(k)](
@@ -572,6 +562,7 @@ class three_dim_Layer(nn.Module):
                     """
                     self.point_layer[str(i) + '_' + str(j) + '_' + str(k)] = point_cul_Layer(data.shape[1] // 2,
                                                                                              data.shape[1] // 2,
+                                                                                             path_len=self.z+self.x+self.y,
                                                                                              in_feature=in_feature,
                                                                                              out_feature=out_feature,
                                                                                              tau_m=tau_m,

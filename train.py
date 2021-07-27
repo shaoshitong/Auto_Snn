@@ -4,30 +4,22 @@
 # mnist,cifar10,fashionmnist
 """
 import argparse
-import pandas as pd
 import os
 import time
-import sys
-from Snn_Auto_master.lib.l2_update import Regularization
-from Snn_Auto_master.lib.parameters_check import parametersCheck, linearSubUpdate, parametersNameCheck, \
-    parametersgradCheck, pd_save
-from Snn_Auto_master.lib.data_loaders import MNISTDataset, get_rand_transform, load_data
-from Snn_Auto_master.lib.three_dsnn import merge_layer
-from Snn_Auto_master.lib.optimizer import get_optimizer
-from Snn_Auto_master.lib.scheduler import get_scheduler,SchedulerLR
-from Snn_Auto_master.lib.criterion import criterion
-from Snn_Auto_master.lib.accuracy import accuracy
-from Snn_Auto_master.lib.log import Log
-import matplotlib.pyplot as plt
+
 import torch
-import numpy as np
-import random
-from torch.utils.data import Dataset, DataLoader
+from omegaconf import OmegaConf
+from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import datasets
-from torchvision import transforms, utils
-import omegaconf
-from omegaconf import OmegaConf
+
+from Snn_Auto_master.lib.accuracy import accuracy
+from Snn_Auto_master.lib.criterion import criterion
+from Snn_Auto_master.lib.data_loaders import MNISTDataset, get_rand_transform, load_data
+from Snn_Auto_master.lib.log import Log
+from Snn_Auto_master.lib.optimizer import get_optimizer
+from Snn_Auto_master.lib.scheduler import get_scheduler, SchedulerLR
+from Snn_Auto_master.lib.three_dsnn import merge_layer
 
 parser = argparse.ArgumentParser(description='SNN AUTO MASTER')
 parser.add_argument('--config_file', type=str, default='train.yaml',
@@ -49,6 +41,7 @@ def set_device():
         device = torch.device("cpu")
     return device
 
+device = set_device()
 def yaml_config_get(args):
     if args.config_file is None:
         print('No config file provided, use default config file')
@@ -60,13 +53,17 @@ def yaml_config_get(args):
 
 def set_random_seed(conf):
     torch.manual_seed(conf['pytorch_seed'])
-
+    torch.cuda.manual_seed(conf['pytorch_seed'])
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    import numpy as np
+    import random
+    np.random.seed(conf['pytorch_seed'])
+    random.seed(conf['pytorch_seed'])
 def test2(model, data, yaml, criterion_loss):
     log.eval(len_dataset=len(data))
     the_model = model
     the_model.settest(True)
-    device = set_device()
-    the_model.to(device)
     the_model.eval()
     with torch.no_grad():
         for i, (input, target) in enumerate(data):
@@ -129,8 +126,6 @@ def test(path, data, yaml, criterion_loss):
 def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="./output"):
     log.train(len_dataset=len(data))
     sigma=yaml['parameters']['sigma']
-    device = set_device()
-    model.to(device)
     model.settest(False)
     for i, (input, target) in enumerate(data):
         if yaml['data'] == 'mnist':
@@ -146,11 +141,19 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
         output = model(input)
         loss = criterion(criterion_loss, output, target)
         model.zero_grad()
-        loss.backward(retain_graph=True)
-        model.subWeightGrad(epoch, yaml['parameters']['epoch'], 1.)
+        if yaml['optimizer']['optimizer_choice']=='SAM':
+            loss.backward(retain_graph=False)
+            model.subWeightGrad(epoch, yaml['parameters']['epoch'], 1.)
+            optimizer.first_step(zero_grad=True)
+            criterion(criterion_loss,model(input),target).backward()
+            model.subWeightGrad(epoch, yaml['parameters']['epoch'], 1.)
+            optimizer.second_step(zero_grad=False)
+        else:
+            loss.backward(retain_graph=True)
+            model.subWeightGrad(epoch, yaml['parameters']['epoch'], 1.)
+            optimizer.step()
         # parametersgradCheck(model)
         # pd_save(model.three_dim_layer.point_layerg+_module[str(0) + '_' + str(0) + '_' + str(0)].tensor_tau_m1.view(28,-1),"tau_m2/"+str(i))
-        optimizer.step()
         prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
         log(model, loss.cpu(), prec1.cpu(),prec5.cpu(),scheduler.lr())
         if isinstance(scheduler, torch.optim.lr_scheduler.CyclicLR):
@@ -204,6 +207,7 @@ if __name__ == "__main__":
     optimizer = get_optimizer(params2, yaml, model)
     scheduler = get_scheduler(optimizer, yaml)
     criterion_loss = torch.nn.CrossEntropyLoss()
+    model.to(set_device())
     if torch.cuda.is_available():
         criterion_loss = criterion_loss.cuda()
     if args.train == True:
