@@ -4,7 +4,21 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 import pandas as pd
-
+import plotly as py
+import chart_studio
+import plotly.io as pio
+import plotly.graph_objects as go
+from plotly.graph_objs import *
+import torch
+import math
+import plotly.express as px
+import os
+pio.templates.default = "simple_white"
+pyplt = py.offline.plot
+p = pio.renderers['png']
+p.width = 800
+p.height = 600
+chart_studio.tools.set_config_file(world_readable=True, sharing='public')
 
 def parametersCheck(parameters):
     resultList = []
@@ -32,14 +46,37 @@ def parametersgradCheck(model):
     paramdict={}
     for name, param in model.named_parameters():
         if type(param.grad) is not type(None):
-            paramdict[name]=max(abs(torch.max(param.grad).cpu().item()),abs(torch.min(param.grad).cpu().item()))
-            print('=' * 120, '\n', name, torch.max(param.grad).item(), torch.min(param.grad).item(),
-                  torch.max(param.data).item(), torch.min(param.data).item())
+            paramdict[name]=abs(torch.abs(param.grad).mean().cpu().item())
+            # print('=' * 120, '\n', name, torch.max(param.grad).item(), torch.min(param.grad).item(),
+            #       torch.max(param.data).item(), torch.min(param.data).item())
         else:
             paramdict[name] = -1
-            print(name, param.requires_grad, type(param.grad), torch.max(param.data).item(),
-                  torch.min(param.data).item())
-
+            # print(name, param.requires_grad, type(param.grad), torch.max(param.data).item(),
+            #       torch.min(param.data).item())
+    x=np.linspace(0,10,len(paramdict))
+    figure1=go.Scatter(x=x,y=list(paramdict.values()),mode='markers',fillcolor='green',marker=dict(size=2,color='red'))
+    data=[figure1]
+    layout = dict(
+        title="grad",
+        font=dict(
+            family="宋体",
+            size=10,
+            color="black",
+        ),
+        xaxis=dict(tickmode='array', tickvals=x, ticktext=list(paramdict.keys()),visible =True,tickfont= dict(family='宋体',
+                                                                                                              size=5,
+                                                                                                              color="black")),
+        xaxis_title="x",
+        yaxis_title="y",
+        legend=dict(
+            x=0.8,
+            y=0.9,
+            bgcolor="white",
+            bordercolor="black",
+            borderwidth=2)
+    )
+    fig=Figure(data=data,layout=layout)
+    fig.show()
 
 def pd_save(tensor, name):
     df = pd.DataFrame()

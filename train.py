@@ -20,6 +20,7 @@ from Snn_Auto_master.lib.log import Log
 from Snn_Auto_master.lib.optimizer import get_optimizer
 from Snn_Auto_master.lib.scheduler import get_scheduler, SchedulerLR
 from Snn_Auto_master.lib.three_dsnn import merge_layer
+from Snn_Auto_master.lib.parameters_check import parametersgradCheck
 
 parser = argparse.ArgumentParser(description='SNN AUTO MASTER')
 parser.add_argument('--config_file', type=str, default='train.yaml',
@@ -139,20 +140,22 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
         target = target.to(device)
         input.requires_grad_()
         output = model(input)
-        loss = criterion(criterion_loss, output, target)
+        L2=model.L2_biasoption()
+        loss = criterion(criterion_loss, output, target)+L2
         model.zero_grad()
         if yaml['optimizer']['optimizer_choice']=='SAM':
             loss.backward(retain_graph=False)
             model.subWeightGrad(epoch, yaml['parameters']['epoch'], 1.)
             optimizer.first_step(zero_grad=True)
-            criterion(criterion_loss,model(input),target).backward()
+            (criterion(criterion_loss,model(input),target)+model.L2_biasoption()).backward()
             model.subWeightGrad(epoch, yaml['parameters']['epoch'], 1.)
             optimizer.second_step(zero_grad=False)
         else:
-            loss.backward(retain_graph=True)
+            loss.backward(retain_graph=False)
             model.subWeightGrad(epoch, yaml['parameters']['epoch'], 1.)
             optimizer.step()
-        # parametersgradCheck(model)
+            if i!=0 and i%600==0:
+                 parametersgradCheck(model)
         # pd_save(model.three_dim_layer.point_layerg+_module[str(0) + '_' + str(0) + '_' + str(0)].tensor_tau_m1.view(28,-1),"tau_m2/"+str(i))
         prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
         log(model, loss.cpu(), prec1.cpu(),prec5.cpu(),scheduler.lr())

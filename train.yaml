@@ -10,8 +10,6 @@ parameters:
   # default parameters
   sigma:
     0.1
-  length:
-    25
   batch_size:
     64
   epoch:

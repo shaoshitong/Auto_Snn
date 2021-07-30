@@ -28,85 +28,100 @@ yaml = yaml_config_get()
 dataoption = yaml['data']
 
 
-
 class Shortcut(nn.Module):
     """
     该层是为了残差连接而设计，从输入数据剪切一块后进行填充
     目前在特征从初始变换到64大小时会用到
     """
 
-    def __init__(self, in_feature, out_feature, use_same=False):
+    def __init__(self, in_feature, out_feature, use_same=False, proportion=2):
         in_feature: int
         out_feature: int
         super(Shortcut, self).__init__()
         self.in_feature = in_feature
         self.out_feature = out_feature
         if use_same == False:
-            self.shortcut = lambda x: F.pad(x[:, :, ::2, ::2],
+            self.shortcut = lambda x: F.pad(x[:, :, ::proportion, ::proportion],
                                             (0, 0, 0, 0, (self.out_feature - x.shape[1]) // 2,
-                                             (self.out_feature - x.shape[1]) // 2),
+                                             (self.out_feature - x.shape[1]) // 2+(self.out_feature - x.shape[1]) % 2),
                                             "constant", 0)
         else:
             self.shortcut = lambda x: F.pad(x,
                                             (0, 0, 0, 0, (self.out_feature - x.shape[1]) // 2,
-                                             (self.out_feature - x.shape[1]) // 2),
+                                             (self.out_feature - x.shape[1]) // 2+(self.out_feature - x.shape[1]) % 2),
                                             "constant", 0)
 
     def forward(self, x):
         return self.shortcut(x)
 
+
 class block_in(nn.Module):
     def __init__(self, in_feature, out_feature=64):
         super(block_in, self).__init__()
-        self.conv1 = nn.Conv2d(in_feature, 32, (4, 4), stride=2, padding=3, bias=True, )
+        self.conv1 = nn.Conv2d(in_feature, 32, (4, 4), stride=2, padding=1, bias=True, )
         self.bn1 = nn.BatchNorm2d(32)
         self.conv2 = nn.Conv2d(32, out_feature, (3, 3), stride=1, padding=1, bias=True)
         self.bn2 = nn.BatchNorm2d(out_feature)
         self.shortcut2 = Shortcut(32, out_feature, use_same=True)
+        self.shortcut1 = Shortcut(in_feature,32)
+        self.shortcut0 = Shortcut(in_feature,out_feature)
 
     def forward(self, x):
-        x1 = F.leaky_relu(self.bn1(self.conv1(x)),inplace=True)
-        x1 = F.leaky_relu(self.bn2(self.conv2(x1)) + self.shortcut2(x1),inplace=True)
-        return x1
+        # print(self.shortcut1(x).shape,self.conv1(x).shape)
+        x1 = self.bn1(self.conv1(x))+self.shortcut1(x)
+        x1 = F.leaky_relu(x1, inplace=True)
+        x2 = self.bn2(self.conv2(x1))+self.shortcut2(x1)
+        x2 = F.leaky_relu(x2, inplace=True)
+        x3 =x2+self.shortcut0(x)
+        return x3
 
 
 class block_out(nn.Module):
     def __init__(self, in_feature, out_feature, classes):
         super(block_out, self).__init__()
-        self.bn_out=nn.BatchNorm2d(in_feature)
+        self.bn_out = nn.BatchNorm2d(in_feature)
         self.conv2 = nn.Conv2d(in_feature, 32, (2, 2), stride=2, padding=0, bias=True)
         self.bn2 = nn.BatchNorm2d(32)
-        self.shortcut2 = Shortcut(in_feature, 32, )
+        self.shortcut2 = Shortcut(in_feature, 32)
+        self.shortcut1 = Shortcut(32, out_feature)
+        self.shortcut0 = Shortcut(in_feature,out_feature,proportion=4)
         self.conv1 = nn.Conv2d(32, out_feature, (2, 2), stride=2, padding=0, bias=True)
         self.bn1 = nn.BatchNorm2d(out_feature)
         self.linear = nn.Sequential(*[
             nn.Flatten(),
-            nn.Linear(4*4*out_feature,classes)
+            nn.Linear(4 * 4 * out_feature, classes)
         ])
+
     def forward(self, x):
-        x = F.relu(self.bn_out(x),inplace=True)
-        x_t = self.bn2(self.conv2(x))
-        x = F.leaky_relu(self.shortcut2(x) + x_t,inplace=True)
-        x = F.leaky_relu(self.bn1(self.conv1(x)),inplace=True)
-        x = self.linear(x)
-        return x
+        x1 = F.relu(self.bn_out(x), inplace=True)
+        # ------------------------------
+        x2 = self.bn2(self.conv2(x1))+self.shortcut2(x)#[32,8,8]
+        x2 = F.leaky_relu(x2, inplace=True)
+        x3= self.bn1(self.conv1(x2))+self.shortcut1(x2)
+        x3 = F.leaky_relu(x3, inplace=True)
+        x3 = self.linear(x3+self.shortcut0(x))
+        return x3
+
+
 class block_eq(nn.Module):
-    def __init__(self,eq_feature):
-        super(block_eq,self).__init__()
-        self.eq_feature=eq_feature
-        self.longConv=nn.Sequential(*[
-            nn.Conv2d(eq_feature,eq_feature,(3,3),stride=1,padding=1,bias=True),
+    def __init__(self, eq_feature):
+        super(block_eq, self).__init__()
+        self.eq_feature = eq_feature
+        self.longConv = nn.Sequential(*[
+            nn.Conv2d(eq_feature, eq_feature, (3, 3), stride=1, padding=1, bias=True),
             nn.ReLU(inplace=True),
             nn.BatchNorm2d(eq_feature)])
-        self.shortConv=nn.Sequential(*[
-            Shortcut(eq_feature,eq_feature,use_same=True),
-            nn.BatchNorm2d(eq_feature)
+        self.shortConv = nn.Sequential(*[
+            Shortcut(eq_feature, eq_feature, use_same=True),
         ])
-        self.bn_eq=nn.BatchNorm2d(eq_feature)
-    def forward(self,x):
-        x=self.bn_eq(x)
-        x=F.leaky_relu(self.shortConv(x)+self.longConv(x),inplace=True)
-        return x
+        self.bn_eq = nn.BatchNorm2d(eq_feature)
+
+    def forward(self, x):
+        x1 = self.longConv(self.bn_eq(x))+self.shortConv(x)
+        x2 = F.leaky_relu(x1, inplace=True)
+        return x2
+
+
 class threshold(torch.autograd.Function):
     """
     该层是为了脉冲激活分形设计，在原版模型使用，当前模型撤销了
@@ -277,10 +292,6 @@ def DiffInitial(data, shape, in_feature, out_feature, group=1):
                        padding=(3 - 1) // 2)
     grad = -torch.sqrt(tmp_col ** 2 + tmp_row ** 2).float()
     if dataoption == 'mnist':
-        # grad = grad.view(-1, 1,28*28)
-        # min, _ = torch.min(grad, dim=-1, keepdim=True)
-        # max, _ = torch.max(grad, dim=-1, keepdim=True)
-        # return ((grad - min) / (max - min)).view_as(data),max,min
         grad = grad.view(-1, 1, 28 * 28)
         mean = grad.mean(dim=-1, keepdim=True)
         std = grad.std(dim=-1, keepdim=True)
@@ -344,12 +355,12 @@ class axonLimit(torch.autograd.Function):
 
 
 class DoorMechanism(nn.Module):
-    def __init__(self, in_pointnum, out_pointnum, in_feature, out_feature,lr=.9):
+    def __init__(self, in_pointnum, out_pointnum, in_feature, out_feature, lr=.9):
         """
         门机制层，对三条路径传来的数据进行选择
         """
         super(DoorMechanism, self).__init__()
-        self.lr=lr
+        self.lr = lr
         self.in_pointnum = in_pointnum
         self.out_pointnum = out_pointnum
         self.in_feature = in_feature
@@ -382,6 +393,7 @@ class DoorMechanism(nn.Module):
         self.tau_m_bias = Parameter(torch.zeros((1, out_feature)).float(), requires_grad=True)
         self.tau_s_bias = Parameter(torch.zeros((1, out_feature)).float(), requires_grad=True)
         self.tau_sm_bias = Parameter(torch.zeros((1, out_feature)).float(), requires_grad=True)
+
     def forward(self, x1, x2, x3, tau_m, tau_s, tau_sm):
         """
         input==>[batchsize,64,x_pointnum//2,y_pointnum//2]
@@ -389,9 +401,9 @@ class DoorMechanism(nn.Module):
         x1: torch.Tensor
         x2: torch.Tensor
         x3: torch.Tensor
-        y1 = x1.view(x1.shape[0], x1.shape[1], -1).mean(dim=-1).mean(dim=0,keepdim=True)
-        y2 = x2.view(x2.shape[0], x2.shape[1], -1).mean(dim=-1).mean(dim=0,keepdim=True)
-        y3 = x3.view(x3.shape[0], x3.shape[1], -1).mean(dim=-1).mean(dim=0,keepdim=True)
+        y1 = x1.view(x1.shape[0], x1.shape[1], -1).mean(dim=-1).mean(dim=0, keepdim=True)
+        y2 = x2.view(x2.shape[0], x2.shape[1], -1).mean(dim=-1).mean(dim=0, keepdim=True)
+        y3 = x3.view(x3.shape[0], x3.shape[1], -1).mean(dim=-1).mean(dim=0, keepdim=True)
         men_1 = torch.sigmoid(y1 @ self.tau_m_weight2 + tau_m @ self.tau_m_weight1 + self.tau_m_bias)
         men_2 = torch.sigmoid(y2 @ self.tau_s_weight2 + tau_s @ self.tau_s_weight1 + self.tau_s_bias)
         men_3 = torch.sigmoid(y3 @ self.tau_sm_weight2 + tau_sm @ self.tau_sm_weight1 + self.tau_sm_bias)
@@ -401,10 +413,12 @@ class DoorMechanism(nn.Module):
         men_1 = (men_1 * self.lr + (1. - self.lr) * tau_m).detach()
         men_2 = (men_2 * self.lr + (1. - self.lr) * tau_s).detach()
         men_3 = (men_3 * self.lr + (1. - self.lr) * tau_sm).detach()
-        return result,men_1,men_2,men_3
+        return result, men_1, men_2, men_3
+
 
 class point_cul_Layer(nn.Module):
-    def __init__(self, in_pointnum, out_pointnum, in_feature, out_feature, path_len,tau_m=4., tau_s=1., grad_small=False,
+    def __init__(self, in_pointnum, out_pointnum, in_feature, out_feature, path_len, tau_m=4., tau_s=1.,
+                 grad_small=False,
                  weight_require_grad=False,
                  weight_rand=False, device=None, STuning=True, grad_lr=0.1, p=0.3, use_gauss=True):
         """
@@ -437,8 +451,10 @@ class point_cul_Layer(nn.Module):
             self.bn1 = nn.BatchNorm2d(64)
         elif dataoption == 'cifar10':
             if use_gauss == True:
+                # self.gaussbur = nn.Conv2d(64,64,(3,3),stride=1,padding=1,bias=False)
                 self.gaussbur = guassNet(64, 64, kernel_size=3, requires_grad=True)
             else:
+                # self.gaussbur = nn.Conv2d(64,64,(3,3),stride=1,padding=1,bias=True)
                 self.gaussbur = guassNet(64, 64, kernel_size=3, requires_grad=True, use_gauss=False)
             self.bn1 = nn.BatchNorm2d(64)
         elif dataoption == 'fashionmnist':
@@ -474,12 +490,15 @@ class point_cul_Layer(nn.Module):
                 m = self.bn1(self.gaussbur(x))
             else:
                 raise KeyError('not have this dataset')
+            # print(self.gaussbur.weight.data.abs().max())
             x = m
         return x
+
     def _initialize(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight.data, mode="fan_in", nonlinearity="relu")
+
     def subWeightGrad(self, epoch, epochs, sigma, diag_num, path_num_x, path_num_y, path_num_z):
         """
         用三项式定理以及链式法则作为数学原理进行梯度修改
@@ -562,7 +581,7 @@ class three_dim_Layer(nn.Module):
                     """
                     self.point_layer[str(i) + '_' + str(j) + '_' + str(k)] = point_cul_Layer(data.shape[1] // 2,
                                                                                              data.shape[1] // 2,
-                                                                                             path_len=self.z+self.x+self.y,
+                                                                                             path_len=self.z + self.x + self.y,
                                                                                              in_feature=in_feature,
                                                                                              out_feature=out_feature,
                                                                                              tau_m=tau_m,
@@ -595,6 +614,35 @@ class three_dim_Layer(nn.Module):
                                                                                                 self.z - i - 1)
 
 
+class InputGenerateNet(nn.Module):
+    def __init__(self,shape,device,weight_require_grad,weight_rand,grad_lr,dropout,test):
+        super(InputGenerateNet,self).__init__()
+        self.shape=shape
+        self.device=device
+        self.weight_require_grad=weight_require_grad
+        self.weight_rand=weight_rand
+        self.grad_lr=grad_lr
+        self.dropout=dropout
+        self.test=test
+        self.three_dim_layer = three_dim_Layer(self.shape, self.device, weight_require_grad, weight_rand, grad_lr,
+                                               p=dropout, test=test)
+    def forward(self,x):
+        y=self.block_eqy(x)
+        z=self.block_eqz(y)
+        return self.three_dim_layer(x,y,z)
+
+    def initiate_layer(self, input, in_feature, out_feature, tau_m=4., tau_s=1., use_gauss=True, batchsize=64):
+        self.three_dim_layer.initiate_layer(torch.rand(batchsize, 64 * (input.shape[1] // (in_feature * 4))),
+                                            in_feature, out_feature, tau_m=tau_m, tau_s=tau_s,
+                                            use_gauss=use_gauss)
+        self.block_eqy=block_eq(in_feature)
+        self.block_eqz=block_eq(in_feature)
+    def settest(self,test):
+        self.three_dim_layer.settest(test)
+    def subWeightGrad(self,epoch, epochs, sigma):
+        self.three_dim_layer.subWeightGrad(epochs,epoch,sigma)
+
+
 class merge_layer(nn.Module):
     def __init__(self, device, shape=None, weight_require_grad=True, weight_rand=True, grad_lr=0.01, dropout=0.3,
                  test=False):
@@ -607,23 +655,22 @@ class merge_layer(nn.Module):
         else:
             self.shape = shape
         self.device = device
-        self.three_dim_layer = three_dim_Layer(self.shape, self.device, weight_require_grad, weight_rand, grad_lr,
-                                               p=dropout, test=test)
+        self.InputGenerateNet=InputGenerateNet(self.shape,self.device,weight_require_grad,weight_rand,grad_lr,dropout,test)
         self.time = 0
 
-    def initdata(self, x):
-        """
-        初始化输入数据，并求出梯度，返回原始数据，grad数据
-        """
-        if dataoption == 'cifar10':
-            y = DiffInitial(x, [x.shape[0], 3, 32, 32], 3, 3, group=3)[0]
-        elif dataoption == 'mnist':
-            y = DiffInitial(x, [x.shape[0], 1, 28, 28], 1, 1, group=1)[0]
-        elif dataoption == 'fashionmnist':
-            y = DiffInitial(x, [x.shape[0], 1, 28, 28], 1, 1, group=1)[0]
-        else:
-            raise KeyError()
-        return x, y
+    # def initdata(self, x):
+    #     """
+    #     初始化输入数据，并求出梯度，返回原始数据，grad数据
+    #     """
+    #     if dataoption == 'cifar10':
+    #         y = DiffInitial(x, [x.shape[0], 3, 32, 32], 3, 3, group=3)[0]
+    #     elif dataoption == 'mnist':
+    #         y = DiffInitial(x, [x.shape[0], 1, 28, 28], 1, 1, group=1)[0]
+    #     elif dataoption == 'fashionmnist':
+    #         y = DiffInitial(x, [x.shape[0], 1, 28, 28], 1, 1, group=1)[0]
+    #     else:
+    #         raise KeyError()
+    #     return x, y
 
     def forward(self, x):
         # x, y = self.initdata(x)
@@ -639,16 +686,15 @@ class merge_layer(nn.Module):
         else:
             raise KeyError()
         x1 = self.block_inx(x)
-        x2 = self.block_iny(x1)
-        x3 = self.block_inz(x2)
-        x = self.three_dim_layer(x1, x2, x3)
-        x = self.block_out(x)
-        return x
+        y=self.InputGenerateNet(x1)
+        y = self.block_out(y)
+        return y
 
     def initiate_layer(self, input, in_feature, out_feature, classes, tau_m=4., tau_s=1., use_gauss=True, batchsize=64):
         """
         配置相应的层
         """
+        out_feature_lowbit = (int(out_feature) & int(-out_feature)) + out_feature
         if len(input.shape) != 2:
             input = input.view(input.shape[0], -1)
             self.first = input.shape[0]
@@ -657,25 +703,50 @@ class merge_layer(nn.Module):
             self.first = input.shape[0]
             self.second = input.numel() / self.first
 
-        self.block_inx = block_in(in_feature,64)
-        self.block_iny = block_eq(64)
-        self.block_inz = block_eq(64)
-        self.three_dim_layer.initiate_layer(torch.rand(batchsize, 64 * (input.shape[1] // (in_feature * 4))),
-                                            in_feature, out_feature, tau_m=tau_m, tau_s=tau_s,
-                                            use_gauss=use_gauss)
-        self.block_out = block_out(64, out_feature, classes)
+        self.block_inx = block_in(in_feature, 64)
+        self.InputGenerateNet.initiate_layer(input,64,64,tau_m,tau_s,use_gauss,batchsize)
+        self.block_out = block_out(64, out_feature_lowbit, classes)
+        self._initialize()
 
     def subWeightGrad(self, epoch, epochs, sigma=1):
         """
         three-dim模型的梯度三项式
         """
-        self.three_dim_layer.subWeightGrad(epoch, epochs, sigma)
+        for layer in self.modules():
+            if isinstance(layer,InputGenerateNet):
+                layer.subWeightGrad(epoch, epochs, sigma)
 
     def settest(self, test=True):
         """
         令模型知道当前处理test
         """
-        self.three_dim_layer.settest(test)
+        for layer in self.modules():
+            if isinstance(layer, InputGenerateNet):
+                layer.settest(test)
+
+    def _initialize(self):
+        for layer in self.modules():
+            if isinstance(layer, nn.Conv2d):
+                layer: nn.Conv2d
+                layer.bias.data.fill_(1.)
+                layer.bias.data -= torch.randn_like(layer.bias.data).abs()  # /math.sqrt(layer.bias.data.numel())
+            elif isinstance(layer, guassNet):
+                layer: guassNet
+                layer.gauss_bias.data.fill_(1.)
+                layer.gauss_bias.data -= torch.randn_like(
+                    layer.gauss_bias.data).abs()  # /math.sqrt(layer.gauss_bias.data.numel())
+
+    def L2_biasoption(self, sigma=0.1):
+        loss = [torch.tensor(0.).float().cuda()]
+        for layer in self.modules():
+            if isinstance(layer, nn.Conv2d):
+                layer: guassNet
+                loss.append(torch.norm(layer.bias.data - 1., p=2))
+            elif isinstance(layer, guassNet):
+                layer: guassNet
+                loss.append(torch.norm(layer.gauss_bias.data - 1., p=2))
+        loss = torch.stack(loss, dim=-1).mean()
+        return loss * sigma
 
 
 """
