@@ -6,13 +6,13 @@
 import argparse
 import os
 import time
-
+import sys
 import torch
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import datasets
-
+sys.path.append("F://Snn_Auto")
 from Snn_Auto_master.lib.accuracy import accuracy
 from Snn_Auto_master.lib.criterion import criterion
 from Snn_Auto_master.lib.data_loaders import MNISTDataset, get_rand_transform, load_data

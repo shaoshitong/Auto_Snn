@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import os
-import tensorboardX.summary as summary
 import random
 import numpy as np
 from Snn_Auto_master.lib.activation import Activation
