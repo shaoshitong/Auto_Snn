@@ -145,14 +145,14 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
         model.zero_grad()
         if yaml['optimizer']['optimizer_choice']=='SAM':
             loss.backward(retain_graph=False)
-            model.subWeightGrad(epoch, yaml['parameters']['epoch'], 1.)
+            model.subWeightGrad(epoch, yaml['parameters']['epoch'], .5)
             optimizer.first_step(zero_grad=True)
             (criterion(criterion_loss,model(input),target)+model.L2_biasoption()).backward()
-            model.subWeightGrad(epoch, yaml['parameters']['epoch'], 1.)
+            model.subWeightGrad(epoch, yaml['parameters']['epoch'], .5)
             optimizer.second_step(zero_grad=False)
         else:
             loss.backward(retain_graph=False)
-            model.subWeightGrad(epoch, yaml['parameters']['epoch'], 1.)
+            model.subWeightGrad(epoch, yaml['parameters']['epoch'], .5)
             optimizer.step()
             if i!=0 and i%600==0:
                  parametersgradCheck(model)
@@ -239,5 +239,5 @@ if __name__ == "__main__":
                 path = checkpoint_path
             if args.test == True:
                 test2(model, test_dataloader, yaml, criterion_loss)
-        print("best_acc:{:.3f}%".format(best_acc))
         log.flush()
+        print("best_acc:{:.3f}%".format(best_acc))

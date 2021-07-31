@@ -93,12 +93,9 @@ class block_out(nn.Module):
         ])
 
     def forward(self, x):
-        x1 = F.relu(self.bn_out(x), inplace=True)
-        # ------------------------------
-        x2 = self.bn2(self.conv2(x1))+self.shortcut2(x)#[32,8,8]
-        x2 = F.leaky_relu(x2, inplace=True)
-        x3= self.bn1(self.conv1(x2))+self.shortcut1(x2)
-        x3 = F.leaky_relu(x3, inplace=True)
+        x1 = self.bn_out(x)+x
+        x2 = self.bn2(self.conv2(F.leaky_relu_(x1)))+self.shortcut2(x1)#[32,8,8]
+        x3= self.bn1(self.conv1(F.leaky_relu_(x2)))+self.shortcut1(x2)
         x3 = self.linear(x3+self.shortcut0(x))
         return x3
 
