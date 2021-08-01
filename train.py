@@ -154,8 +154,8 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
             loss.backward(retain_graph=False)
             model.subWeightGrad(epoch, yaml['parameters']['epoch'], .5)
             optimizer.step()
-            if i!=0 and i%600==0:
-                 parametersgradCheck(model)
+            # if i!=0 and i%600==0:
+            #      parametersgradCheck(model)
         # pd_save(model.three_dim_layer.point_layerg+_module[str(0) + '_' + str(0) + '_' + str(0)].tensor_tau_m1.view(28,-1),"tau_m2/"+str(i))
         prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
         log(model, loss.cpu(), prec1.cpu(),prec5.cpu(),scheduler.lr())

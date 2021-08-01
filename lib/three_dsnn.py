@@ -42,12 +42,14 @@ class Shortcut(nn.Module):
         if use_same == False:
             self.shortcut = lambda x: F.pad(x[:, :, ::proportion, ::proportion],
                                             (0, 0, 0, 0, (self.out_feature - x.shape[1]) // 2,
-                                             (self.out_feature - x.shape[1]) // 2+(self.out_feature - x.shape[1]) % 2),
+                                             (self.out_feature - x.shape[1]) // 2 + (
+                                                     self.out_feature - x.shape[1]) % 2),
                                             "constant", 0)
         else:
             self.shortcut = lambda x: F.pad(x,
                                             (0, 0, 0, 0, (self.out_feature - x.shape[1]) // 2,
-                                             (self.out_feature - x.shape[1]) // 2+(self.out_feature - x.shape[1]) % 2),
+                                             (self.out_feature - x.shape[1]) // 2 + (
+                                                     self.out_feature - x.shape[1]) % 2),
                                             "constant", 0)
 
     def forward(self, x):
@@ -62,16 +64,16 @@ class block_in(nn.Module):
         self.conv2 = nn.Conv2d(32, out_feature, (3, 3), stride=1, padding=1, bias=True)
         self.bn2 = nn.BatchNorm2d(out_feature)
         self.shortcut2 = Shortcut(32, out_feature, use_same=True)
-        self.shortcut1 = Shortcut(in_feature,32)
-        self.shortcut0 = Shortcut(in_feature,out_feature)
+        self.shortcut1 = Shortcut(in_feature, 32)
+        self.shortcut0 = Shortcut(in_feature, out_feature)
 
     def forward(self, x):
         # print(self.shortcut1(x).shape,self.conv1(x).shape)
-        x1 = self.bn1(self.conv1(x))+self.shortcut1(x)
+        x1 = self.bn1(self.conv1(x)) + self.shortcut1(x)
         x1 = F.leaky_relu(x1, inplace=True)
-        x2 = self.bn2(self.conv2(x1))+self.shortcut2(x1)
+        x2 = self.bn2(self.conv2(x1)) + self.shortcut2(x1)
         x2 = F.leaky_relu(x2, inplace=True)
-        x3 =x2+self.shortcut0(x)
+        x3 = x2 + self.shortcut0(x)
         return x3
 
 
@@ -83,7 +85,7 @@ class block_out(nn.Module):
         self.bn2 = nn.BatchNorm2d(32)
         self.shortcut2 = Shortcut(in_feature, 32)
         self.shortcut1 = Shortcut(32, out_feature)
-        self.shortcut0 = Shortcut(in_feature,out_feature,proportion=4)
+        self.shortcut0 = Shortcut(in_feature, out_feature, proportion=4)
         self.conv1 = nn.Conv2d(32, out_feature, (2, 2), stride=2, padding=0, bias=True)
         self.bn1 = nn.BatchNorm2d(out_feature)
         self.linear = nn.Sequential(*[
@@ -92,10 +94,10 @@ class block_out(nn.Module):
         ])
 
     def forward(self, x):
-        x1 = self.bn_out(x)+x
-        x2 = self.bn2(self.conv2(F.leaky_relu_(x1)))+self.shortcut2(x1)#[32,8,8]
-        x3= self.bn1(self.conv1(F.leaky_relu_(x2)))+self.shortcut1(x2)
-        x3 = self.linear(x3+self.shortcut0(x))
+        x1 = self.bn_out(x) + x
+        x2 = self.bn2(self.conv2(F.relu_(x1))) + self.shortcut2(x1)  # [32,8,8]
+        x3 = self.bn1(self.conv1(F.relu_(x2))) + self.shortcut1(x2)
+        x3 = self.linear(x3 + self.shortcut0(x))
         return x3
 
 
@@ -113,7 +115,7 @@ class block_eq(nn.Module):
         self.bn_eq = nn.BatchNorm2d(eq_feature)
 
     def forward(self, x):
-        x1 = self.longConv(self.bn_eq(x))+self.shortConv(x)
+        x1 = self.longConv(self.bn_eq(x)) + self.shortConv(x)
         x2 = F.leaky_relu(x1, inplace=True)
         return x2
 
@@ -373,6 +375,12 @@ class DoorMechanism(nn.Module):
                                         requires_grad=True)
         self.tau_sm_weight2 = Parameter(torch.Tensor(in_feature, out_feature),
                                         requires_grad=True)
+        self.feature_s_sift1 = Parameter(torch.Tensor(int(2 * math.sqrt(self.out_pointnum // self.out_feature)), 1),
+                                         requires_grad=True)
+        self.feature_m_sift1 = Parameter(torch.Tensor(int(2 * math.sqrt(self.out_pointnum // self.out_feature)), 1),
+                                         requires_grad=True)
+        self.feature_sm_sift1 = Parameter(torch.Tensor(int(2 * math.sqrt(self.out_pointnum // self.out_feature)), 1),
+                                          requires_grad=True)
         stdv = 6. / math.sqrt((in_pointnum // in_feature) * (out_pointnum // out_feature))
         # nn.init.orthogonal_(self.tau_m_weight1, gain=1)
         # nn.init.orthogonal_(self.tau_m_weight2, gain=1)
@@ -386,6 +394,9 @@ class DoorMechanism(nn.Module):
         self.tau_s_weight2.data.uniform_(-stdv, stdv)
         self.tau_sm_weight1.data.uniform_(-stdv, stdv)
         self.tau_sm_weight2.data.uniform_(-stdv, stdv)
+        self.feature_m_sift1.data.uniform_(-stdv, stdv)
+        self.feature_s_sift1.data.uniform_(-stdv, stdv)
+        self.feature_sm_sift1.data.uniform_(-stdv, stdv)
         self.tau_m_bias = Parameter(torch.zeros((1, out_feature)).float(), requires_grad=True)
         self.tau_s_bias = Parameter(torch.zeros((1, out_feature)).float(), requires_grad=True)
         self.tau_sm_bias = Parameter(torch.zeros((1, out_feature)).float(), requires_grad=True)
@@ -397,9 +408,18 @@ class DoorMechanism(nn.Module):
         x1: torch.Tensor
         x2: torch.Tensor
         x3: torch.Tensor
-        y1 = x1.view(x1.shape[0], x1.shape[1], -1).mean(dim=-1).mean(dim=0, keepdim=True)
-        y2 = x2.view(x2.shape[0], x2.shape[1], -1).mean(dim=-1).mean(dim=0, keepdim=True)
-        y3 = x3.view(x3.shape[0], x3.shape[1], -1).mean(dim=-1).mean(dim=0, keepdim=True)
+        # y1 = x1.view(x1.shape[0], x1.shape[1], -1).mean(dim=-1).mean(dim=0, keepdim=True)
+        # y2 = x2.view(x2.shape[0], x2.shape[1], -1).mean(dim=-1).mean(dim=0, keepdim=True)
+        # y3 = x3.view(x3.shape[0], x3.shape[1], -1).mean(dim=-1).mean(dim=0, keepdim=True)  # [batchsize,feature]
+        y1 = (torch.stack([x1.mean(dim=-1), x1.mean(dim=-2)], dim=-1).view(x1.shape[0], x1.shape[1], -1) @ F.softmax(
+            self.feature_s_sift1, dim=0)).squeeze(
+            -1).mean(dim=0, keepdim=True)
+        y2 = (torch.stack([x2.mean(dim=-1), x2.mean(dim=-2)], dim=-1).view(x2.shape[0], x2.shape[1], -1) @ F.softmax(
+            self.feature_m_sift1, dim=0)).squeeze(
+            -1).mean(dim=0, keepdim=True)
+        y3 = (torch.stack([x3.mean(dim=-1), x3.mean(dim=-2)], dim=-1).view(x3.shape[0], x3.shape[1], -1) @ F.softmax(
+            self.feature_sm_sift1, dim=0)).squeeze(
+            -1).mean(dim=0, keepdim=True)
         men_1 = torch.sigmoid(y1 @ self.tau_m_weight2 + tau_m @ self.tau_m_weight1 + self.tau_m_bias)
         men_2 = torch.sigmoid(y2 @ self.tau_s_weight2 + tau_s @ self.tau_s_weight1 + self.tau_s_bias)
         men_3 = torch.sigmoid(y3 @ self.tau_sm_weight2 + tau_sm @ self.tau_sm_weight1 + self.tau_sm_bias)
@@ -575,8 +595,8 @@ class three_dim_Layer(nn.Module):
                     """
                     目前虽然有in_pointnum,out_pointnum,in_feature,out_feature,但实际上默认所有的输入输出相等，如果不相等将极大增加模型的设计难度。
                     """
-                    self.point_layer[str(i) + '_' + str(j) + '_' + str(k)] = point_cul_Layer(data.shape[1] // 2,
-                                                                                             data.shape[1] // 2,
+                    self.point_layer[str(i) + '_' + str(j) + '_' + str(k)] = point_cul_Layer(data.shape[1],
+                                                                                             data.shape[1],
                                                                                              path_len=self.z + self.x + self.y,
                                                                                              in_feature=in_feature,
                                                                                              out_feature=out_feature,
@@ -611,32 +631,36 @@ class three_dim_Layer(nn.Module):
 
 
 class InputGenerateNet(nn.Module):
-    def __init__(self,shape,device,weight_require_grad,weight_rand,grad_lr,dropout,test):
-        super(InputGenerateNet,self).__init__()
-        self.shape=shape
-        self.device=device
-        self.weight_require_grad=weight_require_grad
-        self.weight_rand=weight_rand
-        self.grad_lr=grad_lr
-        self.dropout=dropout
-        self.test=test
+    def __init__(self, shape, device, weight_require_grad, weight_rand, grad_lr, dropout, test):
+        super(InputGenerateNet, self).__init__()
+        self.shape = shape
+        self.device = device
+        self.weight_require_grad = weight_require_grad
+        self.weight_rand = weight_rand
+        self.grad_lr = grad_lr
+        self.dropout = dropout
+        self.test = test
         self.three_dim_layer = three_dim_Layer(self.shape, self.device, weight_require_grad, weight_rand, grad_lr,
                                                p=dropout, test=test)
-    def forward(self,x):
-        y=self.block_eqy(x)
-        z=self.block_eqz(y)
-        return self.three_dim_layer(x,y,z)
 
-    def initiate_layer(self, input, in_feature, out_feature, tau_m=4., tau_s=1., use_gauss=True, batchsize=64):
-        self.three_dim_layer.initiate_layer(torch.rand(batchsize, 64 * (input.shape[1] // (in_feature * 4))),
+    def forward(self, x):
+        y = self.block_eqy(x)
+        z = self.block_eqz(y)
+        return self.three_dim_layer(x, y, z)
+
+    def initiate_layer(self, input, in_feature, out_feature, tau_m=4., tau_s=1., use_gauss=True, batchsize=64,
+                       old_in_feature=1, old_out_feature=1):
+        self.three_dim_layer.initiate_layer(torch.rand(batchsize, 64 * (input.shape[1] // (old_out_feature * 4))),
                                             in_feature, out_feature, tau_m=tau_m, tau_s=tau_s,
                                             use_gauss=use_gauss)
-        self.block_eqy=block_eq(in_feature)
-        self.block_eqz=block_eq(in_feature)
-    def settest(self,test):
+        self.block_eqy = block_eq(in_feature)
+        self.block_eqz = block_eq(in_feature)
+
+    def settest(self, test):
         self.three_dim_layer.settest(test)
-    def subWeightGrad(self,epoch, epochs, sigma):
-        self.three_dim_layer.subWeightGrad(epochs,epoch,sigma)
+
+    def subWeightGrad(self, epoch, epochs, sigma):
+        self.three_dim_layer.subWeightGrad(epochs, epoch, sigma)
 
 
 class merge_layer(nn.Module):
@@ -647,11 +671,16 @@ class merge_layer(nn.Module):
         """
         super(merge_layer, self).__init__()
         if shape == None:
-            self.shape = [3, 3, 3]
+            self.shape = [[3, 3, 3], ]
         else:
             self.shape = shape
         self.device = device
-        self.InputGenerateNet=InputGenerateNet(self.shape,self.device,weight_require_grad,weight_rand,grad_lr,dropout,test)
+        self.InputGenerateNet = []
+        for i in range(len(self.shape)):
+            self.InputGenerateNet.append(
+                InputGenerateNet(self.shape[i], self.device, weight_require_grad, weight_rand, grad_lr, dropout,
+                                 test).to(device))
+        self.InputGenerateNet = nn.ModuleList(self.InputGenerateNet)
         self.time = 0
 
     # def initdata(self, x):
@@ -681,9 +710,10 @@ class merge_layer(nn.Module):
             # y = y.view(y.shape[0], 1, 28, 28)
         else:
             raise KeyError()
-        x1 = self.block_inx(x)
-        y=self.InputGenerateNet(x1)
-        y = self.block_out(y)
+        x = self.block_inx(x)
+        for Net in self.InputGenerateNet:
+            x = Net(x)
+        y = self.block_out(x)
         return y
 
     def initiate_layer(self, input, in_feature, out_feature, classes, tau_m=4., tau_s=1., use_gauss=True, batchsize=64):
@@ -700,7 +730,9 @@ class merge_layer(nn.Module):
             self.second = input.numel() / self.first
 
         self.block_inx = block_in(in_feature, 64)
-        self.InputGenerateNet.initiate_layer(input,64,64,tau_m,tau_s,use_gauss,batchsize)
+        for Net in self.InputGenerateNet:
+            Net.initiate_layer(input, 64, 64, tau_m, tau_s, use_gauss, batchsize,
+                               old_in_feature=in_feature, old_out_feature=out_feature)
         self.block_out = block_out(64, out_feature_lowbit, classes)
         self._initialize()
 
@@ -709,7 +741,7 @@ class merge_layer(nn.Module):
         three-dim模型的梯度三项式
         """
         for layer in self.modules():
-            if isinstance(layer,InputGenerateNet):
+            if isinstance(layer, InputGenerateNet):
                 layer.subWeightGrad(epoch, epochs, sigma)
 
     def settest(self, test=True):
@@ -737,10 +769,10 @@ class merge_layer(nn.Module):
         for layer in self.modules():
             if isinstance(layer, nn.Conv2d):
                 layer: guassNet
-                loss.append(torch.norm(layer.bias.data - 1., p=2))
+                loss.append(torch.norm(torch.sigmoid(-layer.bias.data), p=2))
             elif isinstance(layer, guassNet):
                 layer: guassNet
-                loss.append(torch.norm(layer.gauss_bias.data - 1., p=2))
+                loss.append(torch.norm(torch.sigmoid(-layer.gauss_bias.data), p=2))
         loss = torch.stack(loss, dim=-1).mean()
         return loss * sigma
 
