@@ -375,11 +375,12 @@ class DoorMechanism(nn.Module):
                                         requires_grad=True)
         self.tau_sm_weight2 = Parameter(torch.Tensor(in_feature, out_feature),
                                         requires_grad=True)
-        self.feature_s_sift1 = Parameter(torch.Tensor(int(2 * math.sqrt(self.out_pointnum // self.out_feature)), 1),
+        self.len_point=int(math.sqrt(self.out_pointnum // self.out_feature))
+        self.feature_s_sift1 = Parameter(torch.Tensor(int(2 *self.len_point), 1),
                                          requires_grad=True)
-        self.feature_m_sift1 = Parameter(torch.Tensor(int(2 * math.sqrt(self.out_pointnum // self.out_feature)), 1),
+        self.feature_m_sift1 = Parameter(torch.Tensor(int(2 *self.len_point), 1),
                                          requires_grad=True)
-        self.feature_sm_sift1 = Parameter(torch.Tensor(int(2 * math.sqrt(self.out_pointnum // self.out_feature)), 1),
+        self.feature_sm_sift1 = Parameter(torch.Tensor(int(2 *self.len_point), 1),
                                           requires_grad=True)
         stdv = 6. / math.sqrt((in_pointnum // in_feature) * (out_pointnum // out_feature))
         # nn.init.orthogonal_(self.tau_m_weight1, gain=1)
@@ -423,6 +424,9 @@ class DoorMechanism(nn.Module):
         men_1 = torch.sigmoid(y1 @ self.tau_m_weight2 + tau_m @ self.tau_m_weight1 + self.tau_m_bias)
         men_2 = torch.sigmoid(y2 @ self.tau_s_weight2 + tau_s @ self.tau_s_weight1 + self.tau_s_bias)
         men_3 = torch.sigmoid(y3 @ self.tau_sm_weight2 + tau_sm @ self.tau_sm_weight1 + self.tau_sm_bias)
+        x1=x1*torch.sigmoid(self.feature_s_sift1[:self.len_point,:].view(1,1,1,self.len_point)+self.feature_s_sift1[self.len_point:,:].view(1,1,self.len_point,1))
+        x2=x2*self.feature_m_sift1[:self.len_point,:].view(1,1,1,self.len_point)+x2*self.feature_m_sift1[self.len_point:,:].view(1,1,self.len_point,1)
+        x3=x3*self.feature_sm_sift1[:self.len_point,:].view(1,1,1,self.len_point)+x3*self.feature_sm_sift1[self.len_point:,:].view(1,1,self.len_point,1)
         result = torch.tanh(
             men_1.unsqueeze(-1).unsqueeze(-1) * x1 + men_2.unsqueeze(-1).unsqueeze(-1) * x2 + men_3.unsqueeze(
                 -1).unsqueeze(-1) * x3)
@@ -683,19 +687,6 @@ class merge_layer(nn.Module):
         self.InputGenerateNet = nn.ModuleList(self.InputGenerateNet)
         self.time = 0
 
-    # def initdata(self, x):
-    #     """
-    #     初始化输入数据，并求出梯度，返回原始数据，grad数据
-    #     """
-    #     if dataoption == 'cifar10':
-    #         y = DiffInitial(x, [x.shape[0], 3, 32, 32], 3, 3, group=3)[0]
-    #     elif dataoption == 'mnist':
-    #         y = DiffInitial(x, [x.shape[0], 1, 28, 28], 1, 1, group=1)[0]
-    #     elif dataoption == 'fashionmnist':
-    #         y = DiffInitial(x, [x.shape[0], 1, 28, 28], 1, 1, group=1)[0]
-    #     else:
-    #         raise KeyError()
-    #     return x, y
 
     def forward(self, x):
         # x, y = self.initdata(x)
@@ -769,10 +760,10 @@ class merge_layer(nn.Module):
         for layer in self.modules():
             if isinstance(layer, nn.Conv2d):
                 layer: guassNet
-                loss.append(torch.norm(torch.sigmoid(-layer.bias.data), p=2))
+                loss.append(torch.norm(torch.abs(layer.bias.data) - 1., p=2))
             elif isinstance(layer, guassNet):
                 layer: guassNet
-                loss.append(torch.norm(torch.sigmoid(-layer.gauss_bias.data), p=2))
+                loss.append(torch.norm(torch.abs(layer.gauss_bias.data) - 1., p=2))
         loss = torch.stack(loss, dim=-1).mean()
         return loss * sigma
 

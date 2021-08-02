@@ -13,7 +13,7 @@ parameters:
   batch_size:
     64
   epoch:
-    100
+    200
   droupout:
     0.3
   filter_tau_m:
@@ -55,12 +55,11 @@ scheduler:
     'SchedulerLR'
   SchedulerLR:
     milestones:
-      - 0.5
+      - 0.45
       - 0.75
-      - 0.875
-      - 0.9375
+      - 0.95
     gamma:
-      0.5
+      0.2
   MultiStepLR:
     milestones:
       - 25
