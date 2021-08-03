@@ -425,9 +425,9 @@ class DoorMechanism(nn.Module):
         y1 = x1.view(x1.shape[0], x1.shape[1], -1).mean(dim=-1).mean(dim=0, keepdim=True)
         y2 = x2.view(x2.shape[0], x2.shape[1], -1).mean(dim=-1).mean(dim=0, keepdim=True)
         y3 = x3.view(x3.shape[0], x3.shape[1], -1).mean(dim=-1).mean(dim=0, keepdim=True)  # [batchsize,feature]
-        x1=  (x1*self.pointx_s).sum(dim=-2,keepdims=True)+(x1*self.pointy_s).sum(dim=-1,keepdims=True)
-        x2 = (x2 * self.pointx_m).sum(dim=-2, keepdims=True) + (x2 * self.pointy_m).sum(dim=-1, keepdims=True)
-        x3 = (x3 * self.pointx_sm).sum(dim=-2, keepdims=True) + (x3 * self.pointy_sm).sum(dim=-1, keepdims=True)
+        x1=  (x1*self.pointx_s).sum(dim=-2,keepdims=True)+(x1*self.pointy_s).sum(dim=-1,keepdims=True)+torch.eye(x1.shape[-1],dtype=torch.float32).to(x1.device).unsqueeze(0).unsqueeze(0)
+        x2 = (x2 * self.pointx_m).sum(dim=-2, keepdims=True) + (x2 * self.pointy_m).sum(dim=-1, keepdims=True)+torch.eye(x2.shape[-1],dtype=torch.float32).to(x2.device).unsqueeze(0).unsqueeze(0)
+        x3 = (x3 * self.pointx_sm).sum(dim=-2, keepdims=True) + (x3 * self.pointy_sm).sum(dim=-1, keepdims=True)+torch.eye(x3.shape[-1],dtype=torch.float32).to(x3.device).unsqueeze(0).unsqueeze(0)
         # 2.y1 = (torch.stack([x1.mean(dim=-1), x1.mean(dim=-2)], dim=-1).view(x1.shape[0], x1.shape[1], -1) @ F.softmax(
         #     self.feature_s_sift1, dim=0)).squeeze(
         #     -1).mean(dim=0, keepdim=True)
@@ -472,11 +472,11 @@ class point_cul_Layer(nn.Module):
         self.weight_require_grad = weight_require_grad
         self.in_feature, self.out_feature = in_pointnum, out_pointnum
         g = False
-        self.tensor_tau_m1 = torch.randn((1, 64), dtype=torch.float32, requires_grad=g).to(
+        self.tensor_tau_m1 = torch.rand((1, 64), dtype=torch.float32, requires_grad=g).to(
             self.device)
-        self.tensor_tau_s1 = torch.randn((1, 64), dtype=torch.float32, requires_grad=g).to(
+        self.tensor_tau_s1 = torch.rand((1, 64), dtype=torch.float32, requires_grad=g).to(
             self.device)
-        self.tensor_tau_sm1 = torch.randn((1, 64), dtype=torch.float32, requires_grad=g).to(
+        self.tensor_tau_sm1 = torch.rand((1, 64), dtype=torch.float32, requires_grad=g).to(
             self.device)
         self.DoorMach = DoorMechanism(in_pointnum, out_pointnum, 64, 64)
         if dataoption == 'mnist':
@@ -502,13 +502,14 @@ class point_cul_Layer(nn.Module):
         self.STuning = STuning
         self.grad_lr = grad_lr
         self.sigma = 1
+        self.norm = None
         self.index = random.randint(0, path_len)
         self.maxpool=nn.ModuleList([
             nn.MaxPool2d(kernel_size=3,stride=1,padding=1),
         ])
         # self._initialize()
 
-    def forward(self, x, weight):
+    def forward(self, x):
         x1, x2, x3 = x.unbind(dim=-1)
         """
         Try 1
@@ -518,8 +519,6 @@ class point_cul_Layer(nn.Module):
         x, self.tensor_tau_m1, self.tensor_tau_s1, self.tensor_tau_sm1 = self.DoorMach(x1, x2, x3, self.tensor_tau_m1,
                                                                                        self.tensor_tau_s1,
                                                                                        self.tensor_tau_sm1)
-        if self.STuning:
-            pass
         if self.weight_rand:
             if dataoption == 'mnist':
                 m = self.bn1(self.gaussbur(x))
@@ -535,6 +534,8 @@ class point_cul_Layer(nn.Module):
                 raise KeyError('not have this dataset')
             # print(self.gaussbur.weight.data.abs().max())
             x = m
+        self.norm=(torch.norm(x,p=2)/(x.numel())).detach()
+        # print(torch.svd(x1[0,0,:,:])[1],torch.svd(x2[0,0,:,:])[1],torch.svd(x3[0,0,:,:])[1],torch.svd(x[0,0,:,:])[1])
         return x
 
     def _initialize(self):
@@ -542,21 +543,15 @@ class point_cul_Layer(nn.Module):
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight.data, mode="fan_in", nonlinearity="relu")
 
-    def subWeightGrad(self, epoch, epochs, sigma, diag_num, path_num_x, path_num_y, path_num_z):
+    def subWeightGrad(self, epoch, epochs, sigma, diag_num,norm):
         """
         用三项式定理以及链式法则作为数学原理进行梯度修改
         """
 
-        weight = float(sigma) * diag_num * math.pow((self.tensor_tau_m1.mean().clone().detach().cpu()), path_num_x) \
-                 * math.pow((self.tensor_tau_s1.mean().clone().detach().cpu()), path_num_y) \
-                 * math.pow((self.tensor_tau_sm1.mean().clone().detach().cpu()), path_num_z)
+        weight = float(sigma) * diag_num * self.norm/ norm
         for name, param in self.named_parameters():
             if param.requires_grad == True and param.grad != None:
                 param.grad /= weight
-                if epoch <= epochs // 4:
-                    param.grad.data = param.grad.data.clamp_(-1, 1)
-                else:
-                    param.grad.data = param.grad.data.clamp_(-0.5, 0.5)
 
 
 class three_dim_Layer(nn.Module):
@@ -586,6 +581,9 @@ class three_dim_Layer(nn.Module):
         """
         x,y=>[batchsize,64,x_pointnum//2,y_pointnum//2]
         """
+        x=torch.tanh(x)
+        y=torch.tanh(y)
+        z=torch.tanh(z)
         tensor_prev = [[z for i in range(self.x)] for j in range(self.y)]
         for i in range(self.z):
             for j in range(self.y):
@@ -603,7 +601,7 @@ class three_dim_Layer(nn.Module):
                     else:
                         yy = tensor_prev[j][k - 1]
                     tensor_prev[j][k] = self.point_layer_module[str(i) + '_' + str(j) + '_' + str(k)](
-                        torch.stack([xx, yy, zz], dim=-1), i + j + k)
+                        torch.stack([xx, yy, zz], dim=-1))
                     tensor_prev[j][k] = axonLimit.apply(tensor_prev[j][k])
                     if k != self.x - 1 and j != self.y - 1 and i != self.z - 1 and self.test == False:
                         tensor_prev[j][k]= self.dropout[j][k](tensor_prev[j][k])
@@ -651,9 +649,7 @@ class three_dim_Layer(nn.Module):
                                                                                                     self.x - k - 1,
                                                                                                     self.y - j - 1,
                                                                                                     self.z - i - 1),
-                                                                                                self.x - k - 1,
-                                                                                                self.y - j - 1,
-                                                                                                self.z - i - 1)
+                                                                                                self.point_layer_module[str(self.z-1) + '_' + str(self.y-1) + '_' + str(self.x-1)].norm)
 
 
 class InputGenerateNet(nn.Module):
@@ -669,10 +665,11 @@ class InputGenerateNet(nn.Module):
         self.three_dim_layer = three_dim_Layer(self.shape, self.device, weight_require_grad, weight_rand, grad_lr,
                                                p=dropout, test=test)
 
-    def forward(self, x):
-        y = self.block_eqy(x)
-        z = self.block_eqz(y)
-        return self.three_dim_layer(x, y, z)
+    def forward(self, x,y=None,z=None):
+        if y==None and z==None:
+            y = self.block_eqy(x)
+            z = self.block_eqz(y)
+        return y,z,self.three_dim_layer(x, y, z)
 
     def initiate_layer(self, input, in_feature, out_feature, tau_m=4., tau_s=1., use_gauss=True, batchsize=64,
                        old_in_feature=1, old_out_feature=1):
@@ -724,10 +721,12 @@ class merge_layer(nn.Module):
         else:
             raise KeyError()
         x = self.block_inx(x)
+        y=None
+        z=None
         for Net in self.InputGenerateNet:
-            x = Net(x)
-        y = self.block_out(x)
-        return y
+            x,y,z = Net(x,y,z)
+        h = self.block_out(z)
+        return h
 
     def initiate_layer(self, input, in_feature, out_feature, classes, tau_m=4., tau_s=1., use_gauss=True, batchsize=64):
         """
@@ -777,17 +776,22 @@ class merge_layer(nn.Module):
                 layer.gauss_bias.data -= torch.randn_like(
                     layer.gauss_bias.data).abs()  # /math.sqrt(layer.gauss_bias.data.numel())
 
-    def L2_biasoption(self, sigma=0.1):
+    def L2_biasoption(self, sigma=1):
         loss = [torch.tensor(0.).float().cuda()]
+        normlist=[]
         for layer in self.modules():
             if isinstance(layer, nn.Conv2d):
                 layer: guassNet
-                loss.append(torch.norm(torch.abs(layer.bias.data) - 1., p=2))
+                loss.append(torch.norm(torch.abs(layer.bias.data) - 1., p=2)/layer.bias.data.numel())
             elif isinstance(layer, guassNet):
                 layer: guassNet
-                loss.append(torch.norm(torch.abs(layer.gauss_bias.data) - 1., p=2))
-        loss = torch.stack(loss, dim=-1).mean()
-        return loss * sigma
+                loss.append(torch.norm(torch.abs(layer.gauss_bias.data) - 1., p=2)/layer.gauss_bias.data.numel())
+            elif isinstance(layer, point_cul_Layer):
+                layer:point_cul_Layer
+                normlist.append(layer.norm)
+        loss_norm=torch.stack(normlist,dim=-1).std(dim=0)
+        loss_bias = torch.stack(loss, dim=-1).mean()
+        return (loss_norm+loss_bias) * sigma
 
 
 """
