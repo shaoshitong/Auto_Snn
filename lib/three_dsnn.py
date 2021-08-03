@@ -382,13 +382,20 @@ class DoorMechanism(nn.Module):
                                          requires_grad=True)
         self.feature_sm_sift1 = Parameter(torch.Tensor(int(2 *self.len_point), 1),
                                           requires_grad=True)
+
+        self.pointx_s = Parameter(torch.Tensor(1,1,self.len_point,1),
+                                         requires_grad=True)
+        self.pointx_m =Parameter(torch.Tensor(1,1,self.len_point,1),
+                                         requires_grad=True)
+        self.pointx_sm = Parameter(torch.Tensor(1,1,self.len_point,1),
+                                         requires_grad=True)
+        self.pointy_s = Parameter(torch.Tensor(1,1,1,self.len_point),
+                                         requires_grad=True)
+        self.pointy_m =Parameter(torch.Tensor(1,1,1,self.len_point),
+                                         requires_grad=True)
+        self.pointy_sm = Parameter(torch.Tensor(1,1,1,self.len_point),
+                                         requires_grad=True)
         stdv = 6. / math.sqrt((in_pointnum // in_feature) * (out_pointnum // out_feature))
-        # nn.init.orthogonal_(self.tau_m_weight1, gain=1)
-        # nn.init.orthogonal_(self.tau_m_weight2, gain=1)
-        # nn.init.orthogonal_(self.tau_s_weight1, gain=1)
-        # nn.init.orthogonal_(self.tau_s_weight2, gain=1)
-        # nn.init.orthogonal_(self.tau_sm_weight1, gain=1)
-        # nn.init.orthogonal_(self.tau_sm_weight2, gain=1)
         self.tau_m_weight1.data.uniform_(-stdv, stdv)
         self.tau_m_weight2.data.uniform_(-stdv, stdv)
         self.tau_s_weight1.data.uniform_(-stdv, stdv)
@@ -398,6 +405,12 @@ class DoorMechanism(nn.Module):
         self.feature_m_sift1.data.uniform_(-stdv, stdv)
         self.feature_s_sift1.data.uniform_(-stdv, stdv)
         self.feature_sm_sift1.data.uniform_(-stdv, stdv)
+        self.pointx_s.data.uniform_(-stdv, stdv)
+        self.pointx_m.data.uniform_(-stdv, stdv)
+        self.pointx_sm.data.uniform_(-stdv, stdv)
+        self.pointy_s.data.uniform_(-stdv, stdv)
+        self.pointy_m.data.uniform_(-stdv, stdv)
+        self.pointy_sm.data.uniform_(-stdv, stdv)
         self.tau_m_bias = Parameter(torch.zeros((1, out_feature)).float(), requires_grad=True)
         self.tau_s_bias = Parameter(torch.zeros((1, out_feature)).float(), requires_grad=True)
         self.tau_sm_bias = Parameter(torch.zeros((1, out_feature)).float(), requires_grad=True)
@@ -409,24 +422,27 @@ class DoorMechanism(nn.Module):
         x1: torch.Tensor
         x2: torch.Tensor
         x3: torch.Tensor
-        # y1 = x1.view(x1.shape[0], x1.shape[1], -1).mean(dim=-1).mean(dim=0, keepdim=True)
-        # y2 = x2.view(x2.shape[0], x2.shape[1], -1).mean(dim=-1).mean(dim=0, keepdim=True)
-        # y3 = x3.view(x3.shape[0], x3.shape[1], -1).mean(dim=-1).mean(dim=0, keepdim=True)  # [batchsize,feature]
-        y1 = (torch.stack([x1.mean(dim=-1), x1.mean(dim=-2)], dim=-1).view(x1.shape[0], x1.shape[1], -1) @ F.softmax(
-            self.feature_s_sift1, dim=0)).squeeze(
-            -1).mean(dim=0, keepdim=True)
-        y2 = (torch.stack([x2.mean(dim=-1), x2.mean(dim=-2)], dim=-1).view(x2.shape[0], x2.shape[1], -1) @ F.softmax(
-            self.feature_m_sift1, dim=0)).squeeze(
-            -1).mean(dim=0, keepdim=True)
-        y3 = (torch.stack([x3.mean(dim=-1), x3.mean(dim=-2)], dim=-1).view(x3.shape[0], x3.shape[1], -1) @ F.softmax(
-            self.feature_sm_sift1, dim=0)).squeeze(
-            -1).mean(dim=0, keepdim=True)
+        y1 = x1.view(x1.shape[0], x1.shape[1], -1).mean(dim=-1).mean(dim=0, keepdim=True)
+        y2 = x2.view(x2.shape[0], x2.shape[1], -1).mean(dim=-1).mean(dim=0, keepdim=True)
+        y3 = x3.view(x3.shape[0], x3.shape[1], -1).mean(dim=-1).mean(dim=0, keepdim=True)  # [batchsize,feature]
+        x1=  (x1*self.pointx_s).sum(dim=-2,keepdims=True)+(x1*self.pointy_s).sum(dim=-1,keepdims=True)
+        x2 = (x2 * self.pointx_m).sum(dim=-2, keepdims=True) + (x2 * self.pointy_m).sum(dim=-1, keepdims=True)
+        x3 = (x3 * self.pointx_sm).sum(dim=-2, keepdims=True) + (x3 * self.pointy_sm).sum(dim=-1, keepdims=True)
+        # 2.y1 = (torch.stack([x1.mean(dim=-1), x1.mean(dim=-2)], dim=-1).view(x1.shape[0], x1.shape[1], -1) @ F.softmax(
+        #     self.feature_s_sift1, dim=0)).squeeze(
+        #     -1).mean(dim=0, keepdim=True)
+        # y2 = (torch.stack([x2.mean(dim=-1), x2.mean(dim=-2)], dim=-1).view(x2.shape[0], x2.shape[1], -1) @ F.softmax(
+        #     self.feature_m_sift1, dim=0)).squeeze(
+        #     -1).mean(dim=0, keepdim=True)
+        # y3 = (torch.stack([x3.mean(dim=-1), x3.mean(dim=-2)], dim=-1).view(x3.shape[0], x3.shape[1], -1) @ F.softmax(
+        #     self.feature_sm_sift1, dim=0)).squeeze(
+        #     -1).mean(dim=0, keepdim=True)
         men_1 = torch.sigmoid(y1 @ self.tau_m_weight2 + tau_m @ self.tau_m_weight1 + self.tau_m_bias)
         men_2 = torch.sigmoid(y2 @ self.tau_s_weight2 + tau_s @ self.tau_s_weight1 + self.tau_s_bias)
         men_3 = torch.sigmoid(y3 @ self.tau_sm_weight2 + tau_sm @ self.tau_sm_weight1 + self.tau_sm_bias)
-        x1=x1*torch.sigmoid(self.feature_s_sift1[:self.len_point,:].view(1,1,1,self.len_point)+self.feature_s_sift1[self.len_point:,:].view(1,1,self.len_point,1))
-        x2=x2*self.feature_m_sift1[:self.len_point,:].view(1,1,1,self.len_point)+x2*self.feature_m_sift1[self.len_point:,:].view(1,1,self.len_point,1)
-        x3=x3*self.feature_sm_sift1[:self.len_point,:].view(1,1,1,self.len_point)+x3*self.feature_sm_sift1[self.len_point:,:].view(1,1,self.len_point,1)
+        # x1=x1*torch.tanh(self.feature_s_sift1[:self.len_point,:].view(1,1,1,self.len_point)+self.feature_s_sift1[self.len_point:,:].view(1,1,self.len_point,1))
+        # x2=x2*torch.tanh(self.feature_m_sift1[:self.len_point,:].view(1,1,1,self.len_point)+self.feature_m_sift1[self.len_point:,:].view(1,1,self.len_point,1))
+        # x3=x3*torch.tanh(self.feature_sm_sift1[:self.len_point,:].view(1,1,1,self.len_point)+self.feature_sm_sift1[self.len_point:,:].view(1,1,self.len_point,1))
         result = torch.tanh(
             men_1.unsqueeze(-1).unsqueeze(-1) * x1 + men_2.unsqueeze(-1).unsqueeze(-1) * x2 + men_3.unsqueeze(
                 -1).unsqueeze(-1) * x3)
@@ -487,6 +503,9 @@ class point_cul_Layer(nn.Module):
         self.grad_lr = grad_lr
         self.sigma = 1
         self.index = random.randint(0, path_len)
+        self.maxpool=nn.ModuleList([
+            nn.MaxPool2d(kernel_size=3,stride=1,padding=1),
+        ])
         # self._initialize()
 
     def forward(self, x, weight):
@@ -505,7 +524,11 @@ class point_cul_Layer(nn.Module):
             if dataoption == 'mnist':
                 m = self.bn1(self.gaussbur(x))
             elif dataoption == 'cifar10':
-                m = self.bn1(self.gaussbur(x))
+                # x:torch.Tensor
+                # m,p = self.maxpool[0](torch.abs(x))
+                # m=self.maxpool[1](self.maxpool[0](x)[0],p)
+                m=self.bn1(self.gaussbur(x))
+
             elif dataoption == 'fashionmnist':
                 m = self.bn1(self.gaussbur(x))
             else:
@@ -537,7 +560,7 @@ class point_cul_Layer(nn.Module):
 
 
 class three_dim_Layer(nn.Module):
-    def __init__(self, shape, device, weight_require_grad=False, weight_rand=False, grad_lr=0.0001, p=0.3, test=False,
+    def __init__(self, shape, device, weight_require_grad=False, weight_rand=False, grad_lr=0.0001, p=0.1, test=False,
                  use_gauss=True):
         super(three_dim_Layer, self).__init__()
         """
@@ -553,7 +576,7 @@ class three_dim_Layer(nn.Module):
         self.weight_rand = weight_rand
         self.diag_T = Trinomial_operation(max(max(self.x, self.y), self.z))
         self.grad_lr = grad_lr
-        self.dropout = nn.Dropout(p)
+        self.dropout = [[nn.Dropout(p) for i in range(self.x)] for j in range(self.y)]
         self.test = test
 
     def settest(self, test=True):
@@ -582,9 +605,8 @@ class three_dim_Layer(nn.Module):
                     tensor_prev[j][k] = self.point_layer_module[str(i) + '_' + str(j) + '_' + str(k)](
                         torch.stack([xx, yy, zz], dim=-1), i + j + k)
                     tensor_prev[j][k] = axonLimit.apply(tensor_prev[j][k])
-                    if np.random.rand(1) > np.array([
-                        .6666666]) and k != self.x - 1 and j != self.y - 1 and i != self.z - 1 and self.test == False:
-                        tensor_prev[j][k] = self.dropout(tensor_prev[j][k])
+                    if k != self.x - 1 and j != self.y - 1 and i != self.z - 1 and self.test == False:
+                        tensor_prev[j][k]= self.dropout[j][k](tensor_prev[j][k])
         return tensor_prev[-1][-1]
 
     def initiate_layer(self, data, in_feature, out_feature, tau_m=4., tau_s=1., use_gauss=True):
