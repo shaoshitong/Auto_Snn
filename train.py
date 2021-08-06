@@ -92,11 +92,11 @@ def test(path, data, yaml, criterion_loss):
     torch.cuda.empty_cache()
     the_model = merge_layer(set_device(), shape=yaml['shape'], dropout=yaml['parameters']['droupout'], test=True)
     if yaml['data'] == 'mnist':
-        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 28 * 28 * 1), 1,1,int(10),tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'])
+        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 28 * 28 * 1), 1,1,int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'])
     elif yaml['data'] == 'cifar10':
-        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 32 * 32 * 3),3,3, int(10),tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'])
+        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 32 * 32 * 3),3,3, int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'])
     elif yaml['data']=='fashionmnist':
-        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 28 * 28 * 1),1,1,int(10),tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'])
+        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 28 * 28 * 1),1,1,int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'])
     else:
         raise KeyError('not have this dataset')
     the_model.load_state_dict(torch.load(path)['snn_state_dict'])
@@ -145,14 +145,14 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
         model.zero_grad()
         if yaml['optimizer']['optimizer_choice']=='SAM':
             loss.backward(retain_graph=False)
-            model.subWeightGrad(epoch, yaml['parameters']['epoch'], .5)
+            # model.subWeightGrad(epoch, yaml['parameters']['epoch'], .5)
             optimizer.first_step(zero_grad=True)
             (criterion(criterion_loss,model(input),target)+model.L2_biasoption()).backward()
-            model.subWeightGrad(epoch, yaml['parameters']['epoch'], .5)
+            # model.subWeightGrad(epoch, yaml['parameters']['epoch'], .5)
             optimizer.second_step(zero_grad=False)
         else:
             loss.backward(retain_graph=False)
-            model.subWeightGrad(epoch, yaml['parameters']['epoch'], .5)
+            # model.subWeightGrad(epoch, yaml['parameters']['epoch'], .5)
             optimizer.step()
             # if i!=0 and i%600==0:
             #      parametersgradCheck(model)
@@ -186,11 +186,11 @@ if __name__ == "__main__":
         test_dataloader = DataLoader(test_data, batch_size=yaml['parameters']['batch_size'], shuffle=True,
                                      num_workers=4,
                                      drop_last=True)
-        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 28 * 28 * 1),1,1, int(10),tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False)
+        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 28 * 28 * 1),1,1, int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False)
     elif yaml['data'] == 'cifar10':
         train_dataloader, test_dataloader = load_data(yaml['parameters']['batch_size'],
                                                       yaml['parameters']['batch_size'],args.data_url)
-        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 32 * 32 * 3),3,3, int(10),tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False)
+        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 32 * 32 * 3),3,3, int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False)
     elif yaml['data'] == 'fashionmnist':
         fashionmnist_trainset = datasets.FashionMNIST(root=args.data_url, train=True, download=True, transform=rand_transform)
         fashionmnist_testset = datasets.FashionMNIST(root=args.data_url, train=False, download=True, transform=None)
@@ -202,7 +202,7 @@ if __name__ == "__main__":
         test_dataloader = DataLoader(test_data, batch_size=yaml['parameters']['batch_size'], shuffle=True,
                                      num_workers=4,
                                      drop_last=True)
-        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 28 * 28 * 1),1,1, int(10),tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False)
+        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 28 * 28 * 1),1,1, int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False)
 
     else:
         raise KeyError('There is no corresponding dataset')

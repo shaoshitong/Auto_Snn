@@ -5,9 +5,13 @@ experiment_name:
 pytorch_seed:
   2021
 data:
-  cifar10
+  fashionmnist
 parameters:
   # default parameters
+  length:
+    25
+  tmp_feature:
+    64
   sigma:
     0.1
   batch_size:
@@ -26,7 +30,7 @@ parameters:
     True
   membrane_filer:
     False
-shape: [[2,2,2],[2,2,2],[2,2,2]]
+shape: [[2,2,2]]
 optimizer:
   optimizer_choice:
     'Adam'
