@@ -5,7 +5,7 @@ experiment_name:
 pytorch_seed:
   2021
 data:
-  fashionmnist
+  cifar10
 parameters:
   # default parameters
   length:
@@ -19,7 +19,7 @@ parameters:
   epoch:
     200
   droupout:
-    0.3
+    0.2
   filter_tau_m:
     4
   filter_tau_s:
@@ -59,9 +59,9 @@ scheduler:
     'SchedulerLR'
   SchedulerLR:
     milestones:
-      - 0.45
-      - 0.75
-      - 0.95
+      - 0.4
+      - 0.7
+      - 0.9
     gamma:
       0.2
   MultiStepLR:

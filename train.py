@@ -92,11 +92,11 @@ def test(path, data, yaml, criterion_loss):
     torch.cuda.empty_cache()
     the_model = merge_layer(set_device(), shape=yaml['shape'], dropout=yaml['parameters']['droupout'], test=True)
     if yaml['data'] == 'mnist':
-        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 28 * 28 * 1), 1,1,int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'])
+        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],1,28,28), 1,1,int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'])
     elif yaml['data'] == 'cifar10':
-        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 32 * 32 * 3),3,3, int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'])
+        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],3,32,32),3,3, int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'])
     elif yaml['data']=='fashionmnist':
-        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 28 * 28 * 1),1,1,int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'])
+        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],1,28,28),1,1,int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'])
     else:
         raise KeyError('not have this dataset')
     the_model.load_state_dict(torch.load(path)['snn_state_dict'])
