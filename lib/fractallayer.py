@@ -41,7 +41,6 @@ class myenumerate:
 Randomly choose one of several tensors
 """
 
-
 def rand_one_in_array(count, seed=None):
     if seed is None:
         seed = np.random.randint(1, high=int(1e6))
@@ -53,27 +52,9 @@ def rand_one_in_array(count, seed=None):
     index = torch.randperm(count, dtype=torch.long, generator=gts)
     return torch.index_select(arr, 0, index)
 
-
 """
 mul Weighted layer
 """
-
-
-class mulLayer(nn.Module):
-    def __init__(self, global_path):
-        super(mulLayer, self).__init__()
-        if torch.is_tensor(global_path) == False:
-            self.global_path = Parameter(torch.tensor(global_path, dtype=torch.float64))
-        else:
-            self.global_path = Parameter(global_path.float())
-
-    def forward(self, x):
-        while self.global_path.ndim != x.ndim:
-            self.global_path = Parameter(self.global_path.unsqueeze(-1))
-        x = torch.sum(x * self.global_path[:x.shape[0]], dim=0, keepdim=True)
-        return x
-
-
 """
 layer api
 """
@@ -84,15 +65,26 @@ class JoinLayer(nn.Module):
         super(JoinLayer, self).__init__()
         self.p = 1. - drop_p
         self.is_global = is_global
-        self.global_path = mulLayer(global_path)
+        self.global_path = global_path
+        if torch.is_tensor(global_path) == False:
+            self.global_path = torch.tensor(global_path, dtype=torch.float32)
+        else:
+            self.global_path = global_path.to(torch.float32)
+        self.global_path.requires_grad = True
         self.force_path = force_path
         self.average_shape = None
-
+    def _mulLayer(self,x):
+        while self.global_path.ndim != x.ndim:
+            self.global_path =self.global_path.unsqueeze(-1)
+        if self.global_path.device!=x.device:
+            self.global_path=self.global_path.to(x.device)
+        x = torch.mean(x * self.global_path[:x.shape[0]], dim=0, keepdim=True)
+        return x
     def _weights_init_list(self, x):
         self.average_shape = x.shape.tolist[1:]
 
     def _random_arr(self, count, p):
-        return torch.distributions.Binomial(1, torch.tensor([p], dtype=torch.float64).expand(count)).sample()
+        return torch.distributions.Binomial(1, torch.tensor([p], dtype=torch.float32).expand(count)).sample()
 
     def _arr_with_one(self, count):
         return rand_one_in_array(count=count)
@@ -112,22 +104,27 @@ class JoinLayer(nn.Module):
             self.average_shape = inputs.shape[1:]
         count = inputs.shape[0]
         if self.is_global == True:
-            drops = self.global_path.global_path[:inputs.shape[0]].cuda()
-            ave = self.global_path(inputs)
+            drops = self.global_path[:inputs.shape[0]].cuda()
+            ave = self._mulLayer(inputs)
         else:
             drops = self._gen_local_drops(count, self.p).cuda()
             while drops.ndim != inputs.ndim:
                 drops = drops.unsqueeze(-1)
             ave = torch.sum(inputs * drops[:inputs.shape[0]], dim=0, keepdim=True)
         indexsum = torch.sum(drops).item()
-        return ave.squeeze(0) / indexsum if indexsum else ave.squeeze(0)
+        return ave.squeeze(0) / indexsum if indexsum and self.is_global==False else ave.squeeze(0)
 
     def _ave(self, inputs):
-        return torch.mean(inputs.float(), dim=0, keepdim=False)
+        ave=inputs[0]
+        for input in inputs[1:]:
+            ave+=input
+        return ave/inputs.shape[0]
 
     def forward(self, inputs):
-        inputs = self._drop_path(inputs) if self.force_path or inputs.requires_grad else self._ave(inputs)
+
+        inputs = self._drop_path(inputs) if (self.force_path or inputs.requires_grad or self.is_global) else self._ave(inputs)
         inputs = inputs.to(torch.float32)
+        # if not inputs.requires_grad:print(1)
         return inputs
 
 
@@ -158,8 +155,9 @@ class JoinLayerGen:
         # A randomly sampled tensor that will signal if the batch
         # should use global or local droppath
         torch.manual_seed(self.switch_seed)
-        return torch.distributions.Binomial(1, torch.tensor([self.global_p], dtype=torch.float64).expand(
+        p=torch.distributions.Binomial(1, torch.tensor([self.global_p], dtype=torch.float64).expand(
             1)).sample().item() == True
+        return p
 
     def get_join_layer(self, drop_p):
         global_switch = self.is_global

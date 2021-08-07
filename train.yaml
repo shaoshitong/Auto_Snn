@@ -2,6 +2,8 @@
 experiment_name:
   Auto_config
 
+set_seed:
+  True
 pytorch_seed:
   2021
 data:
@@ -30,7 +32,7 @@ parameters:
     True
   membrane_filer:
     False
-shape: [[2,2,2]]
+shape: [[1,1,1],[2,2,2]]
 optimizer:
   optimizer_choice:
     'Adam'
