@@ -62,6 +62,7 @@ class Shortcut(nn.Module):
 class block_in(nn.Module):
     def __init__(self, in_feature, out_feature=64):
         super(block_in, self).__init__()
+        self.conv0 = nn.Conv2d(in_feature, in_feature, (1, 1), stride=1, padding=0, bias=False)
         self.conv1 = nn.Conv2d(in_feature, 32, (4, 4), stride=2, padding=1, bias=True, )
         self.bn1 = nn.BatchNorm2d(32)
         self.conv2 = nn.Conv2d(32, out_feature, (3, 3), stride=1, padding=1, bias=True)
@@ -71,7 +72,7 @@ class block_in(nn.Module):
         self.shortcut0 = Shortcut(in_feature, out_feature)
 
     def forward(self, x):
-        # print(self.shortcut1(x).shape,self.conv1(x).shape)
+        x = self.conv0(x)
         x1 = self.bn1(self.conv1(x)) + self.shortcut1(x)
         x1 = F.leaky_relu(x1, inplace=True)
         x2 = self.bn2(self.conv2(x1)) + self.shortcut2(x1)
@@ -82,7 +83,7 @@ class block_in(nn.Module):
 
 
 class block_out(nn.Module):
-    def __init__(self, in_feature, out_feature, classes,use_pool="max"):
+    def __init__(self, in_feature, out_feature, classes, use_pool="max"):
         super(block_out, self).__init__()
         self.bn_out = nn.BatchNorm2d(in_feature)
         self.conv2 = nn.Conv2d(in_feature, 32, (2, 2), stride=2, padding=0, bias=True)
@@ -90,7 +91,7 @@ class block_out(nn.Module):
         self.conv2_1 = nn.Conv2d(in_feature, out_feature, (2, 2), stride=2, padding=0, bias=True)
         self.bn2_1 = nn.BatchNorm2d(out_feature)
         self.shortcut2 = Shortcut(in_feature, 32)
-        self.shortcut2_1 = Shortcut(in_feature,out_feature)
+        self.shortcut2_1 = Shortcut(in_feature, out_feature)
         self.shortcut1 = Shortcut(32, out_feature)
         self.shortcut0 = Shortcut(in_feature, out_feature, proportion=4)
         self.shortcut0_1 = Shortcut(in_feature, out_feature, proportion=2)
@@ -104,38 +105,44 @@ class block_out(nn.Module):
             nn.Flatten(),
             nn.Linear(4 * 4 * out_feature, classes)
         ])
-        self.linear_1=nn.Sequential(*[
+        self.linear_1 = nn.Sequential(*[
             nn.Flatten(),
             nn.Linear(4 * 4 * out_feature, classes)
         ])
-        self.linear2_1=nn.Sequential(*[
+        self.linear2_1 = nn.Sequential(*[
             nn.Flatten(),
             nn.Linear(7 * 7 * out_feature, classes)
         ])
-        if use_pool=='max':
+        if use_pool == 'max':
             self.maxpool_1 = nn.MaxPool2d(kernel_size=_pair(3), padding=1, stride=1)
             self.maxpool = nn.MaxPool2d(kernel_size=_pair(2), padding=0, stride=1)
-        elif use_pool=='avg':
+        elif use_pool == 'avg':
             self.maxpool_1 = nn.AvgPool2d(kernel_size=_pair(3), padding=1, stride=1)
             self.maxpool = nn.AvgPool2d(kernel_size=_pair(2), padding=0, stride=1)
-        elif use_pool=='none':
+        elif use_pool == 'none':
             pass
-        self.use_pool=use_pool
+        self.use_pool = use_pool
+
     def forward(self, x):
-        if dataoption=='cifar10':
+        if dataoption == 'cifar10':
             x1 = self.bn_out(x) + x
-            x2 = self.bn2(self.conv2(F.relu_(x1))) + self.shortcut2(x1)  # [32,8,8]
-            x3 = self.bn1(self.conv1(F.relu_(x2))) + self.shortcut1(x2)+self.shortcut0(x)
-            if self.use_pool!='none':
-                x3 = self.maxpool(x3)
+            x2 = self.bn2(self.conv2(F.relu_(x1)))  # + self.shortcut2(x1)  # [32,8,8]
+            x3 = self.bn1(self.conv1(F.relu_(x2))) + self.shortcut0(x)  # + self.shortcut1(x2)+self.shortcut0(x)
+            if self.use_pool != 'none':
+                x3 = self.maxpool(F.leaky_relu_(x3))
                 x3 = self.linear(x3)
             else:
                 x3 = self.linear_1(x3)
-        elif dataoption=='mnist' or dataoption=='fashionmnist':
+        elif dataoption == 'mnist' or dataoption == 'fashionmnist':
             x1 = self.bn_out(x) + x
-            x2 = self.bn2_1(self.conv2_1(F.relu_(x1))) + self.shortcut2_1(x1)+self.shortcut0_1(x)  # [32,8,8]
+            x2 = self.bn2_1(self.conv2_1(F.relu_(x1))) + self.shortcut0_1(
+                x)  # + self.shortcut2_1(x1)+self.shortcut0_1(x)  # [32,8,8]
             if self.use_pool != 'none':
-                x2 = self.maxpool_1(x2)
+                if self.use_pool == 'max':
+                    relu = F.relu_
+                else:
+                    relu = F.leaky_relu_
+                x2 = self.maxpool_1(relu(x2))
                 x3 = self.linear2(x2)
             else:
                 x3 = self.linear2_1(x2)
@@ -151,13 +158,13 @@ class block_eq(nn.Module):
         self.eq_feature = eq_feature
         self.longConv = nn.Sequential(*[
             nn.ReflectionPad2d(1),
-            nn.Conv2d(eq_feature, eq_feature * 2, (3, 3), stride=1, padding=0,
+            nn.Conv2d(eq_feature, eq_feature * 2, (3, 3), stride=_pair(1), padding=0,
                       bias=True) if Use_Spectral == False else SNConv2d(eq_feature, eq_feature * 2, (3, 3), stride=1,
                                                                         padding=0, bias=True),
             nn.BatchNorm2d(eq_feature * 2),
             nn.ReLU(inplace=True),
             nn.ReflectionPad2d(1),
-            nn.Conv2d(eq_feature * 2, eq_feature, (3, 3), stride=1, padding=0,
+            nn.Conv2d(eq_feature * 2, eq_feature, (3, 3), stride=_pair(1), padding=0,
                       bias=True) if Use_Spectral == False else SNConv2d(eq_feature * 2, eq_feature, (3, 3), stride=1,
                                                                         padding=0, bias=True),
             nn.BatchNorm2d(eq_feature),
@@ -167,7 +174,7 @@ class block_eq(nn.Module):
         ])
         self.shortConv_1 = nn.Sequential(*[
             nn.ReflectionPad2d(1),
-            nn.Conv2d(eq_feature, eq_feature, (3, 3), stride=1, padding=0,
+            nn.Conv2d(eq_feature, eq_feature, (3, 3), stride=_pair(1), padding=0,
                       bias=True) if Use_Spectral == False else SNConv2d(eq_feature, eq_feature, (3, 3), stride=1,
                                                                         padding=0, bias=True),
             nn.BatchNorm2d(eq_feature),
@@ -398,11 +405,11 @@ class axonLimit(torch.autograd.Function):
         # v1 = 1.3 * torch.sigmoid(v1) - 0.2
         # return v1
         if dataoption == 'mnist':
-            return torch.min(torch.max(v1, torch.Tensor([-1.]).cuda()), torch.Tensor([1.]).cuda())
+            return torch.min(torch.max(v1, torch.Tensor([-1.5]).cuda()), torch.Tensor([1.5]).cuda())
         elif dataoption == 'cifar10':
-            return torch.min(torch.max(v1, torch.Tensor([-1.]).cuda()), torch.Tensor([1.]).cuda())
+            return torch.min(torch.max(v1, torch.Tensor([-1.5]).cuda()), torch.Tensor([1.5]).cuda())
         elif dataoption == 'fashionmnist':
-            return torch.min(torch.max(v1, torch.Tensor([-1.]).cuda()), torch.Tensor([1.]).cuda())
+            return torch.min(torch.max(v1, torch.Tensor([-1.5]).cuda()), torch.Tensor([1.5]).cuda())
         else:
             raise KeyError()
 
@@ -410,21 +417,21 @@ class axonLimit(torch.autograd.Function):
     def backward(ctx, grad_output):
         input, = ctx.saved_tensors
         if dataoption == 'mnist':
-            exponent = torch.where((input > -1.1) & (input < 1.1), torch.ones_like(input).cuda(),
+            exponent = torch.where((input > -1.6) & (input < 1.6), torch.ones_like(input).cuda(),
                                    torch.zeros_like(input).cuda())
-            exponent = torch.where((input > 1.1) | (input < -1.1),
+            exponent = torch.where((input > 1.6) | (input < -1.6),
                                    (torch.exp(-((input.float()) ** 2) / 2) / 2.506628).cuda(), exponent)
             return exponent * grad_output
         elif dataoption == 'cifar10':
-            exponent = torch.where((input > -1.1) & (input < 1.1), torch.ones_like(input).cuda(),
+            exponent = torch.where((input > -1.6) & (input < 1.6), torch.ones_like(input).cuda(),
                                    torch.zeros_like(input).cuda())
-            exponent = torch.where((input > 1.1) | (input < -1.1),
+            exponent = torch.where((input > 1.6) | (input < -1.6),
                                    (torch.exp(-((input.float()) ** 2) / 2) / 2.506628).cuda(), exponent)
             return exponent * grad_output
         elif dataoption == 'fashionmnist':
-            exponent = torch.where((input > -1.1) & (input < 1.1), torch.ones_like(input).cuda(),
+            exponent = torch.where((input > -1.6) & (input < 1.6), torch.ones_like(input).cuda(),
                                    torch.zeros_like(input).cuda())
-            exponent = torch.where((input > 1.1) | (input < -1.1),
+            exponent = torch.where((input > 1.6) | (input < -1.6),
                                    (torch.exp(-((input.float()) ** 2) / 2) / 2.506628).cuda(), exponent)
             return exponent * grad_output
         else:
@@ -494,7 +501,7 @@ class DoorMechanism(nn.Module):
         self.tau_s_bias = Parameter(torch.zeros((1, out_feature)).float(), requires_grad=True)
         self.tau_sm_bias = Parameter(torch.zeros((1, out_feature)).float(), requires_grad=True)
 
-    def forward(self, x1, x2, x3, tau_m, tau_s, tau_sm):
+    def forward(self, x1, x2, x3, tau_m, tau_s, tau_sm) -> tuple:
         """
         input==>[batchsize,64,x_pointnum//2,y_pointnum//2]
         """
@@ -534,7 +541,7 @@ class DoorMechanism(nn.Module):
         men_1 = (men_1 * self.lr + (1. - self.lr) * tau_m).detach()
         men_2 = (men_2 * self.lr + (1. - self.lr) * tau_s).detach()
         men_3 = (men_3 * self.lr + (1. - self.lr) * tau_sm).detach()
-        return result, men_1, men_2, men_3
+        return (result, men_1, men_2, men_3)
 
 
 class point_cul_Layer(nn.Module):
@@ -568,7 +575,8 @@ class point_cul_Layer(nn.Module):
             if use_gauss == True:
                 self.gaussbur = guassNet(in_feature, in_feature, kernel_size=3, requires_grad=True)
             else:
-                self.gaussbur = multi_block_eq(in_feature, multi_k=STuning + 1, Use_Spactral=True, Use_fractal=(STuning!=1))
+                self.gaussbur = multi_block_eq(in_feature, multi_k=2, Use_Spactral=True,
+                                               Use_fractal=True)
             self.bn1 = nn.BatchNorm2d(in_feature)
         elif dataoption == 'cifar10':
             if use_gauss == True:
@@ -576,23 +584,21 @@ class point_cul_Layer(nn.Module):
                 self.gaussbur = guassNet(in_feature, in_feature, kernel_size=3, requires_grad=True)
             else:
                 # self.gaussbur = nn.Conv2d(64,64,(3,3),stride=1,padding=1,bias=True)
-                self.gaussbur = multi_block_eq(in_feature, multi_k=STuning + 1, Use_Spactral=True, Use_fractal=False)
+                self.gaussbur = multi_block_eq(in_feature, multi_k=2, Use_Spactral=True, Use_fractal=True)
                 # self.gaussbur = guassNet(in_feature, in_feature, kernel_size=3, requires_grad=True, use_gauss=False)
             self.bn1 = nn.BatchNorm2d(in_feature)
         elif dataoption == 'fashionmnist':
             if use_gauss == True:
                 self.gaussbur = guassNet(in_feature, in_feature, kernel_size=3, requires_grad=True)
             else:
-                self.gaussbur = multi_block_eq(in_feature, multi_k=STuning + 1, Use_Spactral=True, Use_fractal=(STuning!=1))
+                self.gaussbur = multi_block_eq(in_feature, multi_k=2, Use_Spactral=True,
+                                               Use_fractal=True)
             self.bn1 = nn.BatchNorm2d(in_feature)
         self.STuning = STuning
         self.grad_lr = grad_lr
         self.sigma = 1
         self.norm = None
         self.index = random.randint(0, path_len)
-        self.maxpool = nn.ModuleList([
-            nn.MaxPool2d(kernel_size=3, stride=1, padding=1),
-        ])
         # self._initialize()
 
     def forward(self, x):
@@ -659,6 +665,7 @@ class three_dim_Layer(nn.Module):
         self.grad_lr = grad_lr
         self.dropout = [[[nn.Dropout(p) for i in range(self.x)] for j in range(self.y)] for k in range(self.z)]
         self.test = test
+        self.x_join, self.y_join, self.z_join = LastJoiner(2), LastJoiner(2), LastJoiner(2)
 
     def settest(self, test=True):
         self.test = test
@@ -729,9 +736,9 @@ class three_dim_Layer(nn.Module):
                             tensor_prev[i][j][num] = self.dropout[i][j][num](tensor_prev[i][j][num])
             else:
                 tensor_prev[self.z - 1][self.y - 1][-1] = x
-            x = tensor_prev[self.z - 1][self.y - 1][min(self.x - 1, num)] + x
-            y = tensor_prev[self.z - 1][min(self.y - 1, num)][self.x - 1] + y
-            z = tensor_prev[min(self.z - 1, num)][self.y - 1][self.x - 1] + z
+            x = self.x_join([tensor_prev[self.z - 1][self.y - 1][min(self.x - 1, num)], x])
+            y = self.y_join([tensor_prev[self.z - 1][min(self.y - 1, num)][self.x - 1], y])
+            z = self.z_join([tensor_prev[min(self.z - 1, num)][self.y - 1][self.x - 1], z])
 
         return x + y + z
         # for i in range(self.z):
@@ -862,8 +869,8 @@ class merge_layer(nn.Module):
 
     def forward(self, x):
         # x, y = self.initdata(x)
-        if hasattr(self,'input_shape'):
-            x=x.view(self.input_shape)
+        if hasattr(self, 'input_shape'):
+            x = x.view(self.input_shape)
         else:
             if dataoption == 'cifar10':
                 x = x.view(x.shape[0], 3, 32, 32)
@@ -903,7 +910,7 @@ class merge_layer(nn.Module):
         for Net in self.InputGenerateNet:
             Net.initiate_layer(input, tmp_feature, tmp_feature, tau_m, tau_s, use_gauss, batchsize,
                                old_in_feature=in_feature, old_out_feature=out_feature)
-        self.block_out = block_out(tmp_feature, out_feature_lowbit, classes,use_pool='none')
+        self.block_out = block_out(tmp_feature, out_feature_lowbit, classes, use_pool='none')
         self._initialize()
 
     def subWeightGrad(self, epoch, epochs, sigma=1):
@@ -937,7 +944,7 @@ class merge_layer(nn.Module):
     def L2_biasoption(self, sigma=1):
         loss = [torch.tensor(0.).float().cuda()]
         normlist = []
-        loss_norm=0.
+        loss_norm = 0.
         for layer in self.modules():
             if isinstance(layer, nn.Conv2d) and layer.bias is not None:
                 layer: guassNet
@@ -946,13 +953,13 @@ class merge_layer(nn.Module):
                 layer: guassNet
                 loss.append(torch.norm(torch.abs(layer.gauss_bias.data) - 1., p=2) / layer.gauss_bias.data.numel())
             elif isinstance(layer, point_cul_Layer):
-                layer:point_cul_Layer
+                layer: point_cul_Layer
                 normlist.append(layer.norm)
         # loss_norm=torch.stack(normlist,dim=-1).std(dim=0)
         # loss_norm = ( torch.stack(loss_norm, dim=-1).min()-torch.stack(loss_norm, dim=-1))
         # loss_norm = (torch.exp(-loss_norm)/torch.exp(-loss_norm).sum(dim=-1)).std(dim=-1)
         loss_bias = torch.stack(loss, dim=-1).mean()
-        return (loss_norm+loss_bias) * sigma
+        return (loss_norm + loss_bias) * sigma
 
 
 """
@@ -981,4 +988,3 @@ def conv2d(x, weight, bias, stride, pad):
     out = out + bias.view(1, -1, 1, 1)          # 添加偏置值
     return out
 """
-
