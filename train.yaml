@@ -22,9 +22,11 @@ parameters:
     200
   droupout:
     0.2
-  filter_tau_m:
+  filter_tau_x:
     4
-  filter_tau_s:
+  filter_tau_y:
+    1
+  filter_tau_z:
     1
   train_coefficients:
     True
@@ -32,7 +34,7 @@ parameters:
     True
   membrane_filer:
     False
-shape: [[1,1,1],[2,2,2]]
+shape: [5,]
 optimizer:
   optimizer_choice:
     'Adam'

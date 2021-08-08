@@ -86,33 +86,37 @@ class block_out(nn.Module):
     def __init__(self, in_feature, out_feature, classes, use_pool="max"):
         super(block_out, self).__init__()
         self.bn_out = nn.BatchNorm2d(in_feature)
-        self.conv2 = nn.Conv2d(in_feature, 32, (2, 2), stride=2, padding=0, bias=True)
-        self.bn2 = nn.BatchNorm2d(32)
-        self.conv2_1 = nn.Conv2d(in_feature, out_feature, (2, 2), stride=2, padding=0, bias=True)
-        self.bn2_1 = nn.BatchNorm2d(out_feature)
-        self.shortcut2 = Shortcut(in_feature, 32)
-        self.shortcut2_1 = Shortcut(in_feature, out_feature)
-        self.shortcut1 = Shortcut(32, out_feature)
-        self.shortcut0 = Shortcut(in_feature, out_feature, proportion=4)
-        self.shortcut0_1 = Shortcut(in_feature, out_feature, proportion=2)
+        # self.shortcut2 = Shortcut(in_feature, 32)
+        # self.shortcut2_1 = Shortcut(in_feature, out_feature)
+        # self.shortcut1 = Shortcut(32, out_feature)
         self.conv1 = nn.Conv2d(32, out_feature, (2, 2), stride=2, padding=0, bias=True)
         self.bn1 = nn.BatchNorm2d(out_feature)
-        self.linear = nn.Sequential(*[
-            nn.Flatten(),
-            nn.Linear(3 * 3 * out_feature, classes)
-        ])
-        self.linear2 = nn.Sequential(*[
-            nn.Flatten(),
-            nn.Linear(4 * 4 * out_feature, classes)
-        ])
-        self.linear_1 = nn.Sequential(*[
-            nn.Flatten(),
-            nn.Linear(4 * 4 * out_feature, classes)
-        ])
-        self.linear2_1 = nn.Sequential(*[
-            nn.Flatten(),
-            nn.Linear(7 * 7 * out_feature, classes)
-        ])
+        if dataoption == 'cifar10':
+            self.shortcut0 = Shortcut(in_feature, out_feature, proportion=4)
+            self.conv2 = nn.Conv2d(in_feature, 32, (2, 2), stride=2, padding=0, bias=True)
+            self.bn2 = nn.BatchNorm2d(32)
+            self.linear = nn.Sequential(*[
+                nn.Flatten(),
+                nn.Linear(3 * 3 * out_feature, classes)
+            ])
+            self.linear_1 = nn.Sequential(*[
+                nn.Flatten(),
+                nn.Linear(4 * 4 * out_feature, classes)
+            ])
+        elif dataoption == 'mnist' or dataoption == 'fashionmnist':
+            self.shortcut0_1 = Shortcut(in_feature, out_feature, proportion=2)
+            self.conv2_1 = nn.Conv2d(in_feature, out_feature, (2, 2), stride=2, padding=0, bias=True)
+            self.bn2_1 = nn.BatchNorm2d(out_feature)
+            self.linear2 = nn.Sequential(*[
+                nn.Flatten(),
+                nn.Linear(4 * 4 * out_feature, classes)
+            ])
+            self.linear2_1 = nn.Sequential(*[
+                nn.Flatten(),
+                nn.Linear(7 * 7 * out_feature, classes)
+            ])
+        else:
+            pass
         if use_pool == 'max':
             self.maxpool_1 = nn.MaxPool2d(kernel_size=_pair(3), padding=1, stride=1)
             self.maxpool = nn.MaxPool2d(kernel_size=_pair(2), padding=0, stride=1)
@@ -545,7 +549,7 @@ class DoorMechanism(nn.Module):
 
 
 class point_cul_Layer(nn.Module):
-    def __init__(self, in_pointnum, out_pointnum, in_feature, out_feature, path_len, tau_m=4., tau_s=1.,
+    def __init__(self, in_pointnum, out_pointnum, in_feature, out_feature, path_len, tau_x=4., tau_y=1., tau_z=1.,
                  grad_small=False,
                  weight_require_grad=False,
                  weight_rand=False, device=None, STuning=True, grad_lr=0.1, p=0.3, use_gauss=True):
@@ -557,18 +561,22 @@ class point_cul_Layer(nn.Module):
         self.device = device
         self.in_feature = in_feature
         self.out_feature = out_feature
-        self.tau_m = tau_m
-        self.tau_s = tau_s
+        self.tau_x = tau_x
+        self.tau_y = tau_y
+        self.tau_z = tau_z
         self.weight_rand = weight_rand
         self.grad_small = grad_small
         self.weight_require_grad = weight_require_grad
         self.in_feature, self.out_feature = in_pointnum, out_pointnum
         g = False
-        self.tensor_tau_m1 = torch.rand((1, in_feature), dtype=torch.float32, requires_grad=g).to(
+        self.tensor_tau_m1 = 1. / (1 + math.exp(-tau_x)) + torch.rand((1, in_feature), dtype=torch.float32,
+                                                                      requires_grad=g).to(
             self.device)
-        self.tensor_tau_s1 = torch.rand((1, in_feature), dtype=torch.float32, requires_grad=g).to(
+        self.tensor_tau_s1 = 1. / (1 + math.exp(-tau_y)) + torch.rand((1, in_feature), dtype=torch.float32,
+                                                                      requires_grad=g).to(
             self.device)
-        self.tensor_tau_sm1 = torch.rand((1, in_feature), dtype=torch.float32, requires_grad=g).to(
+        self.tensor_tau_sm1 = 1. / (1 + math.exp(-tau_z)) + torch.rand((1, in_feature), dtype=torch.float32,
+                                                                       requires_grad=g).to(
             self.device)
         self.DoorMach = DoorMechanism(in_pointnum, out_pointnum, in_feature, in_feature)
         if dataoption == 'mnist':
@@ -613,15 +621,15 @@ class point_cul_Layer(nn.Module):
                                                                                        self.tensor_tau_sm1)
         if self.weight_rand:
             if dataoption == 'mnist':
-                m = self.bn1(self.gaussbur(x))
+                m = self.gaussbur(x)
             elif dataoption == 'cifar10':
                 # x:torch.Tensor
                 # m,p = self.maxpool[0](torch.abs(x))
                 # m=self.maxpool[1](self.maxpool[0](x)[0],p)
-                m = self.bn1(self.gaussbur(x))
+                m = self.gaussbur(x)
 
             elif dataoption == 'fashionmnist':
-                m = self.bn1(self.gaussbur(x))
+                m = self.gaussbur(x)
             else:
                 raise KeyError('not have this dataset')
             # print(self.gaussbur.weight.data.abs().max())
@@ -635,19 +643,9 @@ class point_cul_Layer(nn.Module):
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight.data, mode="fan_in", nonlinearity="relu")
 
-    def subWeightGrad(self, epoch, epochs, sigma, diag_num, norm):
-        """
-        用三项式定理以及链式法则作为数学原理进行梯度修改
-        """
-
-        weight = float(sigma) * diag_num * self.norm / norm
-        for name, param in self.named_parameters():
-            if param.requires_grad == True and param.grad != None:
-                param.grad /= weight
-
 
 class three_dim_Layer(nn.Module):
-    def __init__(self, shape, device, weight_require_grad=False, weight_rand=False, grad_lr=0.0001, p=0.1, test=False,
+    def __init__(self, length, device, weight_require_grad=False, weight_rand=False, grad_lr=0.0001, p=0.1, test=False,
                  use_gauss=True):
         super(three_dim_Layer, self).__init__()
         """
@@ -656,16 +654,15 @@ class three_dim_Layer(nn.Module):
         y维度代表原始数据先获得grad后经过卷积变换到[batchsize,64,x//2,y//2]
         z维度目前用0向量填充，未来可以改进
         """
-        self.x, self.y, self.z = shape
+        self.length = length
         self.device = device
         self.use_gauss = use_gauss
         self.weight_require_grad = weight_require_grad
         self.weight_rand = weight_rand
-        self.diag_T = Trinomial_operation(max(max(self.x, self.y), self.z))
         self.grad_lr = grad_lr
-        self.dropout = [[[nn.Dropout(p) for i in range(self.x)] for j in range(self.y)] for k in range(self.z)]
+        self.dropout = [[nn.Dropout(p), nn.Dropout(p), nn.Dropout(p)] for len in range(self.length)]
         self.test = test
-        self.x_join, self.y_join, self.z_join = LastJoiner(2), LastJoiner(2), LastJoiner(2)
+        self.join = [[LastJoiner(2), LastJoiner(2), LastJoiner(2)] for _ in range(2)]
 
     def settest(self, test=True):
         self.test = test
@@ -677,70 +674,59 @@ class three_dim_Layer(nn.Module):
         x = torch.tanh(x)
         y = torch.tanh(y)
         z = torch.tanh(z)
-        tensor_prev = [[[z for i in range(self.x)] for j in range(self.y)] for k in range(self.z)]
-        for num in range(max(self.z, self.y, self.x)):
-            if num < self.z:
-                for i in range(num, self.y):
-                    for j in range(num, self.x):
-                        zz = z
-                        if j == num:
-                            yy = y
-                        else:
-                            yy = tensor_prev[num][i][j - 1]
-                        if i == num:
-                            xx = x
-                        else:
-                            xx = tensor_prev[num][i - 1][j]
-                        tensor_prev[num][i][j] = self.point_layer_module[str(num) + '_' + str(i) + '_' + str(j)](
-                            torch.stack([xx, yy, zz], dim=-1))
-                        tensor_prev[num][i][j] = axonLimit.apply(tensor_prev[num][i][j])
-                        if j != self.x - 1 and i != self.y - 1 and num != self.z - 1 and self.test == False:
-                            tensor_prev[num][i][j] = self.dropout[num][i][j](tensor_prev[num][i][j])
+        xx = x.clone()
+        yy = y.clone()
+        zz = z.clone()
+        tensor_prev = [[xx, yy, zz], [xx, yy, zz]]
+        tag = 0
+        len = 0
+        while len < self.length:
+            if tag == 0:
+                tensor_prev[1][0] = self.point_layer_module[str(len) + '_' + str(1) + '_' + str(0) + '_' + str(0)](
+                    torch.stack([tensor_prev[0][0], tensor_prev[0][1], tensor_prev[0][2]], dim=-1))
+                tensor_prev[1][0] = axonLimit.apply(tensor_prev[1][0])
+                if len == 0 and self.test == False:
+                    tensor_prev[1][0] = self.dropout[len][0](tensor_prev[1][0])
+                tensor_prev[1][1] = self.point_layer_module[str(len) + '_' + str(0) + '_' + str(1) + '_' + str(0)](
+                    torch.stack([tensor_prev[0][1], tensor_prev[0][2], tensor_prev[0][0]], dim=-1))
+                tensor_prev[1][1] = axonLimit.apply(tensor_prev[1][1])
+                if len == 0 and self.test == False:
+                    tensor_prev[1][1] = self.dropout[len][1](tensor_prev[1][1])
+                tensor_prev[1][2] = self.point_layer_module[str(len) + '_' + str(0) + '_' + str(0) + '_' + str(1)](
+                    torch.stack([tensor_prev[0][2], tensor_prev[0][0], tensor_prev[0][1]], dim=-1))
+                tensor_prev[1][2] = axonLimit.apply(tensor_prev[1][2])
+                if len == 0 and self.test == False:
+                    tensor_prev[1][2] = self.dropout[len][2](tensor_prev[1][2])
+                tensor_prev[1][0] = self.join[0][0]([tensor_prev[1][0], x])
+                tensor_prev[1][1] = self.join[0][1]([tensor_prev[1][1], y])
+                tensor_prev[1][2] = self.join[0][2]([tensor_prev[1][2], z])
+                tag = 1
             else:
-                tensor_prev[-1][self.y - 1][self.x - 1] = z
-            if num < self.y:
-                for i in range(num, self.z):
-                    for j in range(num, self.x):
-                        yy = y
-                        if i == num:
-                            xx = x
-                        else:
-                            xx = tensor_prev[i - 1][num][j]
-                        if j == num:
-                            zz = z
-                        else:
-                            zz = tensor_prev[i][num][j - 1]
-                        tensor_prev[i][num][j] = self.point_layer_module[str(i) + '_' + str(num) + '_' + str(j)](
-                            torch.stack([xx, yy, zz], dim=-1))
-                        tensor_prev[i][num][j] = axonLimit.apply(tensor_prev[i][num][j])
-                        if j != self.x - 1 and num != self.y - 1 and i != self.z - 1 and self.test == False:
-                            tensor_prev[i][num][j] = self.dropout[i][num][j](tensor_prev[i][num][j])
-            else:
-                tensor_prev[self.z - 1][-1][self.x - 1] = y
-            if num < self.x:
-                for i in range(num, self.z):
-                    for j in range(num, self.y):
-                        xx = x
-                        if i == num:
-                            yy = y
-                        else:
-                            yy = tensor_prev[i - 1][j][num]
-                        if j == num:
-                            zz = z
-                        else:
-                            zz = tensor_prev[i][j - 1][num]
-                        tensor_prev[i][j][num] = self.point_layer_module[str(i) + '_' + str(j) + '_' + str(num)](
-                            torch.stack([xx, yy, zz], dim=-1))
-                        tensor_prev[i][j][num] = axonLimit.apply(tensor_prev[i][j][num])
-                        if num != self.x - 1 and j != self.y - 1 and i != self.z - 1 and self.test == False:
-                            tensor_prev[i][j][num] = self.dropout[i][j][num](tensor_prev[i][j][num])
-            else:
-                tensor_prev[self.z - 1][self.y - 1][-1] = x
-            x = self.x_join([tensor_prev[self.z - 1][self.y - 1][min(self.x - 1, num)], x])
-            y = self.y_join([tensor_prev[self.z - 1][min(self.y - 1, num)][self.x - 1], y])
-            z = self.z_join([tensor_prev[min(self.z - 1, num)][self.y - 1][self.x - 1], z])
+                tensor_prev[0][0] = self.point_layer_module[str(len) + '_' + str(1) + '_' + str(0) + '_' + str(0)](
+                    torch.stack([tensor_prev[1][0], tensor_prev[1][1], tensor_prev[1][2]], dim=-1))
+                tensor_prev[0][0] = axonLimit.apply(tensor_prev[0][0])
+                if len == 0 and self.test == False:
+                    tensor_prev[0][0] = self.dropout[len][0](tensor_prev[0][0])
+                tensor_prev[0][1] = self.point_layer_module[str(len) + '_' + str(0) + '_' + str(1) + '_' + str(0)](
+                    torch.stack([tensor_prev[1][1], tensor_prev[1][2], tensor_prev[1][0]], dim=-1))
+                tensor_prev[0][1] = axonLimit.apply(tensor_prev[0][1])
+                if len == 0 and self.test == False:
+                    tensor_prev[0][1] = self.dropout[len][1](tensor_prev[0][1])
+                tensor_prev[0][2] = self.point_layer_module[str(len) + '_' + str(0) + '_' + str(0) + '_' + str(1)](
+                    torch.stack([tensor_prev[1][2], tensor_prev[1][0], tensor_prev[1][1]], dim=-1))
+                tensor_prev[0][2] = axonLimit.apply(tensor_prev[0][2])
+                if len == 0 and self.test == False:
+                    tensor_prev[0][2] = self.dropout[len][2](tensor_prev[0][2])
+                tensor_prev[0][0] = self.join[1][0]([tensor_prev[0][0], x])
+                tensor_prev[0][1] = self.join[1][1]([tensor_prev[0][1], y])
+                tensor_prev[0][2] = self.join[1][2]([tensor_prev[0][2], z])
+                tag = 0
+            len += 1
+        if tag == 0:
+            return tensor_prev[1][0] + tensor_prev[1][1] + tensor_prev[1][2]
+        else:
+            return tensor_prev[0][0] + tensor_prev[0][1] + tensor_prev[0][2]
 
-        return x + y + z
         # for i in range(self.z):
         #     for j in range(self.y):
         #         for k in range(self.x):
@@ -763,66 +749,81 @@ class three_dim_Layer(nn.Module):
         #                 tensor_prev[j][k]= self.dropout[0][j][k](tensor_prev[j][k])
         # return tensor_prev[-1][-1]
 
-    def initiate_layer(self, data, in_feature, out_feature, tau_m=4., tau_s=1., use_gauss=True):
+    def initiate_layer(self, data, in_feature, out_feature, tau_x=4., tau_y=1., tau_z=1., use_gauss=True, length=10):
         """
         three-dim层初始化节点
         """
+        if getattr(self, "length") is None:
+            self.length = length
         self.use_gauss = use_gauss
         self.point_layer = {}
-        for i in range(self.z):
-            for j in range(self.y):
-                for k in range(self.x):
-                    """
-                    目前虽然有in_pointnum,out_pointnum,in_feature,out_feature,但实际上默认所有的输入输出相等，如果不相等将极大增加模型的设计难度。
-                    """
-                    self.point_layer[str(i) + '_' + str(j) + '_' + str(k)] = point_cul_Layer(data.shape[1],
-                                                                                             data.shape[1],
-                                                                                             path_len=self.z + self.x + self.y,
-                                                                                             in_feature=in_feature,
-                                                                                             out_feature=out_feature,
-                                                                                             tau_m=tau_m,
-                                                                                             tau_s=tau_s,
-                                                                                             grad_small=False,
-                                                                                             weight_require_grad=self.weight_require_grad,
-                                                                                             weight_rand=self.weight_rand,
-                                                                                             device=self.device,
-                                                                                             # bool((i+j+k)%2),False
-                                                                                             STuning=bool(
-                                                                                                 (i + j + k) % 2),
-                                                                                             grad_lr=self.grad_lr,
-                                                                                             use_gauss=self.use_gauss)
-        self.point_layer_module = nn.ModuleDict(self.point_layer)
+        for len in range(length):
+            self.point_layer[str(len) + '_' + str(1) + '_' + str(0) + '_' + str(0)] = point_cul_Layer(data.shape[1],
+                                                                                                      data.shape[1],
+                                                                                                      path_len=len,
+                                                                                                      in_feature=in_feature,
+                                                                                                      out_feature=out_feature,
+                                                                                                      tau_x=tau_x,
+                                                                                                      tau_y=tau_y,
+                                                                                                      tau_z=tau_z,
+                                                                                                      grad_small=False,
+                                                                                                      weight_require_grad=self.weight_require_grad,
+                                                                                                      weight_rand=self.weight_rand,
+                                                                                                      device=self.device,
+                                                                                                      # bool((i+j+k)%2),False
+                                                                                                      STuning=bool(
+                                                                                                          (len) % 2),
+                                                                                                      grad_lr=self.grad_lr,
+                                                                                                      use_gauss=self.use_gauss)
+            self.point_layer[str(len) + '_' + str(0) + '_' + str(1) + '_' + str(0)] = point_cul_Layer(data.shape[1],
+                                                                                                      data.shape[1],
+                                                                                                      path_len=len,
+                                                                                                      in_feature=in_feature,
+                                                                                                      out_feature=out_feature,
+                                                                                                      tau_x=tau_x,
+                                                                                                      tau_y=tau_y,
+                                                                                                      tau_z=tau_z,
+                                                                                                      grad_small=False,
+                                                                                                      weight_require_grad=self.weight_require_grad,
+                                                                                                      weight_rand=self.weight_rand,
+                                                                                                      device=self.device,
+                                                                                                      # bool((i+j+k)%2),False
+                                                                                                      STuning=bool(
+                                                                                                          (len) % 2),
+                                                                                                      grad_lr=self.grad_lr,
+                                                                                                      use_gauss=self.use_gauss)
+            self.point_layer[str(len) + '_' + str(0) + '_' + str(0) + '_' + str(1)] = point_cul_Layer(data.shape[1],
+                                                                                                      data.shape[1],
+                                                                                                      path_len=len,
+                                                                                                      in_feature=in_feature,
+                                                                                                      out_feature=out_feature,
+                                                                                                      tau_x=tau_x,
+                                                                                                      tau_y=tau_y,
+                                                                                                      tau_z=tau_z,
+                                                                                                      grad_small=False,
+                                                                                                      weight_require_grad=self.weight_require_grad,
+                                                                                                      weight_rand=self.weight_rand,
+                                                                                                      device=self.device,
+                                                                                                      # bool((i+j+k)%2),False
+                                                                                                      STuning=bool(
+                                                                                                          (len) % 2),
+                                                                                                      grad_lr=self.grad_lr,
+                                                                                                      use_gauss=self.use_gauss)
 
-    def subWeightGrad(self, epoch, epochs, sigma=1):
-        """
-        作为three-dim修改梯度使用
-        """
-        for i in range(self.z):
-            for j in range(self.y):
-                for k in range(self.x):
-                    self.point_layer_module[str(i) + '_' + str(j) + '_' + str(k)].subWeightGrad(epoch, epochs, sigma,
-                                                                                                self.diag_T.get_value(
-                                                                                                    self.x - k - 1,
-                                                                                                    self.y - j - 1,
-                                                                                                    self.z - i - 1),
-                                                                                                self.point_layer_module[
-                                                                                                    str(
-                                                                                                        self.z - 1) + '_' + str(
-                                                                                                        self.y - 1) + '_' + str(
-                                                                                                        self.x - 1)].norm)
+        self.point_layer_module = nn.ModuleDict(self.point_layer)
 
 
 class InputGenerateNet(nn.Module):
-    def __init__(self, shape, device, weight_require_grad, weight_rand, grad_lr, dropout, test):
+    def __init__(self, length, device, weight_require_grad, weight_rand, grad_lr, dropout, test):
         super(InputGenerateNet, self).__init__()
-        self.shape = shape
+        self.length = length
         self.device = device
         self.weight_require_grad = weight_require_grad
         self.weight_rand = weight_rand
         self.grad_lr = grad_lr
         self.dropout = dropout
         self.test = test
-        self.three_dim_layer = three_dim_Layer(self.shape, self.device, weight_require_grad, weight_rand, grad_lr,
+        self.three_dim_layer = three_dim_Layer(self.length, self.device, weight_require_grad, weight_rand, grad_lr,
                                                p=dropout, test=test)
 
     def forward(self, x, y=None, z=None):
@@ -831,20 +832,17 @@ class InputGenerateNet(nn.Module):
             z = self.block_eqz(y)
         return y, z, self.three_dim_layer(x, y, z)
 
-    def initiate_layer(self, input, in_feature, out_feature, tau_m=4., tau_s=1., use_gauss=True, batchsize=64,
+    def initiate_layer(self, input, in_feature, out_feature, tau_x=4., tau_y=1., tau_z=1., use_gauss=True, batchsize=64,
                        old_in_feature=1, old_out_feature=1):
         self.three_dim_layer.initiate_layer(
             torch.rand(batchsize, in_feature * (input.shape[1] // (old_out_feature * 4))),
-            in_feature, out_feature, tau_m=tau_m, tau_s=tau_s,
-            use_gauss=use_gauss)
+            in_feature, out_feature, tau_x=tau_x, tau_y=tau_y, tau_z=tau_z,
+            use_gauss=use_gauss, length=self.length)
         self.block_eqy = multi_block_eq(in_feature, multi_k=2)
         self.block_eqz = multi_block_eq(in_feature, multi_k=2)
 
     def settest(self, test):
         self.three_dim_layer.settest(test)
-
-    def subWeightGrad(self, epoch, epochs, sigma):
-        self.three_dim_layer.subWeightGrad(epochs, epoch, sigma)
 
 
 class merge_layer(nn.Module):
@@ -855,7 +853,7 @@ class merge_layer(nn.Module):
         """
         super(merge_layer, self).__init__()
         if shape == None:
-            self.shape = [[3, 3, 3], ]
+            self.shape = [10, ]
         else:
             self.shape = shape
         self.device = device
@@ -891,8 +889,8 @@ class merge_layer(nn.Module):
         h = self.block_out(x)
         return h
 
-    def initiate_layer(self, input, in_feature, out_feature, classes, tmp_feature=64, tau_m=4., tau_s=1.,
-                       use_gauss=True, batchsize=64):
+    def initiate_layer(self, input, in_feature, out_feature, classes, tmp_feature=64, tau_x=4., tau_y=1.,
+                       tau_z=1., use_gauss=True, batchsize=64):
         """
         配置相应的层
         """
@@ -908,18 +906,10 @@ class merge_layer(nn.Module):
 
         self.block_inx = block_in(in_feature, tmp_feature)
         for Net in self.InputGenerateNet:
-            Net.initiate_layer(input, tmp_feature, tmp_feature, tau_m, tau_s, use_gauss, batchsize,
+            Net.initiate_layer(input, tmp_feature, tmp_feature, tau_x, tau_y, tau_z, use_gauss, batchsize,
                                old_in_feature=in_feature, old_out_feature=out_feature)
         self.block_out = block_out(tmp_feature, out_feature_lowbit, classes, use_pool='none')
         self._initialize()
-
-    def subWeightGrad(self, epoch, epochs, sigma=1):
-        """
-        three-dim模型的梯度三项式
-        """
-        for layer in self.modules():
-            if isinstance(layer, InputGenerateNet):
-                layer.subWeightGrad(epoch, epochs, sigma)
 
     def settest(self, test=True):
         """
