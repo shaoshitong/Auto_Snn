@@ -11,6 +11,7 @@ from Snn_Auto_master.lib.plt_analyze import vis_img
 from Snn_Auto_master.lib.parameters_check import pd_save, parametersgradCheck
 from Snn_Auto_master.lib.SNnorm import SNConv2d, SNLinear
 from Snn_Auto_master.lib.fractallayer import LastJoiner
+from Snn_Auto_master.lib.cocoscontextloss import ContextualLoss_forward
 import math
 import pandas as pd
 from torch.nn.parameter import Parameter
@@ -204,6 +205,8 @@ class multi_block_eq(nn.Module):
 
     def forward(self, x):
         return self.model(x)
+
+
 
 
 class threshold(torch.autograd.Function):
@@ -538,9 +541,10 @@ class DoorMechanism(nn.Module):
         result = torch.tanh(
             men_1.unsqueeze(-1).unsqueeze(-1) * x1 + men_2.unsqueeze(-1).unsqueeze(-1) * x2 + men_3.unsqueeze(
                 -1).unsqueeze(-1) * x3)
-        men_1 = (men_1 * self.lr + (1. - self.lr) * tau_m).detach()
-        men_2 = (men_2 * self.lr + (1. - self.lr) * tau_s).detach()
-        men_3 = (men_3 * self.lr + (1. - self.lr) * tau_sm).detach()
+        with torch.no_grad():
+            men_1 = (men_1 * self.lr + (1. - self.lr) * tau_m)
+            men_2 = (men_2 * self.lr + (1. - self.lr) * tau_s)
+            men_3 = (men_3 * self.lr + (1. - self.lr) * tau_sm)
         return (result, men_1, men_2, men_3)
 
 
@@ -613,15 +617,15 @@ class point_cul_Layer(nn.Module):
                                                                                        self.tensor_tau_sm1)
         if self.weight_rand:
             if dataoption == 'mnist':
-                m = self.bn1(self.gaussbur(x))
+                m = self.gaussbur(x)
             elif dataoption == 'cifar10':
                 # x:torch.Tensor
                 # m,p = self.maxpool[0](torch.abs(x))
                 # m=self.maxpool[1](self.maxpool[0](x)[0],p)
-                m = self.bn1(self.gaussbur(x))
+                m = self.gaussbur(x)
 
             elif dataoption == 'fashionmnist':
-                m = self.bn1(self.gaussbur(x))
+                m = self.gaussbur(x)
             else:
                 raise KeyError('not have this dataset')
             # print(self.gaussbur.weight.data.abs().max())
@@ -664,9 +668,10 @@ class three_dim_Layer(nn.Module):
         self.diag_T = Trinomial_operation(max(max(self.x, self.y), self.z))
         self.grad_lr = grad_lr
         self.dropout = [[[nn.Dropout(p) for i in range(self.x)] for j in range(self.y)] for k in range(self.z)]
+        self.context = ContextualLoss_forward(False)
         self.test = test
         self.x_join, self.y_join, self.z_join = LastJoiner(2), LastJoiner(2), LastJoiner(2)
-
+        self.losses=0.
     def settest(self, test=True):
         self.test = test
 
@@ -674,9 +679,11 @@ class three_dim_Layer(nn.Module):
         """
         x,y=>[batchsize,64,x_pointnum//2,y_pointnum//2]
         """
+        losses = self.context(x,y,z)
         x = torch.tanh(x)
         y = torch.tanh(y)
         z = torch.tanh(z)
+
         tensor_prev = [[[z for i in range(self.x)] for j in range(self.y)] for k in range(self.z)]
         for num in range(max(self.z, self.y, self.x)):
             if num < self.z:
@@ -740,6 +747,7 @@ class three_dim_Layer(nn.Module):
             y = self.y_join([tensor_prev[self.z - 1][min(self.y - 1, num)][self.x - 1], y])
             z = self.z_join([tensor_prev[min(self.z - 1, num)][self.y - 1][self.x - 1], z])
 
+        self.losses=losses
         return x + y + z
         # for i in range(self.z):
         #     for j in range(self.y):
@@ -944,7 +952,9 @@ class merge_layer(nn.Module):
     def L2_biasoption(self, sigma=1):
         loss = [torch.tensor(0.).float().cuda()]
         normlist = []
+        loss_feature=0.
         loss_norm = 0.
+        len=0.
         for layer in self.modules():
             if isinstance(layer, nn.Conv2d) and layer.bias is not None:
                 layer: guassNet
@@ -955,11 +965,16 @@ class merge_layer(nn.Module):
             elif isinstance(layer, point_cul_Layer):
                 layer: point_cul_Layer
                 normlist.append(layer.norm)
+            elif isinstance(layer,InputGenerateNet):
+                layer:InputGenerateNet
+                loss_feature+=layer.three_dim_layer.losses
+                len+=1
+        loss_feature/=len
         # loss_norm=torch.stack(normlist,dim=-1).std(dim=0)
         # loss_norm = ( torch.stack(loss_norm, dim=-1).min()-torch.stack(loss_norm, dim=-1))
         # loss_norm = (torch.exp(-loss_norm)/torch.exp(-loss_norm).sum(dim=-1)).std(dim=-1)
         loss_bias = torch.stack(loss, dim=-1).mean()
-        return (loss_norm + loss_bias) * sigma
+        return (loss_norm + loss_bias+loss_feature) * sigma
 
 
 """
