@@ -4,9 +4,6 @@ this .py file use to calcuate the feature difference
 import torch
 import torch.nn as nn
 class reverse(torch.autograd.Function):
-    """
-    该层是为了脉冲激活分形设计，在原版模型使用，当前模型撤销了
-    """
 
     @staticmethod
     def forward(ctx, input):
@@ -96,4 +93,4 @@ class ContextualLoss_forward(nn.Module):
         loss1=self.contextualloss_binary1(X_features,Y_features)
         loss2=self.contextualloss_binary2(Y_features,Z_features)
         loss3=self.contextualloss_binary3(Z_features,X_features)
-        return torch.sigmoid(-(loss1+loss2+loss3).mean())*10.
+        return torch.tanh(1./(loss1+loss2+loss3).mean())*10.

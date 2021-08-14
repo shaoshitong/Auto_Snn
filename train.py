@@ -207,8 +207,12 @@ if __name__ == "__main__":
 
     else:
         raise KeyError('There is no corresponding dataset')
-    params2 = filter(lambda i: i.requires_grad, model.parameters())
-    optimizer = get_optimizer(params2, yaml, model)
+    params1 = list(filter(lambda i: i.requires_grad, model.InputGenerateNet.parameters()))
+    params_sub=list(map(id,model.InputGenerateNet.parameters()))
+    params2 = list(filter(lambda i: i.requires_grad and id(i) not in params_sub, model.parameters()))
+    dict_list1=dict(params=params1,weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay'])
+    dict_list2=dict(params=params2,)
+    optimizer = get_optimizer([dict_list1,dict_list2], yaml, model)
     scheduler = get_scheduler(optimizer, yaml)
     criterion_loss = torch.nn.CrossEntropyLoss()
     model.to(set_device())
