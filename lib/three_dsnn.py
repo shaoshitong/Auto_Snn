@@ -27,20 +27,27 @@ def yaml_config_get():
     conf = OmegaConf.load('./train.yaml')
     return conf
 
+
 def batch_norm(input):
-    input_linear=input.view(input.shape[0],-1)
-    mean=input_linear.mean(dim=1,keepdim=True).unsqueeze(-1).unsqueeze(-1)
-    std=input_linear.std(dim=1,keepdim=True).unsqueeze(-1).unsqueeze(-1)
-    return torch.div(torch.sub(input,mean),std)
+    input_linear = input.view(input.shape[0], -1)
+    mean = input_linear.mean(dim=1, keepdim=True).unsqueeze(-1).unsqueeze(-1)
+    std = input_linear.std(dim=1, keepdim=True).unsqueeze(-1).unsqueeze(-1)
+    return torch.div(torch.sub(input, mean), std)
+
+
 yaml = yaml_config_get()
 dataoption = yaml['data']
-def size_change(f,s):
+
+
+def size_change(f, s):
     def change(xx):
-        xx:torch.Tensor
-        xx = F.interpolate(xx, (s, s), mode='bilinear',align_corners=True)
-        xx = xx.repeat(1,f//xx.shape[1],1,1)
+        xx: torch.Tensor
+        xx = F.interpolate(xx, (s, s), mode='bilinear', align_corners=True)
+        xx = xx.repeat(1, f // xx.shape[1], 1, 1)
         return xx
+
     return change
+
 
 class Shortcut(nn.Module):
     """
@@ -95,15 +102,15 @@ class block_in(nn.Module):
 
 
 class block_out(nn.Module):
-    def __init__(self, in_feature, out_feature, classes, size,use_pool="max"):
+    def __init__(self, in_feature, out_feature, classes, size, use_pool="max"):
         super(block_out, self).__init__()
-        self.tmp_feature=int(math.sqrt(in_feature*out_feature))
+        self.tmp_feature = int(math.sqrt(in_feature * out_feature))
         self.bn_out = nn.BatchNorm2d(in_feature)
-        self.conv2 = nn.Conv2d(in_feature,self.tmp_feature, (2, 2), stride=2, padding=0, bias=True)
+        self.conv2 = nn.Conv2d(in_feature, self.tmp_feature, (2, 2), stride=2, padding=0, bias=True)
         self.bn2 = nn.BatchNorm2d(self.tmp_feature)
         self.conv2_1 = nn.Conv2d(in_feature, out_feature, (2, 2), stride=2, padding=0, bias=True)
         self.bn2_1 = nn.BatchNorm2d(out_feature)
-        self.shortcut2 = Shortcut(in_feature,self.tmp_feature)
+        self.shortcut2 = Shortcut(in_feature, self.tmp_feature)
         self.shortcut2_1 = Shortcut(in_feature, out_feature)
         self.shortcut1 = Shortcut(self.tmp_feature, out_feature)
         self.shortcut0 = Shortcut(in_feature, out_feature, proportion=4)
@@ -112,11 +119,11 @@ class block_out(nn.Module):
         self.bn1 = nn.BatchNorm2d(out_feature)
         self.linear = nn.Sequential(*[
             nn.Flatten(),
-            nn.Linear(size * size * out_feature//16, classes)
+            nn.Linear(size * size * out_feature // 16, classes)
         ])
         self.linear_1 = nn.Sequential(*[
             nn.Flatten(),
-            nn.Linear(size * size * out_feature//16, classes)
+            nn.Linear(size * size * out_feature // 16, classes)
         ])
         if use_pool == 'max':
             self.maxpool_1 = nn.MaxPool2d(kernel_size=_pair(1), padding=0, stride=1)
@@ -210,22 +217,26 @@ class multi_block_eq(nn.Module):
     def forward(self, x):
         return self.model(x)
 
+
 class multi_block_neq(nn.Module):
-    def __init__(self,in_feature,out_feature,multi_k=1,Use_Spactral=False,Use_fractal=False):
-        super(multi_block_neq,self).__init__()
-        self.in_feature=in_feature
-        self.out_feature=out_feature
-        self.model=nn.Sequential(*[
-            block_eq(self.in_feature,Use_Spectral=Use_Spactral,Use_fractal=Use_fractal) for _ in range(multi_k)
+    def __init__(self, in_feature, out_feature, multi_k=1, Use_Spactral=False, Use_fractal=False):
+        super(multi_block_neq, self).__init__()
+        self.in_feature = in_feature
+        self.out_feature = out_feature
+        self.model = nn.Sequential(*[
+            block_eq(self.in_feature, Use_Spectral=Use_Spactral, Use_fractal=Use_fractal) for _ in range(multi_k)
         ])
-        if Use_Spactral==True:
-            self.out=SNConv2d(in_feature,out_feature,(4,4),stride=2,padding=1)
+        if Use_Spactral == True:
+            self.out = SNConv2d(in_feature, out_feature, (4, 4), stride=2, padding=1)
         else:
-            self.out=nn.Sequential(nn.LeakyReLU(1e-2,inplace=True),
-                                   nn.Conv2d(in_feature,out_feature,(4,4),stride=2,padding=1),
-                                   nn.BatchNorm2d(out_feature,affine=False))
-    def forward(self,x):
+            self.out = nn.Sequential(nn.LeakyReLU(1e-2, inplace=True),
+                                     nn.Conv2d(in_feature, out_feature, (4, 4), stride=2, padding=1),
+                                     nn.BatchNorm2d(out_feature, affine=False))
+
+    def forward(self, x):
         return self.out(self.model(x))
+
+
 class threshold(torch.autograd.Function):
     """
     该层是为了脉冲激活分形设计，在原版模型使用，当前模型撤销了
@@ -540,9 +551,9 @@ class DoorMechanism(nn.Module):
         # x3 = (x3 * self.pointx_sm).sum(dim=-2, keepdims=True) + (x3 * self.pointy_sm).sum(dim=-1,
         #                                                                                   keepdims=True) + torch.eye(
         #     x3.shape[-1], dtype=torch.float32).to(x3.device).unsqueeze(0).unsqueeze(0)
-        x1 = x1+ torch.eye(x1.shape[-1], dtype=torch.float32).to(x1.device).unsqueeze(0).unsqueeze(0)
-        x2 = x2+ torch.eye(x2.shape[-1], dtype=torch.float32).to(x2.device).unsqueeze(0).unsqueeze(0)
-        x3 = x3+ torch.eye(x3.shape[-1], dtype=torch.float32).to(x3.device).unsqueeze(0).unsqueeze(0)
+        x1 = x1 + torch.eye(x1.shape[-1], dtype=torch.float32).to(x1.device).unsqueeze(0).unsqueeze(0)
+        x2 = x2 + torch.eye(x2.shape[-1], dtype=torch.float32).to(x2.device).unsqueeze(0).unsqueeze(0)
+        x3 = x3 + torch.eye(x3.shape[-1], dtype=torch.float32).to(x3.device).unsqueeze(0).unsqueeze(0)
         # 2.y1 = (torch.stack([x1.mean(dim=-1), x1.mean(dim=-2)], dim=-1).view(x1.shape[0], x1.shape[1], -1) @ F.softmax(
         #     self.feature_s_sift1, dim=0)).squeeze(
         #     -1).mean(dim=0, keepdim=True)
@@ -555,6 +566,9 @@ class DoorMechanism(nn.Module):
         men_1 = torch.sigmoid(y1 @ self.tau_m_weight2 + tau_m @ self.tau_m_weight1 + self.tau_m_bias)
         men_2 = torch.sigmoid(y2 @ self.tau_s_weight2 + tau_s @ self.tau_s_weight1 + self.tau_s_bias)
         men_3 = torch.sigmoid(y3 @ self.tau_sm_weight2 + tau_sm @ self.tau_sm_weight1 + self.tau_sm_bias)
+        self.norm_mem_1 = men_1.norm(p=2, dim=0).mean() / (men_1.numel() / men_1.size()[0])
+        self.norm_mem_2 = men_2.norm(p=2, dim=0).mean() / (men_2.numel() / men_2.size()[0])
+        self.norm_mem_3 = men_3.norm(p=2, dim=0).mean() / (men_3.numel() / men_3.size()[0])
         # x1=x1*torch.tanh(self.feature_s_sift1[:self.len_point,:].view(1,1,1,self.len_point)+self.feature_s_sift1[self.len_point:,:].view(1,1,self.len_point,1))
         # x2=x2*torch.tanh(self.feature_m_sift1[:self.len_point,:].view(1,1,1,self.len_point)+self.feature_m_sift1[self.len_point:,:].view(1,1,self.len_point,1))
         # x3=x3*torch.tanh(self.feature_sm_sift1[:self.len_point,:].view(1,1,1,self.len_point)+self.feature_sm_sift1[self.len_point:,:].view(1,1,self.len_point,1))
@@ -599,29 +613,30 @@ class point_cul_Layer(nn.Module):
         self.DoorMach = DoorMechanism(in_pointnum, in_pointnum, in_feature, in_feature)
         if dataoption == 'mnist':
             if use_gauss == True:
-                if in_feature==out_feature:
+                if in_feature == out_feature:
                     self.gaussbur = guassNet(in_feature, in_feature, kernel_size=3, requires_grad=True)
                 else:
                     self.gaussbur = guassNet(in_feature, out_feature, kernel_size=3, requires_grad=True)
             else:
-                if in_feature==out_feature:
+                if in_feature == out_feature:
                     self.gaussbur = multi_block_eq(in_feature, multi_k=2, Use_Spactral=True,
-                                               Use_fractal=True)
+                                                   Use_fractal=True)
                 else:
-                    self.gaussbur = multi_block_neq(in_feature,out_feature,multi_k=2, Use_Spactral=True,
-                                               Use_fractal=True)
+                    self.gaussbur = multi_block_neq(in_feature, out_feature, multi_k=2, Use_Spactral=True,
+                                                    Use_fractal=True)
             self.bn1 = nn.BatchNorm2d(out_feature)
         elif dataoption == 'cifar10':
             if use_gauss == True:
-                if in_feature==out_feature:
+                if in_feature == out_feature:
                     self.gaussbur = guassNet(in_feature, in_feature, kernel_size=3, requires_grad=True)
                 else:
                     self.gaussbur = guassNet(in_feature, out_feature, kernel_size=3, requires_grad=True)
             else:
-                if in_feature==out_feature:
+                if in_feature == out_feature:
                     self.gaussbur = multi_block_eq(in_feature, multi_k=2, Use_Spactral=True, Use_fractal=True)
                 else:
-                    self.gaussbur = multi_block_neq(in_feature,out_feature, multi_k=2, Use_Spactral=True, Use_fractal=True)
+                    self.gaussbur = multi_block_neq(in_feature, out_feature, multi_k=2, Use_Spactral=True,
+                                                    Use_fractal=True)
             self.bn1 = nn.BatchNorm2d(out_feature)
         elif dataoption == 'fashionmnist':
             if use_gauss == True:
@@ -720,18 +735,16 @@ class three_dim_Layer(nn.Module):
         x,y=>[batchsize,64,x_pointnum//2,y_pointnum//2]
         """
         losses = self.context(x, y, z)
-        x = torch.tanh(x)
-        y = torch.tanh(y)
-        z = torch.tanh(z)
-        old=[[x,y,z],]
+        x = F.leaky_relu(x)
+        y = F.leaky_relu(y)
+        z = F.leaky_relu(z)
+        old = [[x, y, z], ]
         tensor_prev = [[[z for i in range(self.x)] for j in range(self.y)] for k in range(self.z)]
         for num in range(max(self.z, self.y, self.x)):
+            fo_list = []
             if num < self.z:
                 for i in range(num, self.y):
                     for j in range(num, self.x):
-                        f = self.point_layer_module[str(num) + '_' + str(i) + '_' + str(j)].in_feature
-                        s = self.point_layer_module[str(num) + '_' + str(i) + '_' + str(j)].in_size
-                        m = size_change(f,s)
                         zz = z
                         if j == num:
                             yy = y
@@ -748,12 +761,11 @@ class three_dim_Layer(nn.Module):
                             tensor_prev[num][i][j] = self.dropout[num][i][j](tensor_prev[num][i][j])
             else:
                 tensor_prev[-1][self.y - 1][self.x - 1] = z
+            if num == max(self.z, self.y, self.x):
+                fo_list.append(tensor_prev[-1][self.y - 1][self.x - 1].clone())
             if num < self.y:
                 for i in range(num, self.z):
                     for j in range(num, self.x):
-                        f = self.point_layer_module[str(i) + '_' + str(num) + '_' + str(j)].in_feature
-                        s = self.point_layer_module[str(i) + '_' + str(num) + '_' + str(j)].in_size
-                        m = size_change(f,s)
                         yy = y
                         if i == num:
                             xx = x
@@ -770,12 +782,11 @@ class three_dim_Layer(nn.Module):
                             tensor_prev[i][num][j] = self.dropout[i][num][j](tensor_prev[i][num][j])
             else:
                 tensor_prev[self.z - 1][-1][self.x - 1] = y
+            if num == max(self.z, self.y, self.x):
+                fo_list.append(tensor_prev[-1][self.y - 1][self.x - 1].clone())
             if num < self.x:
                 for i in range(num, self.z):
                     for j in range(num, self.y):
-                        f = self.point_layer_module[str(i) + '_' + str(j) + '_' + str(num)].in_feature
-                        s = self.point_layer_module[str(i) + '_' + str(j) + '_' + str(num)].in_size
-                        m = size_change(f,s)
                         xx = x
                         if i == num:
                             yy = y
@@ -792,14 +803,21 @@ class three_dim_Layer(nn.Module):
                             tensor_prev[i][j][num] = self.dropout[i][j][num](tensor_prev[i][j][num])
             else:
                 tensor_prev[self.z - 1][self.y - 1][-1] = x
-            m = size_change(tensor_prev[self.z - 1][self.y - 1][min(self.x - 1, num)].shape[1],tensor_prev[self.z - 1][self.y - 1][min(self.x - 1, num)].shape[2])
-            x = batch_norm(torch.div((tensor_prev[self.z - 1][self.y - 1][min(self.x - 1, num)]+m(x)),1.2))
-            y = batch_norm(torch.div((tensor_prev[self.z - 1][min(self.y - 1, num)][self.x - 1]+m(y)),1.2))
-            z = batch_norm(torch.div((tensor_prev[min(self.z - 1, num)][self.y - 1][self.x - 1]+m(z)),1.2))
-            old.append([x,y,z])
+            if num == max(self.z, self.y, self.x):
+                fo_list.append(tensor_prev[-1][self.y - 1][self.x - 1].clone())
+            m = size_change(tensor_prev[self.z - 1][self.y - 1][min(self.x - 1, num)].shape[1],
+                            tensor_prev[self.z - 1][self.y - 1][min(self.x - 1, num)].shape[2])
+            if num == max(self.z, self.y, self.x):
+                x = batch_norm(torch.div((fo_list[2] + m(x)), 1.2))
+                y = batch_norm(torch.div((fo_list[1] + m(y)), 1.2))
+                z = batch_norm(torch.div((fo_list[0] + m(z)), 1.2))
+            else:
+                x = batch_norm(torch.div((tensor_prev[self.z - 1][self.y - 1][min(self.x - 1, num)] + m(x)), 1.2))
+                y = batch_norm(torch.div((tensor_prev[self.z - 1][min(self.y - 1, num)][self.x - 1] + m(y)), 1.2))
+                z = batch_norm(torch.div((tensor_prev[min(self.z - 1, num)][self.y - 1][self.x - 1] + m(z)), 1.2))
+            old.append([x, y, z])
         self.losses = losses
-        del x,y,z,m,f,s,tensor_prev
-
+        del x, y, z, m, tensor_prev, fo_list
         return old
         # for i in range(self.z):
         #     for j in range(self.y):
@@ -829,28 +847,29 @@ class three_dim_Layer(nn.Module):
         """
         self.use_gauss = use_gauss
         self.point_layer = {}
-        self.in_shape=data.shape
-        self.feature_len=[int(in_feature*(2**_)) for _ in range(max(self.x,self.y,self.z)+1)]
-        self.div_len=[2**_ for _ in range(max(self.x,self.y,self.z)+1)]
-        old_size=int(math.sqrt(data.shape[1]/in_feature))
-        for i in range(max(self.x,self.y,self.z)+1):
-            if old_size % (2**i)==0:
+        self.in_shape = data.shape
+        self.feature_len = [int(in_feature * (2 ** _)) for _ in range(max(self.x, self.y, self.z) + 1)]
+        self.div_len = [2 ** _ for _ in range(max(self.x, self.y, self.z) + 1)]
+        old_size = int(math.sqrt(data.shape[1] / in_feature))
+        for i in range(max(self.x, self.y, self.z) + 1):
+            if old_size % (2 ** i) == 0:
                 pass
             else:
-                self.feature_len[i]=self.feature_len[i-1]
-                self.div_len[i]=self.div_len[i-1]
+                self.feature_len[i] = self.feature_len[i - 1]
+                self.div_len[i] = self.div_len[i - 1]
         for i in range(self.z):
             for j in range(self.y):
                 for k in range(self.x):
                     """
                     目前虽然有in_pointnum,out_pointnum,in_feature,out_feature,但实际上默认所有的输入输出相等，如果不相等将极大增加模型的设计难度。
+                    该版本已经实现了特征维度不相等
                     """
-                    num=min(i,j,k)
-                    in_div=self.div_len[num]
-                    in_feature=self.feature_len[num]
-                    out_div=self.div_len[num+1]
-                    out_feature=self.feature_len[num+1]
-                    if (i==self.z-1)+(j==self.y-1)+(k==self.x-1)>=2:
+                    num = min(i, j, k)
+                    in_div = self.div_len[num]
+                    in_feature = self.feature_len[num]
+                    out_div = self.div_len[num + 1]
+                    out_feature = self.feature_len[num + 1]
+                    if (i == self.z - 1) + (j == self.y - 1) + (k == self.x - 1) >= 2:
                         self.point_layer[str(i) + '_' + str(j) + '_' + str(k)] = point_cul_Layer(
                             int(data.shape[1] // in_div),
                             int(data.shape[1] // out_div),
@@ -889,7 +908,7 @@ class three_dim_Layer(nn.Module):
 
         self.point_layer_module = nn.ModuleDict(self.point_layer)
         del self.point_layer
-        return self.feature_len[-1],data.shape[1]//self.div_len[-1]
+        return self.feature_len[-1], data.shape[1] // self.div_len[-1]
 
     def subWeightGrad(self, epoch, epochs, sigma=1):
         """
@@ -931,10 +950,10 @@ class InputGenerateNet(nn.Module):
 
     def initiate_layer(self, input, in_feature, out_feature, tau_m=4., tau_s=1., use_gauss=True, batchsize=64,
                        old_in_feature=1, old_out_feature=1):
-        if dataoption=='mnist' or dataoption=='fashionmnist':
-            input=torch.randn(input.shape[0],1*32*32).to(input.device)
-        elif dataoption=='cifar10':
-            input=torch.randn(input.shape[0],3*32*32).to(input.device)
+        if dataoption == 'mnist' or dataoption == 'fashionmnist':
+            input = torch.randn(input.shape[0], 1 * 32 * 32).to(input.device)
+        elif dataoption == 'cifar10':
+            input = torch.randn(input.shape[0], 3 * 32 * 32).to(input.device)
         self.three_dim_layer.initiate_layer(
             torch.rand(batchsize, in_feature * (input.shape[1] // (old_out_feature * 4))),
             in_feature, out_feature, tau_m=tau_m, tau_s=tau_s,
@@ -942,6 +961,7 @@ class InputGenerateNet(nn.Module):
         self.block_eqy = multi_block_eq(in_feature, multi_k=2)
         self.block_eqz = multi_block_eq(in_feature, multi_k=2)
         return self.three_dim_layer.feature_len
+
     def settest(self, test):
         self.three_dim_layer.settest(test)
 
@@ -961,8 +981,9 @@ class merge_layer(nn.Module):
         else:
             self.shape = shape
         self.device = device
-        self.InputGenerateNet =InputGenerateNet(self.shape[0], self.device, weight_require_grad, weight_rand, grad_lr, dropout,
-                                 test).to(device)
+        self.InputGenerateNet = InputGenerateNet(self.shape[0], self.device, weight_require_grad, weight_rand, grad_lr,
+                                                 dropout,
+                                                 test).to(device)
         self.time = 0
 
     def forward(self, x):
@@ -986,8 +1007,8 @@ class merge_layer(nn.Module):
                 raise KeyError()
         x = self.block_inx(x)
         x_lists = self.InputGenerateNet(x)
-        x=self.feature_forward(x_lists)
-        h =self.out_classifier(x)
+        x = self.feature_forward(x_lists)
+        h = self.out_classifier(x)
         return h
 
     def initiate_layer(self, input, in_feature, out_feature, classes, tmp_feature=64, tau_m=4., tau_s=1.,
@@ -1006,20 +1027,19 @@ class merge_layer(nn.Module):
             self.second = input.numel() / self.first
 
         self.block_inx = block_in(in_feature, tmp_feature)
-        feature_len=self.InputGenerateNet.initiate_layer(input, tmp_feature, tmp_feature, tau_m, tau_s, use_gauss, batchsize,
-                               old_in_feature=in_feature, old_out_feature=out_feature)
+        feature_len = self.InputGenerateNet.initiate_layer(input, tmp_feature, tmp_feature, tau_m, tau_s, use_gauss,
+                                                           batchsize,
+                                                           old_in_feature=in_feature, old_out_feature=out_feature)
         # self.block_out = block_out(tmp_feature, out_feature_lowbit, classes, use_pool='none')
         import copy
         feature_len.append(copy.deepcopy(feature_len[-1]))
-        self.feature_forward=Feature_forward(feature_len)
-        if dataoption=='fashionmnist' or dataoption=='mnist' or dataoption=='cifar10':
-            out_pointnum=max(16//(feature_len[-1]//tmp_feature),1)
+        self.feature_forward = Feature_forward(feature_len)
+        if dataoption == 'fashionmnist' or dataoption == 'mnist' or dataoption == 'cifar10':
+            out_pointnum = max(16 // (feature_len[-1] // tmp_feature), 1)
         else:
             raise KeyError("not import")
-        # self.out_classifier=nn.Sequential(nn.LeakyReLU(1e-2,inplace=True),
-        #                                   nn.Flatten(),
-        #                                   nn.Linear(out_pointnum*out_pointnum*feature_len[-1],classes))
-        self.out_classifier=block_out(feature_len[-1],feature_len[-1]*4,classes=classes,size=out_pointnum,use_pool='none')
+        self.out_classifier = block_out(feature_len[-1], feature_len[-1] * 4, classes=classes, size=out_pointnum,
+                                        use_pool='none')
         self._initialize()
 
     def subWeightGrad(self, epoch, epochs, sigma=1):
@@ -1056,8 +1076,8 @@ class merge_layer(nn.Module):
         loss_feature = 0.
         loss_norm = 0.
         len = 0.
-        len2=0.
-        loss_tau=0.
+        len2 = 0.
+        loss_tau = 0.
         for layer in self.modules():
             if isinstance(layer, nn.Conv2d) and layer.bias is not None:
                 layer: guassNet
@@ -1072,12 +1092,10 @@ class merge_layer(nn.Module):
                 layer: InputGenerateNet
                 loss_feature += layer.three_dim_layer.losses
                 len += 1
-            elif isinstance(layer,three_dim_Layer):
-                layer:three_dim_Layer
-                for l in layer.point_layer_module.values():
-                    m=(l.tensor_tau_m1+l.tensor_tau_sm1+l.tensor_tau_s1)/3.
-                    loss_tau+=(torch.norm(m,p=2)/(m.numel())).mean()
-                    len2+=1
+            elif isinstance(layer, DoorMechanism):
+                layer: DoorMechanism
+                loss_tau+=(layer.norm_mem_1+layer.norm_mem_2+layer.norm_mem_3)
+                len2+=1
         loss_feature /= len
         loss_tau /= len2
         # loss_norm=torch.stack(normlist,dim=-1).std(dim=0)

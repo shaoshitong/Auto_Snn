@@ -207,8 +207,8 @@ if __name__ == "__main__":
 
     else:
         raise KeyError('There is no corresponding dataset')
-    params1 = list(filter(lambda i: i.requires_grad, model.InputGenerateNet.parameters()))
-    params_sub=list(map(id,model.InputGenerateNet.parameters()))
+    params1 = list(filter(lambda i: i.requires_grad, model.out_classifier.parameters()))
+    params_sub=list(map(id,model.out_classifier.parameters()))
     params2 = list(filter(lambda i: i.requires_grad and id(i) not in params_sub, model.parameters()))
     dict_list1=dict(params=params1,weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay'])
     dict_list2=dict(params=params2,)
