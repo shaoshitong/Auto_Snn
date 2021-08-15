@@ -11,6 +11,7 @@ from Snn_Auto_master.lib.plt_analyze import vis_img
 from Snn_Auto_master.lib.parameters_check import pd_save, parametersgradCheck
 from Snn_Auto_master.lib.SNnorm import SNConv2d, SNLinear
 from Snn_Auto_master.lib.fractallayer import LastJoiner
+from Snn_Auto_master.lib.DenseNet import Denselayer
 from Snn_Auto_master.lib.cocoscontextloss import ContextualLoss_forward
 from Snn_Auto_master.lib.featurefocusing import Feature_forward
 import math
@@ -78,29 +79,49 @@ class Shortcut(nn.Module):
         return self.shortcut(x)
 
 
+# class block_in(nn.Module):
+#     def __init__(self, in_feature, out_feature=64):
+#         super(block_in, self).__init__()
+#         self.conv0 = nn.Conv2d(in_feature, in_feature, (1, 1), stride=1, padding=0, bias=False)
+#         self.conv1 = nn.Conv2d(in_feature, 32, (4, 4), stride=2, padding=1, bias=True, )
+#         self.bn1 = nn.BatchNorm2d(32)
+#         self.conv2 = nn.Conv2d(32, out_feature, (3, 3), stride=1, padding=1, bias=True)
+#         self.bn2 = nn.BatchNorm2d(out_feature)
+#         self.shortcut2 = Shortcut(32, out_feature, use_same=True)
+#         self.shortcut1 = Shortcut(in_feature, 32)
+#         self.shortcut0 = Shortcut(in_feature, out_feature)
+#
+#     def forward(self, x):
+#         x = self.conv0(x)
+#         x1 = self.bn1(self.conv1(x)) + self.shortcut1(x)
+#         x1 = F.leaky_relu(x1, inplace=True)
+#         x2 = self.bn2(self.conv2(x1)) + self.shortcut2(x1)
+#         x2 = F.leaky_relu(x2, inplace=True)
+#         x3 = x2 + self.shortcut0(x)
+#         x3 = F.relu_(x3)
+#         return x3
+
 class block_in(nn.Module):
     def __init__(self, in_feature, out_feature=64):
         super(block_in, self).__init__()
-        self.conv0 = nn.Conv2d(in_feature, in_feature, (1, 1), stride=1, padding=0, bias=False)
-        self.conv1 = nn.Conv2d(in_feature, 32, (4, 4), stride=2, padding=1, bias=True, )
-        self.bn1 = nn.BatchNorm2d(32)
-        self.conv2 = nn.Conv2d(32, out_feature, (3, 3), stride=1, padding=1, bias=True)
-        self.bn2 = nn.BatchNorm2d(out_feature)
-        self.shortcut2 = Shortcut(32, out_feature, use_same=True)
-        self.shortcut1 = Shortcut(in_feature, 32)
-        self.shortcut0 = Shortcut(in_feature, out_feature)
-
-    def forward(self, x):
-        x = self.conv0(x)
-        x1 = self.bn1(self.conv1(x)) + self.shortcut1(x)
-        x1 = F.leaky_relu(x1, inplace=True)
-        x2 = self.bn2(self.conv2(x1)) + self.shortcut2(x1)
-        x2 = F.leaky_relu(x2, inplace=True)
-        x3 = x2 + self.shortcut0(x)
-        x3 = F.relu_(x3)
-        return x3
-
-
+        self.block_in_layer=Denselayer([in_feature,32,32,out_feature,out_feature])
+        self.conv_cat=nn.Sequential(nn.ReflectionPad2d(1),
+                                    nn.Conv2d(out_feature,3*out_feature,(4,4),stride=2,padding=0),
+                                    nn.BatchNorm2d(3*out_feature),)
+        self.out_feature=out_feature
+        self.relu=nn.LeakyReLU(1e-1)
+        self.f_conv=nn.ModuleList([SNConv2d(3*out_feature,out_feature,(1,1),stride=1,padding=0) for _ in range(3)])
+        self.training=False
+    def settest(self,training_status):
+        self.training=training_status
+    def forward(self,x):
+        x=self.block_in_layer(x,not self.training)
+        m=size_change(3*self.out_feature,x.size()[-1]//2)
+        x=self.relu(self.conv_cat(x)+m(x))
+        a,b,c=torch.split(x,dim=1,split_size_or_sections=[x.size()[1]//3,x.size()[1]//3,x.size()[1]//3])
+        a,b,c=a+self.f_conv[0](x),b+self.f_conv[0](x),c+self.f_conv[0](x)
+        del x
+        return a,b,c
 class block_out(nn.Module):
     def __init__(self, in_feature, out_feature, classes, size, use_pool="max"):
         super(block_out, self).__init__()
@@ -117,21 +138,25 @@ class block_out(nn.Module):
         self.shortcut0_1 = Shortcut(in_feature, out_feature, proportion=2)
         self.conv1 = nn.Conv2d(self.tmp_feature, out_feature, (2, 2), stride=2, padding=0, bias=True)
         self.bn1 = nn.BatchNorm2d(out_feature)
-        self.linear = nn.Sequential(*[
-            nn.Flatten(),
-            nn.Linear(size * size * out_feature // 16, classes)
-        ])
-        self.linear_1 = nn.Sequential(*[
-            nn.Flatten(),
-            nn.Linear(size * size * out_feature // 16, classes)
-        ])
         if use_pool == 'max':
             self.maxpool_1 = nn.MaxPool2d(kernel_size=_pair(1), padding=0, stride=1)
             self.maxpool = nn.MaxPool2d(kernel_size=_pair(1), padding=0, stride=1)
+            self.linear = nn.Sequential(*[
+                nn.Flatten(),
+                nn.Linear(size * size * out_feature // 16, classes)
+            ])
         elif use_pool == 'avg':
             self.maxpool_1 = nn.AvgPool2d(kernel_size=_pair(1), padding=0, stride=1)
             self.maxpool = nn.AvgPool2d(kernel_size=_pair(1), padding=0, stride=1)
+            self.linear = nn.Sequential(*[
+                nn.Flatten(),
+                nn.Linear(size * size * out_feature // 16, classes)
+            ])
         elif use_pool == 'none':
+            self.linear_1 = nn.Sequential(*[
+                nn.Flatten(),
+                nn.Linear(size * size * out_feature // 16, classes)
+            ])
             pass
         self.use_pool = use_pool
 
@@ -145,6 +170,8 @@ class block_out(nn.Module):
                 x3 = self.linear(x3)
             else:
                 x3 = self.linear_1(x3)
+        else:
+            raise KeyError("not import")
         # elif dataoption == 'mnist' or dataoption == 'fashionmnist':
         #     x1 = self.bn_out(x) + x
         #     x2 = self.bn2_1(self.conv2_1(F.relu_(x1))) + self.shortcut0_1(
@@ -203,6 +230,7 @@ class block_eq(nn.Module):
         else:
             x1 = self.merged([self.longConv(x), self.shortConv_1(x)])
         x2 = F.relu(x1, inplace=True)
+        del x
         return x2
 
 
@@ -492,26 +520,6 @@ class DoorMechanism(nn.Module):
                                         requires_grad=True)
         self.tau_sm_weight2 = Parameter(torch.Tensor(in_feature, out_feature),
                                         requires_grad=True)
-        self.len_point = int(math.sqrt(self.out_pointnum // self.out_feature))
-        self.feature_s_sift1 = Parameter(torch.Tensor(int(2 * self.len_point), 1),
-                                         requires_grad=True)
-        self.feature_m_sift1 = Parameter(torch.Tensor(int(2 * self.len_point), 1),
-                                         requires_grad=True)
-        self.feature_sm_sift1 = Parameter(torch.Tensor(int(2 * self.len_point), 1),
-                                          requires_grad=True)
-
-        self.pointx_s = Parameter(torch.Tensor(1, 1, self.len_point, 1),
-                                  requires_grad=True)
-        self.pointx_m = Parameter(torch.Tensor(1, 1, self.len_point, 1),
-                                  requires_grad=True)
-        self.pointx_sm = Parameter(torch.Tensor(1, 1, self.len_point, 1),
-                                   requires_grad=True)
-        self.pointy_s = Parameter(torch.Tensor(1, 1, 1, self.len_point),
-                                  requires_grad=True)
-        self.pointy_m = Parameter(torch.Tensor(1, 1, 1, self.len_point),
-                                  requires_grad=True)
-        self.pointy_sm = Parameter(torch.Tensor(1, 1, 1, self.len_point),
-                                   requires_grad=True)
         stdv = 6. / math.sqrt((in_pointnum // in_feature) * (out_pointnum // out_feature))
         self.tau_m_weight1.data.uniform_(-stdv, stdv)
         self.tau_m_weight2.data.uniform_(-stdv, stdv)
@@ -519,15 +527,6 @@ class DoorMechanism(nn.Module):
         self.tau_s_weight2.data.uniform_(-stdv, stdv)
         self.tau_sm_weight1.data.uniform_(-stdv, stdv)
         self.tau_sm_weight2.data.uniform_(-stdv, stdv)
-        self.feature_m_sift1.data.uniform_(-stdv, stdv)
-        self.feature_s_sift1.data.uniform_(-stdv, stdv)
-        self.feature_sm_sift1.data.uniform_(-stdv, stdv)
-        self.pointx_s.data.uniform_(-stdv, stdv)
-        self.pointx_m.data.uniform_(-stdv, stdv)
-        self.pointx_sm.data.uniform_(-stdv, stdv)
-        self.pointy_s.data.uniform_(-stdv, stdv)
-        self.pointy_m.data.uniform_(-stdv, stdv)
-        self.pointy_sm.data.uniform_(-stdv, stdv)
         self.tau_m_bias = Parameter(torch.zeros((1, out_feature)).float(), requires_grad=True)
         self.tau_s_bias = Parameter(torch.zeros((1, out_feature)).float(), requires_grad=True)
         self.tau_sm_bias = Parameter(torch.zeros((1, out_feature)).float(), requires_grad=True)
@@ -573,12 +572,12 @@ class DoorMechanism(nn.Module):
         # x2=x2*torch.tanh(self.feature_m_sift1[:self.len_point,:].view(1,1,1,self.len_point)+self.feature_m_sift1[self.len_point:,:].view(1,1,self.len_point,1))
         # x3=x3*torch.tanh(self.feature_sm_sift1[:self.len_point,:].view(1,1,1,self.len_point)+self.feature_sm_sift1[self.len_point:,:].view(1,1,self.len_point,1))
         result = torch.tanh(
-            men_1.unsqueeze(-1).unsqueeze(-1) * x1 + men_2.unsqueeze(-1).unsqueeze(-1) * x2 + men_3.unsqueeze(
-                -1).unsqueeze(-1) * x3)
+            men_1.unsqueeze(-1).unsqueeze(-1) * x1 +men_2.unsqueeze(-1).unsqueeze(-1) * x2 + men_3.unsqueeze(-1).unsqueeze(-1) * x3)
         with torch.no_grad():
             men_1 = (men_1 * self.lr + (1. - self.lr) * tau_m)
             men_2 = (men_2 * self.lr + (1. - self.lr) * tau_s)
             men_3 = (men_3 * self.lr + (1. - self.lr) * tau_sm)
+        del tau_s,tau_m,tau_sm,x1,x2,x3,y1,y2,y3
         return (result, men_1, men_2, men_3)
 
 
@@ -735,9 +734,9 @@ class three_dim_Layer(nn.Module):
         x,y=>[batchsize,64,x_pointnum//2,y_pointnum//2]
         """
         losses = self.context(x, y, z)
-        x = F.leaky_relu(x)
-        y = F.leaky_relu(y)
-        z = F.leaky_relu(z)
+        x=torch.tanh(x)
+        y=torch.tanh(y)
+        z=torch.tanh(z)
         old = [[x, y, z], ]
         tensor_prev = [[[z for i in range(self.x)] for j in range(self.y)] for k in range(self.z)]
         for num in range(max(self.z, self.y, self.x)):
@@ -817,7 +816,8 @@ class three_dim_Layer(nn.Module):
                 z = batch_norm(torch.div((tensor_prev[min(self.z - 1, num)][self.y - 1][self.x - 1] + m(z)), 1.2))
             old.append([x, y, z])
         self.losses = losses
-        del x, y, z, m, tensor_prev, fo_list
+        tensor_prev.clear()
+        del x, y, z, m, fo_list
         return old
         # for i in range(self.z):
         #     for j in range(self.y):
@@ -942,10 +942,7 @@ class InputGenerateNet(nn.Module):
         self.three_dim_layer = three_dim_Layer(self.shape, self.device, weight_require_grad, weight_rand, grad_lr,
                                                p=dropout, test=test)
 
-    def forward(self, x, y=None, z=None):
-        if y == None and z == None:
-            y = self.block_eqy(x)
-            z = self.block_eqz(y)
+    def forward(self, x, y, z):
         return self.three_dim_layer(x, y, z)
 
     def initiate_layer(self, input, in_feature, out_feature, tau_m=4., tau_s=1., use_gauss=True, batchsize=64,
@@ -958,8 +955,6 @@ class InputGenerateNet(nn.Module):
             torch.rand(batchsize, in_feature * (input.shape[1] // (old_out_feature * 4))),
             in_feature, out_feature, tau_m=tau_m, tau_s=tau_s,
             use_gauss=use_gauss)
-        self.block_eqy = multi_block_eq(in_feature, multi_k=2)
-        self.block_eqz = multi_block_eq(in_feature, multi_k=2)
         return self.three_dim_layer.feature_len
 
     def settest(self, test):
@@ -1005,8 +1000,8 @@ class merge_layer(nn.Module):
                 # y = y.view(y.shape[0], 1, 28, 28)
             else:
                 raise KeyError()
-        x = self.block_inx(x)
-        x_lists = self.InputGenerateNet(x)
+        a,b,c = self.block_in_x_y_z(x)
+        x_lists = self.InputGenerateNet(a,b,c)
         x = self.feature_forward(x_lists)
         h = self.out_classifier(x)
         return h
@@ -1026,7 +1021,7 @@ class merge_layer(nn.Module):
             self.first = input.shape[0]
             self.second = input.numel() / self.first
 
-        self.block_inx = block_in(in_feature, tmp_feature)
+        self.block_in_x_y_z = block_in(in_feature, tmp_feature)
         feature_len = self.InputGenerateNet.initiate_layer(input, tmp_feature, tmp_feature, tau_m, tau_s, use_gauss,
                                                            batchsize,
                                                            old_in_feature=in_feature, old_out_feature=out_feature)
@@ -1055,7 +1050,7 @@ class merge_layer(nn.Module):
         令模型知道当前处理test
         """
         for layer in self.modules():
-            if isinstance(layer, InputGenerateNet):
+            if isinstance(layer, InputGenerateNet) or isinstance(layer,block_in):
                 layer.settest(test)
 
     def _initialize(self):
@@ -1073,11 +1068,11 @@ class merge_layer(nn.Module):
     def L2_biasoption(self, sigma=1):
         loss = [torch.tensor(0.).float().cuda()]
         normlist = []
-        loss_feature = 0.
-        loss_norm = 0.
-        len = 0.
-        len2 = 0.
-        loss_tau = 0.
+        loss_feature = torch.tensor(0.).float().cuda()
+        loss_norm = torch.tensor(0.).float().cuda()
+        len =torch.tensor(0.).float().cuda()
+        len2 = torch.tensor(0.).float().cuda()
+        loss_tau = torch.tensor(0.).float().cuda()
         for layer in self.modules():
             if isinstance(layer, nn.Conv2d) and layer.bias is not None:
                 layer: guassNet
