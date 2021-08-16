@@ -62,7 +62,7 @@ class block_ad(nn.Module):
             self.fc2.weight.requires_grad=False
             self.fc2.bias.requires_grad = False
     def forward(self, input):
-        x = F.avg_pool2d(input, input.shape[3])
+        x = F.avg_pool2d(input, input.shape[-1])
         x = x.view(x.size(0), -1)
         y = F.relu(self.fc1(x))
         self.y = self.fc2(y)
@@ -97,6 +97,7 @@ class block_ad(nn.Module):
                 predict_bin = torch.min(torch.max(mid, torch.Tensor([0]).cpu()), torch.Tensor([1]).cpu())
             else:
                 predict_bin = torch.min(torch.max(mid, torch.Tensor([0]).cuda()), torch.Tensor([1]).cuda())
+        del x,y
         return predict_bin.unsqueeze(2).unsqueeze(3)
 
 """=======================================================above is block========================================================="""
@@ -104,9 +105,9 @@ class block_ad(nn.Module):
 def block_conv(eq_feature,groups=1):
     model1=nn.Sequential(nn.LeakyReLU(1e-2),
                          nn.BatchNorm2d(eq_feature*3),
-                         nn.Conv2d(eq_feature*3,eq_feature*2,(3,3),padding=1,stride=1,groups=groups),
-                         nn.Conv2d(eq_feature*2,eq_feature*2,(3,3),padding=1,stride=1,groups=1),
-                         nn.Conv2d(eq_feature*2,eq_feature*3,(3,3),stride=1,padding=1,groups=groups),
+                         nn.Conv2d(eq_feature*3,eq_feature,(3,3),padding=1,stride=1,groups=groups),
+                         nn.Conv2d(eq_feature,eq_feature,(3,3),padding=1,stride=1,groups=1),
+                         nn.Conv2d(eq_feature,eq_feature*3,(3,3),stride=1,padding=1,groups=groups),
                          )
     model2=nn.Sequential(block_ad(eq_feature*3,eq_feature*3))
     return model1,model2

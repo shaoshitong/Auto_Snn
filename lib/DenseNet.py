@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from  Snn_Auto_master.lib.SNnorm import SNConv2d
 import torch.nn.utils as utils
 import numpy as np
 import os,sys
@@ -34,7 +35,9 @@ class Denselayer(nn.Module):
                 feature_list[i+1]+=feature_list[i]
 
         self.joinlist=nn.ModuleList([
-            nn.Conv2d(feature_list[i],self.old_feature_list[i],(1,1),stride=1,padding=0) for i in range(1,len(feature_list))
+            nn.Sequential(nn.BatchNorm2d(feature_list[i]),
+                          nn.ReLU(),
+                          SNConv2d(feature_list[i],self.old_feature_list[i],(1,1),stride=1,padding=0)) for i in range(1,len(feature_list))
         ])
     def forward(self,x,training=True):
         pre=x

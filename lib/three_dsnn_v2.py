@@ -1003,3 +1003,26 @@ def conv2d(x, weight, bias, stride, pad):
     out = out + bias.view(1, -1, 1, 1)          # 添加偏置值
     return out
 """
+"""
+# class block_in(nn.Module):
+#     def __init__(self, in_feature, out_feature=64):
+#         super(block_in, self).__init__()
+#         self.conv0 = nn.Conv2d(in_feature, in_feature, (1, 1), stride=1, padding=0, bias=False)
+#         self.conv1 = nn.Conv2d(in_feature, 32, (4, 4), stride=2, padding=1, bias=True, )
+#         self.bn1 = nn.BatchNorm2d(32)
+#         self.conv2 = nn.Conv2d(32, out_feature, (3, 3), stride=1, padding=1, bias=True)
+#         self.bn2 = nn.BatchNorm2d(out_feature)
+#         self.shortcut2 = Shortcut(32, out_feature, use_same=True)
+#         self.shortcut1 = Shortcut(in_feature, 32)
+#         self.shortcut0 = Shortcut(in_feature, out_feature)
+#
+#     def forward(self, x):
+#         x = self.conv0(x)
+#         x1 = self.bn1(self.conv1(x)) + self.shortcut1(x)
+#         x1 = F.leaky_relu(x1, inplace=True)
+#         x2 = self.bn2(self.conv2(x1)) + self.shortcut2(x1)
+#         x2 = F.leaky_relu(x2, inplace=True)
+#         x3 = x2 + self.shortcut0(x)
+#         x3 = F.relu_(x3)
+#         return x3
+"""

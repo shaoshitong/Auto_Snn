@@ -79,27 +79,7 @@ class Shortcut(nn.Module):
         return self.shortcut(x)
 
 
-# class block_in(nn.Module):
-#     def __init__(self, in_feature, out_feature=64):
-#         super(block_in, self).__init__()
-#         self.conv0 = nn.Conv2d(in_feature, in_feature, (1, 1), stride=1, padding=0, bias=False)
-#         self.conv1 = nn.Conv2d(in_feature, 32, (4, 4), stride=2, padding=1, bias=True, )
-#         self.bn1 = nn.BatchNorm2d(32)
-#         self.conv2 = nn.Conv2d(32, out_feature, (3, 3), stride=1, padding=1, bias=True)
-#         self.bn2 = nn.BatchNorm2d(out_feature)
-#         self.shortcut2 = Shortcut(32, out_feature, use_same=True)
-#         self.shortcut1 = Shortcut(in_feature, 32)
-#         self.shortcut0 = Shortcut(in_feature, out_feature)
-#
-#     def forward(self, x):
-#         x = self.conv0(x)
-#         x1 = self.bn1(self.conv1(x)) + self.shortcut1(x)
-#         x1 = F.leaky_relu(x1, inplace=True)
-#         x2 = self.bn2(self.conv2(x1)) + self.shortcut2(x1)
-#         x2 = F.leaky_relu(x2, inplace=True)
-#         x3 = x2 + self.shortcut0(x)
-#         x3 = F.relu_(x3)
-#         return x3
+
 
 class block_in(nn.Module):
     def __init__(self, in_feature, out_feature=64):
@@ -119,76 +99,97 @@ class block_in(nn.Module):
         m=size_change(3*self.out_feature,x.size()[-1]//2)
         x=self.relu(self.conv_cat(x)+m(x))
         a,b,c=torch.split(x,dim=1,split_size_or_sections=[x.size()[1]//3,x.size()[1]//3,x.size()[1]//3])
-        a,b,c=a+self.f_conv[0](x),b+self.f_conv[0](x),c+self.f_conv[0](x)
+        a,b,c=a+self.f_conv[0](x),b+self.f_conv[1](x),c+self.f_conv[2](x)
         del x
         return a,b,c
 class block_out(nn.Module):
-    def __init__(self, in_feature, out_feature, classes, size, use_pool="max"):
-        super(block_out, self).__init__()
-        self.tmp_feature = int(math.sqrt(in_feature * out_feature))
-        self.bn_out = nn.BatchNorm2d(in_feature)
-        self.conv2 = nn.Conv2d(in_feature, self.tmp_feature, (2, 2), stride=2, padding=0, bias=True)
-        self.bn2 = nn.BatchNorm2d(self.tmp_feature)
-        self.conv2_1 = nn.Conv2d(in_feature, out_feature, (2, 2), stride=2, padding=0, bias=True)
-        self.bn2_1 = nn.BatchNorm2d(out_feature)
-        self.shortcut2 = Shortcut(in_feature, self.tmp_feature)
-        self.shortcut2_1 = Shortcut(in_feature, out_feature)
-        self.shortcut1 = Shortcut(self.tmp_feature, out_feature)
-        self.shortcut0 = Shortcut(in_feature, out_feature, proportion=4)
-        self.shortcut0_1 = Shortcut(in_feature, out_feature, proportion=2)
-        self.conv1 = nn.Conv2d(self.tmp_feature, out_feature, (2, 2), stride=2, padding=0, bias=True)
-        self.bn1 = nn.BatchNorm2d(out_feature)
-        if use_pool == 'max':
-            self.maxpool_1 = nn.MaxPool2d(kernel_size=_pair(1), padding=0, stride=1)
-            self.maxpool = nn.MaxPool2d(kernel_size=_pair(1), padding=0, stride=1)
-            self.linear = nn.Sequential(*[
-                nn.Flatten(),
-                nn.Linear(size * size * out_feature // 16, classes)
-            ])
-        elif use_pool == 'avg':
-            self.maxpool_1 = nn.AvgPool2d(kernel_size=_pair(1), padding=0, stride=1)
-            self.maxpool = nn.AvgPool2d(kernel_size=_pair(1), padding=0, stride=1)
-            self.linear = nn.Sequential(*[
-                nn.Flatten(),
-                nn.Linear(size * size * out_feature // 16, classes)
-            ])
-        elif use_pool == 'none':
-            self.linear_1 = nn.Sequential(*[
-                nn.Flatten(),
-                nn.Linear(size * size * out_feature // 16, classes)
-            ])
-            pass
-        self.use_pool = use_pool
-
-    def forward(self, x):
-        if dataoption == 'cifar10' or dataoption == 'fashionmnist' or dataoption == 'mnist':
-            x1 = self.bn_out(x) + x
-            x2 = self.bn2(self.conv2(F.relu_(x1)))  # + self.shortcut2(x1)  # [32,8,8]
-            x3 = self.bn1(self.conv1(F.relu_(x2))) + self.shortcut0(x)  # + self.shortcut1(x2)+self.shortcut0(x)
-            if self.use_pool != 'none':
-                x3 = self.maxpool(F.leaky_relu_(x3))
-                x3 = self.linear(x3)
-            else:
-                x3 = self.linear_1(x3)
+    def __init__(self,in_feature,out_feature,classes,size,use_pool='none'):
+        super(block_out,self).__init__()
+        self.block_out_layer=Denselayer([in_feature,64,64,out_feature,out_feature])
+        if use_pool=='none':
+            self.classifiar=nn.Sequential(nn.Flatten(),SNLinear(out_feature*size*size,classes))
         else:
-            raise KeyError("not import")
-        # elif dataoption == 'mnist' or dataoption == 'fashionmnist':
-        #     x1 = self.bn_out(x) + x
-        #     x2 = self.bn2_1(self.conv2_1(F.relu_(x1))) + self.shortcut0_1(
-        #         x)  # + self.shortcut2_1(x1)+self.shortcut0_1(x)  # [32,8,8]
-        #     if self.use_pool != 'none':
-        #         if self.use_pool == 'max':
-        #             relu = F.relu_
-        #         else:
-        #             relu = F.leaky_relu_
-        #         x2 = self.maxpool_1(relu(x2))
-        #         x3 = self.linear2(x2)
-        #     else:
-        #         x3 = self.linear2_1(x2)
-        #
-        # else:
-        #     raise KeyError('not is True')
-        return x3
+            self.classifiar=nn.Sequential(nn.Flatten(),SNLinear(out_feature,classes))
+        self.training=False
+        self.use_pool=use_pool
+        self.size=size
+    def settest(self,training_status):
+        self.training=training_status
+    def forward(self,x):
+        x=self.block_out_layer(x,not self.training)
+        if self.use_pool=='none':
+            return self.classifiar(x)
+        elif self.use_pool=='max':
+            return self.classifiar(F.max_pool2d(x,x.shape[-1]))
+        elif self.use_pool=='avg':
+            return self.classifiar(F.avg_pool2d(x,x.shape[-1]))
+# class block_out(nn.Module):
+#     def __init__(self, in_feature, out_feature, classes, size, use_pool="max"):
+#         super(block_out, self).__init__()
+#         self.tmp_feature = int(math.sqrt(in_feature * out_feature))
+#         self.bn_out = nn.BatchNorm2d(in_feature)
+#         self.conv2 = nn.Conv2d(in_feature, self.tmp_feature, (2, 2), stride=2, padding=0, bias=True)
+#         self.bn2 = nn.BatchNorm2d(self.tmp_feature)
+#         self.conv2_1 = nn.Conv2d(in_feature, out_feature, (2, 2), stride=2, padding=0, bias=True)
+#         self.bn2_1 = nn.BatchNorm2d(out_feature)
+#         self.shortcut2 = Shortcut(in_feature, self.tmp_feature)
+#         self.shortcut2_1 = Shortcut(in_feature, out_feature)
+#         self.shortcut1 = Shortcut(self.tmp_feature, out_feature)
+#         self.shortcut0 = Shortcut(in_feature, out_feature, proportion=4)
+#         self.shortcut0_1 = Shortcut(in_feature, out_feature, proportion=2)
+#         self.conv1 = nn.Conv2d(self.tmp_feature, out_feature, (2, 2), stride=2, padding=0, bias=True)
+#         self.bn1 = nn.BatchNorm2d(out_feature)
+#         if use_pool == 'max':
+#             self.maxpool_1 = nn.MaxPool2d(kernel_size=_pair(1), padding=0, stride=1)
+#             self.maxpool = nn.MaxPool2d(kernel_size=_pair(1), padding=0, stride=1)
+#             self.linear = nn.Sequential(*[
+#                 nn.Flatten(),
+#                 nn.Linear(size * size * out_feature // 16, classes)
+#             ])
+#         elif use_pool == 'avg':
+#             self.maxpool_1 = nn.AvgPool2d(kernel_size=_pair(1), padding=0, stride=1)
+#             self.maxpool = nn.AvgPool2d(kernel_size=_pair(1), padding=0, stride=1)
+#             self.linear = nn.Sequential(*[
+#                 nn.Flatten(),
+#                 nn.Linear(size * size * out_feature // 16, classes)
+#             ])
+#         elif use_pool == 'none':
+#             self.linear_1 = nn.Sequential(*[
+#                 nn.Flatten(),
+#                 nn.Linear(size * size * out_feature // 16, classes)
+#             ])
+#             pass
+#         self.use_pool = use_pool
+#
+#     def forward(self, x):
+#         if dataoption == 'cifar10' or dataoption == 'fashionmnist' or dataoption == 'mnist':
+#             x1 = self.bn_out(x) + x
+#             x2 = self.bn2(self.conv2(F.relu_(x1)))  # + self.shortcut2(x1)  # [32,8,8]
+#             x3 = self.bn1(self.conv1(F.relu_(x2))) + self.shortcut0(x)  # + self.shortcut1(x2)+self.shortcut0(x)
+#             if self.use_pool != 'none':
+#                 x3 = self.maxpool(F.leaky_relu_(x3))
+#                 x3 = self.linear(x3)
+#             else:
+#                 x3 = self.linear_1(x3)
+#         else:
+#             raise KeyError("not import")
+#         # elif dataoption == 'mnist' or dataoption == 'fashionmnist':
+#         #     x1 = self.bn_out(x) + x
+#         #     x2 = self.bn2_1(self.conv2_1(F.relu_(x1))) + self.shortcut0_1(
+#         #         x)  # + self.shortcut2_1(x1)+self.shortcut0_1(x)  # [32,8,8]
+#         #     if self.use_pool != 'none':
+#         #         if self.use_pool == 'max':
+#         #             relu = F.relu_
+#         #         else:
+#         #             relu = F.leaky_relu_
+#         #         x2 = self.maxpool_1(relu(x2))
+#         #         x3 = self.linear2(x2)
+#         #     else:
+#         #         x3 = self.linear2_1(x2)
+#         #
+#         # else:
+#         #     raise KeyError('not is True')
+#         return x3
 
 
 class block_eq(nn.Module):
@@ -1033,7 +1034,7 @@ class merge_layer(nn.Module):
             out_pointnum = max(16 // (feature_len[-1] // tmp_feature), 1)
         else:
             raise KeyError("not import")
-        self.out_classifier = block_out(feature_len[-1], feature_len[-1] * 4, classes=classes, size=out_pointnum,
+        self.out_classifier = block_out(feature_len[-1],32, classes=classes, size=out_pointnum,
                                         use_pool='none')
         self._initialize()
 
@@ -1050,7 +1051,7 @@ class merge_layer(nn.Module):
         令模型知道当前处理test
         """
         for layer in self.modules():
-            if isinstance(layer, InputGenerateNet) or isinstance(layer,block_in):
+            if isinstance(layer, InputGenerateNet) or isinstance(layer,block_in) or isinstance(layer,block_out):
                 layer.settest(test)
 
     def _initialize(self):
@@ -1097,7 +1098,7 @@ class merge_layer(nn.Module):
         # loss_norm = ( torch.stack(loss_norm, dim=-1).min()-torch.stack(loss_norm, dim=-1))
         # loss_norm = (torch.exp(-loss_norm)/torch.exp(-loss_norm).sum(dim=-1)).std(dim=-1)
         loss_bias = torch.stack(loss, dim=-1).mean()
-        return (loss_norm + loss_bias + loss_feature) * sigma
+        return (loss_tau + loss_bias +loss_feature) * sigma
 
 
 """
