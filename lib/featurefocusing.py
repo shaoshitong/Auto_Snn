@@ -105,9 +105,9 @@ class block_ad(nn.Module):
 def block_conv(eq_feature,groups=1):
     model1=nn.Sequential(nn.LeakyReLU(1e-2),
                          nn.BatchNorm2d(eq_feature*3),
-                         nn.Conv2d(eq_feature*3,eq_feature,(3,3),padding=1,stride=1,groups=groups),
-                         nn.Conv2d(eq_feature,eq_feature,(3,3),padding=1,stride=1,groups=1),
-                         nn.Conv2d(eq_feature,eq_feature*3,(3,3),stride=1,padding=1,groups=groups),
+                         nn.Conv2d(eq_feature*3,eq_feature*2,(3,3),padding=1,stride=1,groups=groups),
+                         nn.ReLU(),
+                         nn.Conv2d(eq_feature*2,eq_feature*3,(3,3),padding=1,stride=1,groups=groups),
                          )
     model2=nn.Sequential(block_ad(eq_feature*3,eq_feature*3))
     return model1,model2

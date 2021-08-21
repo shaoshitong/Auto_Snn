@@ -695,7 +695,8 @@ class three_dim_Layer(nn.Module):
         self.diag_T = Trinomial_operation(max(max(self.x, self.y), self.z))
         self.grad_lr = grad_lr
         self.dropout = [[[nn.Dropout(p) for i in range(self.x)] for j in range(self.y)] for k in range(self.z)]
-        self.context = ContextualLoss_forward(False)
+        from Snn_Auto_master.lib.dimixloss import DimIxLoss
+        self.feature_loss=DimIxLoss(shape[-1])
         self.test = test
         self.x_join, self.y_join, self.z_join = LastJoiner(2), LastJoiner(2), LastJoiner(2)
         self.losses = 0.
@@ -707,7 +708,6 @@ class three_dim_Layer(nn.Module):
         """
         x,y=>[batchsize,64,x_pointnum//2,y_pointnum//2]
         """
-        losses = self.context(x, y, z)
         x=torch.tanh(x)
         y=torch.tanh(y)
         z=torch.tanh(z)
@@ -789,9 +789,9 @@ class three_dim_Layer(nn.Module):
                 y = batch_norm(torch.div((tensor_prev[self.z - 1][min(self.y - 1, num)][self.x - 1] + m(y)), 1.2))
                 z = batch_norm(torch.div((tensor_prev[min(self.z - 1, num)][self.y - 1][self.x - 1] + m(z)), 1.2))
             old.append([x, y, z])
-        self.losses = losses
         tensor_prev.clear()
         del x, y, z, m, fo_list
+        self.losses=self.feature_loss(old)
         return old
         # for i in range(self.z):
         #     for j in range(self.y):
@@ -1042,7 +1042,7 @@ class merge_layer(nn.Module):
     def L2_biasoption(self, sigma=1):
         loss = [torch.tensor(0.).float().cuda()]
         normlist = []
-        loss_feature = torch.tensor(0.).float().cuda()
+        loss_feature = torch.tensor([0.]).float().cuda()
         loss_norm = torch.tensor(0.).float().cuda()
         len =torch.tensor(0.).float().cuda()
         len2 = torch.tensor(0.).float().cuda()
@@ -1066,6 +1066,7 @@ class merge_layer(nn.Module):
                 loss_tau+=(layer.norm_mem_1+layer.norm_mem_2+layer.norm_mem_3)
                 len2+=1
         loss_feature /= len
+        loss_feature.squeeze_(-1)
         loss_tau /= len2
         # loss_norm=torch.stack(normlist,dim=-1).std(dim=0)
         # loss_norm = ( torch.stack(loss_norm, dim=-1).min()-torch.stack(loss_norm, dim=-1))
