@@ -23,7 +23,7 @@ from Snn_Auto_master.lib.three_dsnn import merge_layer
 from Snn_Auto_master.lib.parameters_check import parametersgradCheck
 
 parser = argparse.ArgumentParser(description='SNN AUTO MASTER')
-parser.add_argument('--config_file', type=str, default='train.yaml',
+parser.add_argument('--config_file', type=str, default='train_eeg.yaml',
                     help='path to configuration file')
 parser.add_argument('--train', dest='train', default=True, type=bool,
                     help='train model')
@@ -102,6 +102,8 @@ def test(path, data, yaml, criterion_loss):
         the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],3,32,32),3,3, int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'])
     elif yaml['data']=='fashionmnist':
         the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],1,28,28),1,1,int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'])
+    elif yaml['data']=='fashionmnist':
+        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],14,64,64),14,14,int(2),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'])
     else:
         raise KeyError('not have this dataset')
     the_model.load_state_dict(torch.load(path)['snn_state_dict'])
@@ -117,6 +119,8 @@ def test(path, data, yaml, criterion_loss):
                 input = input.float().to(device).view(input.shape[0], -1)
             elif yaml['data']=='fashionmnist':
                 input = input.float().to(device)
+            elif yaml['data'] == 'eeg':
+                input = input.float().to(device).view(input.shape[0], -1)
             else:
                 raise KeyError()
             target = target.to(device)
@@ -226,7 +230,7 @@ if __name__ == "__main__":
         test_dataloader = DataLoader(test_data, batch_size=yaml['parameters']['batch_size'], shuffle=True,
                                      num_workers=4,
                                      drop_last=True)
-        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 16 * 16 * 64),64,64, int(2),tmp_feature=yaml['parameters']['tmp_feature']*2,tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False)
+        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 14 * 64 * 64),14,14, int(2),tmp_feature=yaml['parameters']['tmp_feature']*2,tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False)
 
     else:
         raise KeyError('There is no corresponding dataset')

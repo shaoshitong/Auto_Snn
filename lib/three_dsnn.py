@@ -22,11 +22,12 @@ from omegaconf import OmegaConf
 import matplotlib.pyplot as plt
 
 
-def yaml_config_get():
+def yaml_config_get(yamlname):
     """
     该函数是为了获取模型的配置信息
     """
-    conf = OmegaConf.load('./train.yaml')
+
+    conf = OmegaConf.load(yamlname)
     return conf
 
 
@@ -37,7 +38,8 @@ def batch_norm(input):
     return torch.div(torch.sub(input, mean), std)
 
 
-yaml = yaml_config_get()
+yaml = yaml_config_get("./train_eeg.yaml")
+# yaml = yaml_config_get("./train.yaml")
 dataoption = yaml['data']
 
 
@@ -85,6 +87,7 @@ class Shortcut(nn.Module):
 class block_in(nn.Module):
     def __init__(self, in_feature, out_feature=64):
         super(block_in, self).__init__()
+        print(out_feature//2)
         self.block_in_layer=Denselayer([in_feature,out_feature//2,out_feature//2,out_feature,out_feature])
         self.conv_cat=nn.Sequential(nn.ReflectionPad2d(1),
                                     nn.Conv2d(out_feature,3*out_feature,(4,4),stride=2,padding=0),
@@ -105,6 +108,7 @@ class block_in(nn.Module):
         return a,b,c
 class block_out(nn.Module):
     def __init__(self,in_feature,out_feature,classes,size,use_pool='none'):
+        print(in_feature//4)
         super(block_out,self).__init__()
         self.block_out_layer=Denselayer([in_feature,in_feature//4,in_feature//4,out_feature,out_feature])
         if use_pool=='none':
@@ -999,7 +1003,7 @@ class merge_layer(nn.Module):
                 x = F.interpolate(x, (32, 32), mode='bilinear', align_corners=True)
                 # y = y.view(y.shape[0], 1, 28, 28)
             elif dataoption == 'eeg':
-                x = x.view(x.shape[0], 64,16, 16)
+                x = x.view(x.shape[0], 14,64, 64)
                 # 64,16,16
             else:
                 raise KeyError()
@@ -1035,7 +1039,7 @@ class merge_layer(nn.Module):
         if dataoption == 'fashionmnist' or dataoption == 'mnist' or dataoption == 'cifar10':
             out_pointnum = max(16 // (feature_len[-1] // tmp_feature), 1)
         elif dataoption == 'eeg':
-            out_pointnum = max(8 // (feature_len[-1] // tmp_feature), 1)
+            out_pointnum = max(32 // (feature_len[-1] // tmp_feature), 1)
         else:
             raise KeyError("not import")
         self.out_classifier = block_out(feature_len[-1],32, classes=classes, size=out_pointnum,
@@ -1070,7 +1074,7 @@ class merge_layer(nn.Module):
                 layer.gauss_bias.data -= torch.randn_like(
                     layer.gauss_bias.data).abs()  # /math.sqrt(layer.gauss_bias.data.numel())
 
-    def L2_biasoption(self, sigma=1):
+    def L2_biasoption(self, sigma=0.1):
         loss = [torch.tensor(0.).float().cuda()]
         normlist = []
         loss_feature = torch.tensor([0.]).float().cuda()

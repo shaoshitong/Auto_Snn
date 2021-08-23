@@ -7,7 +7,7 @@ set_seed:
 pytorch_seed:
   2021
 data:
-  cifar10
+  eeg
 parameters:
   # default parameters
   length:
@@ -17,9 +17,9 @@ parameters:
   sigma:
     0.1
   batch_size:
-    64
+    32
   epoch:
-    200
+    100
   droupout:
     0.2
   filter_tau_m:
@@ -32,10 +32,10 @@ parameters:
     True
   membrane_filer:
     False
-shape: [[2,2,2]]
+shape: [[1,1,1]]
 optimizer:
   optimizer_choice:
-    'SGD'
+    'Adam'
   Adam:
     lr: 0.001
     weight_decay: 0
@@ -61,8 +61,8 @@ scheduler:
     'SchedulerLR'
   SchedulerLR:
     milestones:
-      - 0.4
-      - 0.8
+      - 0.2
+      - 0.7
     gamma:
       0.1
   MultiStepLR:

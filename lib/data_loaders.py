@@ -158,7 +158,7 @@ class EEGDateset(Dataset):
         return self.label.shape[0]
 
     def __getitem__(self, idx):
-        X = np.repeat(np.expand_dims(self.data[idx], axis=-1), repeats=self.data[idx].shape[-1], axis=-1)
+        X = np.repeat(np.expand_dims(np.transpose(self.data[idx],(1,0)), axis=-1), repeats=self.data[idx].shape[-1], axis=-1)
         y = self.label[idx]
         if self.transform==True:
             import random
@@ -178,7 +178,7 @@ class EEGDateset(Dataset):
         import torch.nn.functional as F
         with torch.no_grad():
             X=X.unsqueeze(0)
-            X=F.interpolate(X,size=[16,16],mode='nearest')
+            X=F.interpolate(X,size=[64,64],mode='nearest')
             X=X.squeeze(0)
         y=torch.Tensor([y])
         return X,y.long().squeeze(-1)
