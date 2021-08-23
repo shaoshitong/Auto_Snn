@@ -115,13 +115,12 @@ def revertNoramlImgae(image):
 
 
 class EEGDateset(Dataset):
-    def __init__(self, max_rate=1, flatten=False, transform=False, training=True):
+    def __init__(self, random, flatten=False, transform=False, training=True):
         repeat = 0
         scale = 0.1
         label_selection = "ScoreValence"
         self.transform = transform
         self.flatten = flatten
-        self.max_rate = max_rate
         self.train_X = []
         self.train_y = []
         self.test_X = []
@@ -135,7 +134,7 @@ class EEGDateset(Dataset):
                 repeat, scale * 100, label_selection, i)))
             self.test_y.append(np.load(file='./data/eeg/ytest_re%ds%d_%s_modelseed%d.npy' % (
                 repeat, scale * 100, label_selection, i)))
-        seed_indices=random.randint(0,4)
+        seed_indices=random
         self.test_X = self.test_X[seed_indices]
         self.train_X = self.train_X[seed_indices]
         self.test_y = self.test_y[seed_indices]
@@ -153,6 +152,7 @@ class EEGDateset(Dataset):
         else:
             self.data = self.test_X
             self.label = self.test_y
+        print(self.label.shape[0])
 
     def __len__(self):
         return self.label.shape[0]

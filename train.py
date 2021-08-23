@@ -5,6 +5,7 @@
 """
 import argparse
 import os
+import random
 import time
 import sys
 import torch
@@ -90,6 +91,7 @@ def test2(model, data, yaml, criterion_loss):
             elif yaml['data'] in ['mnist', 'fashionmnist', 'cifar10']:
                 prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
             log(model, loss.cpu(), prec1.cpu(), prec5.cpu())
+    return log.epoch_state["top_1"] / log.epoch_state["steps"],log.epoch_state["loss"] / log.epoch_state["steps"]
 
 
 def test(path, data, yaml, criterion_loss):
@@ -102,7 +104,7 @@ def test(path, data, yaml, criterion_loss):
         the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],3,32,32),3,3, int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'])
     elif yaml['data']=='fashionmnist':
         the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],1,28,28),1,1,int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'])
-    elif yaml['data']=='fashionmnist':
+    elif yaml['data']=='eeg':
         the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],14,64,64),14,14,int(2),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'])
     else:
         raise KeyError('not have this dataset')
@@ -134,6 +136,7 @@ def test(path, data, yaml, criterion_loss):
             elif yaml['data'] in ['mnist', 'fashionmnist', 'cifar10']:
                 prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
             log(model, loss.cpu(), prec1.cpu(), prec5.cpu())
+    return log.epoch_state["top_1"] / log.epoch_state["steps"],log.epoch_state["loss"] / log.epoch_state["steps"]
 
 
 def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="./output"):
@@ -222,8 +225,10 @@ if __name__ == "__main__":
                                      drop_last=True)
         model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 28 * 28 * 1),1,1, int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False)
     elif yaml['data'] == 'eeg':
-        train_data=EEGDateset(flatten=True, transform=True,training=True)
-        test_data=EEGDateset(flatten=False,transform=False,training=False)
+        p=random.randint(0,4)
+        print(p)
+        train_data=EEGDateset(random=p,flatten=True, transform=True,training=True)
+        test_data=EEGDateset(random=p,flatten=False,transform=False,training=False)
         train_dataloader=DataLoader(train_data, batch_size=yaml['parameters']['batch_size'], shuffle=True,
                                       num_workers=4,
                                       drop_last=True)
@@ -251,25 +256,25 @@ if __name__ == "__main__":
             model.train()
             epoch_time_stamp = time.strftime("%Y%m%d-%H%M%S")
             prec1, loss = train(model, optimizer, scheduler, train_dataloader, yaml, j, criterion_loss)
-            checkpoint_path = os.path.join(yaml['output'], str(j) + '_' + epoch_time_stamp + str(best_acc))
-            if best_acc < prec1:
-                best_acc = prec1
-                torch.save({
-                    'epoch': j,
-                    'snn_state_dict': model.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict(),
-                    'loss': loss,
-                }, checkpoint_path + 'best')
-                path = checkpoint_path + 'best'
-            else:
-                torch.save({
-                    'epoch': j,
-                    'snn_state_dict': model.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict(),
-                    'loss': loss,
-                }, checkpoint_path)
-                path = checkpoint_path
             if args.test == True:
-                test2(model, test_dataloader, yaml, criterion_loss)
+                checkpoint_path = os.path.join(yaml['output'], str(j) + '_' + epoch_time_stamp + str(best_acc))
+                prec1,loss=test2(model, test_dataloader, yaml, criterion_loss)
+                if best_acc < prec1:
+                    best_acc = prec1
+                #     torch.save({
+                #         'epoch': j,
+                #         'snn_state_dict': model.state_dict(),
+                #         'optimizer_state_dict': optimizer.state_dict(),
+                #         'loss': loss,
+                #     }, checkpoint_path + 'best')
+                #     path = checkpoint_path + 'best'
+                # else:
+                #     torch.save({
+                #         'epoch': j,
+                #         'snn_state_dict': model.state_dict(),
+                #         'optimizer_state_dict': optimizer.state_dict(),
+                #         'loss': loss,
+                #     }, checkpoint_path)
+                #     path = checkpoint_path
         log.flush()
         print("best_acc:{:.3f}%".format(best_acc))
