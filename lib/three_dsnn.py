@@ -14,6 +14,7 @@ from Snn_Auto_master.lib.fractallayer import LastJoiner
 from Snn_Auto_master.lib.DenseNet import Denselayer
 from Snn_Auto_master.lib.cocoscontextloss import ContextualLoss_forward
 from Snn_Auto_master.lib.featurefocusing import Feature_forward
+from Snn_Auto_master.lib.dimixloss import DimIxLoss
 import math
 import pandas as pd
 from torch.nn.parameter import Parameter
@@ -84,7 +85,7 @@ class Shortcut(nn.Module):
 class block_in(nn.Module):
     def __init__(self, in_feature, out_feature=64):
         super(block_in, self).__init__()
-        self.block_in_layer=Denselayer([in_feature,32,32,out_feature,out_feature])
+        self.block_in_layer=Denselayer([in_feature,out_feature//2,out_feature//2,out_feature,out_feature])
         self.conv_cat=nn.Sequential(nn.ReflectionPad2d(1),
                                     nn.Conv2d(out_feature,3*out_feature,(4,4),stride=2,padding=0),
                                     nn.BatchNorm2d(3*out_feature),)
@@ -105,7 +106,7 @@ class block_in(nn.Module):
 class block_out(nn.Module):
     def __init__(self,in_feature,out_feature,classes,size,use_pool='none'):
         super(block_out,self).__init__()
-        self.block_out_layer=Denselayer([in_feature,64,64,out_feature,out_feature])
+        self.block_out_layer=Denselayer([in_feature,in_feature//4,in_feature//4,out_feature,out_feature])
         if use_pool=='none':
             self.classifiar=nn.Sequential(nn.Flatten(),SNLinear(out_feature*size*size,classes))
         else:
@@ -470,6 +471,8 @@ class axonLimit(torch.autograd.Function):
             return torch.min(torch.max(v1, torch.Tensor([-1.5]).cuda()), torch.Tensor([1.5]).cuda())
         elif dataoption == 'fashionmnist':
             return torch.min(torch.max(v1, torch.Tensor([-1.5]).cuda()), torch.Tensor([1.5]).cuda())
+        elif dataoption == 'eeg':
+            return torch.min(torch.max(v1, torch.Tensor([-1.5]).cuda()), torch.Tensor([1.5]).cuda())
         else:
             raise KeyError()
 
@@ -489,6 +492,12 @@ class axonLimit(torch.autograd.Function):
                                    (torch.exp(-((input.float()) ** 2) / 2) / 2.506628).cuda(), exponent)
             return exponent * grad_output
         elif dataoption == 'fashionmnist':
+            exponent = torch.where((input > -1.6) & (input < 1.6), torch.ones_like(input).cuda(),
+                                   torch.zeros_like(input).cuda())
+            exponent = torch.where((input > 1.6) | (input < -1.6),
+                                   (torch.exp(-((input.float()) ** 2) / 2) / 2.506628).cuda(), exponent)
+            return exponent * grad_output
+        elif dataoption == 'eeg':
             exponent = torch.where((input > -1.6) & (input < 1.6), torch.ones_like(input).cuda(),
                                    torch.zeros_like(input).cuda())
             exponent = torch.where((input > 1.6) | (input < -1.6),
@@ -603,7 +612,7 @@ class point_cul_Layer(nn.Module):
                 else:
                     self.gaussbur = multi_block_neq(in_feature, out_feature, multi_k=2, Use_Spactral=True,
                                                     Use_fractal=True)
-            self.bn1 = nn.BatchNorm2d(out_feature)
+            # self.bn1 = nn.BatchNorm2d(out_feature)
         elif dataoption == 'cifar10':
             if use_gauss == True:
                 if in_feature == out_feature:
@@ -616,7 +625,7 @@ class point_cul_Layer(nn.Module):
                 else:
                     self.gaussbur = multi_block_neq(in_feature, out_feature, multi_k=2, Use_Spactral=True,
                                                     Use_fractal=True)
-            self.bn1 = nn.BatchNorm2d(out_feature)
+            # self.bn1 = nn.BatchNorm2d(out_feature)
         elif dataoption == 'fashionmnist':
             if use_gauss == True:
                 if in_feature == out_feature:
@@ -630,7 +639,23 @@ class point_cul_Layer(nn.Module):
                 else:
                     self.gaussbur = multi_block_neq(in_feature, out_feature, multi_k=2, Use_Spactral=True,
                                                     Use_fractal=True)
-            self.bn1 = nn.BatchNorm2d(out_feature)
+            # self.bn1 = nn.BatchNorm2d(out_feature)
+        elif dataoption == 'eeg':
+            if use_gauss == True:
+                if in_feature == out_feature:
+                    self.gaussbur = guassNet(in_feature, in_feature, kernel_size=3, requires_grad=True)
+                else:
+                    self.gaussbur = guassNet(in_feature, out_feature, kernel_size=3, requires_grad=True)
+            else:
+                if in_feature == out_feature:
+                    self.gaussbur = multi_block_eq(in_feature, multi_k=2, Use_Spactral=True,
+                                                   Use_fractal=True)
+                else:
+                    self.gaussbur = multi_block_neq(in_feature, out_feature, multi_k=2, Use_Spactral=True,
+                                                    Use_fractal=True)
+        else:
+            raise KeyError("not import gaussbur!")
+            # self.bn1 = nn.BatchNorm2d(out_feature)
         self.STuning = STuning
         self.grad_lr = grad_lr
         self.sigma = 1
@@ -655,6 +680,8 @@ class point_cul_Layer(nn.Module):
                 m = self.gaussbur(x)
 
             elif dataoption == 'fashionmnist':
+                m = self.gaussbur(x)
+            elif dataoption == 'eeg':
                 m = self.gaussbur(x)
             else:
                 raise KeyError('not have this dataset')
@@ -695,7 +722,6 @@ class three_dim_Layer(nn.Module):
         self.diag_T = Trinomial_operation(max(max(self.x, self.y), self.z))
         self.grad_lr = grad_lr
         self.dropout = [[[nn.Dropout(p) for i in range(self.x)] for j in range(self.y)] for k in range(self.z)]
-        from Snn_Auto_master.lib.dimixloss import DimIxLoss
         self.feature_loss=DimIxLoss(shape[-1])
         self.test = test
         self.x_join, self.y_join, self.z_join = LastJoiner(2), LastJoiner(2), LastJoiner(2)
@@ -972,6 +998,9 @@ class merge_layer(nn.Module):
                 x = x.view(x.shape[0], 1, 28, 28)
                 x = F.interpolate(x, (32, 32), mode='bilinear', align_corners=True)
                 # y = y.view(y.shape[0], 1, 28, 28)
+            elif dataoption == 'eeg':
+                x = x.view(x.shape[0], 64,16, 16)
+                # 64,16,16
             else:
                 raise KeyError()
         a,b,c = self.block_in_x_y_z(x)
@@ -1005,6 +1034,8 @@ class merge_layer(nn.Module):
         self.feature_forward = Feature_forward(feature_len)
         if dataoption == 'fashionmnist' or dataoption == 'mnist' or dataoption == 'cifar10':
             out_pointnum = max(16 // (feature_len[-1] // tmp_feature), 1)
+        elif dataoption == 'eeg':
+            out_pointnum = max(8 // (feature_len[-1] // tmp_feature), 1)
         else:
             raise KeyError("not import")
         self.out_classifier = block_out(feature_len[-1],32, classes=classes, size=out_pointnum,
@@ -1043,7 +1074,6 @@ class merge_layer(nn.Module):
         loss = [torch.tensor(0.).float().cuda()]
         normlist = []
         loss_feature = torch.tensor([0.]).float().cuda()
-        loss_norm = torch.tensor(0.).float().cuda()
         len =torch.tensor(0.).float().cuda()
         len2 = torch.tensor(0.).float().cuda()
         loss_tau = torch.tensor(0.).float().cuda()

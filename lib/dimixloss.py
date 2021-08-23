@@ -49,9 +49,9 @@ class DimIxLoss(nn.Module):
                 xy=MatmulTopkLoss(x,y).mean()
                 yz=MatmulTopkLoss(y,z).mean()
                 zx=MatmulTopkLoss(z,x).mean()
-                xy=1-torch.exp(-xy+xy.min()-1e-3)
-                yz=1-torch.exp(-yz+yz.min()-1e-3)
-                zx=1-torch.exp(-zx+zx.min()-1e-3)
+                xy=torch.exp(-xy+xy.min()-1e-1)
+                yz=torch.exp(-yz+yz.min()-1e-1)
+                zx=torch.exp(-zx+zx.min()-1e-1)
                 all_loss+=(xy+yz+zx)
         return all_loss
 

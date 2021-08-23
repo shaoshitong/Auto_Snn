@@ -31,9 +31,8 @@ class Denselayer(nn.Module):
         self.old_feature_list=copy.deepcopy(feature_list)
         self.training=training
         for i,feature in enumerate(feature_list):
-            if feature!=feature_list[-1]:
+            if i!=len(feature_list)-1:
                 feature_list[i+1]+=feature_list[i]
-
         self.joinlist=nn.ModuleList([
             nn.Sequential(nn.BatchNorm2d(feature_list[i]),
                           nn.ReLU(),
