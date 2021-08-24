@@ -24,7 +24,7 @@ from Snn_Auto_master.lib.three_dsnn import merge_layer
 from Snn_Auto_master.lib.parameters_check import parametersgradCheck
 
 parser = argparse.ArgumentParser(description='SNN AUTO MASTER')
-parser.add_argument('--config_file', type=str, default='train_eeg.yaml',
+parser.add_argument('--config_file', type=str, default='train.yaml',
                     help='path to configuration file')
 parser.add_argument('--train', dest='train', default=True, type=bool,
                     help='train model')
@@ -99,13 +99,13 @@ def test(path, data, yaml, criterion_loss):
     torch.cuda.empty_cache()
     the_model = merge_layer(set_device(), shape=yaml['shape'], dropout=yaml['parameters']['droupout'], test=True)
     if yaml['data'] == 'mnist':
-        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],1,28,28), 1,1,int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'])
+        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],1,28,28), 1,1,int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'])
     elif yaml['data'] == 'cifar10':
-        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],3,32,32),3,3, int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'])
+        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],3,32,32),3,3, int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'])
     elif yaml['data']=='fashionmnist':
-        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],1,28,28),1,1,int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'])
+        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],1,28,28),1,1,int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'])
     elif yaml['data']=='eeg':
-        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],14,64,64),14,14,int(2),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'])
+        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],14,64,64),14,14,int(2),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'])
     else:
         raise KeyError('not have this dataset')
     the_model.load_state_dict(torch.load(path)['snn_state_dict'])
@@ -207,11 +207,11 @@ if __name__ == "__main__":
         test_dataloader = DataLoader(test_data, batch_size=yaml['parameters']['batch_size'], shuffle=True,
                                      num_workers=4,
                                      drop_last=True)
-        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 28 * 28 * 1),1,1, int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False)
+        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 28 * 28 * 1),1,1, int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'])
     elif yaml['data'] == 'cifar10':
         train_dataloader, test_dataloader = load_data(yaml['parameters']['batch_size'],
                                                       yaml['parameters']['batch_size'],args.data_url)
-        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 32 * 32 * 3),3,3, int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False)
+        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 32 * 32 * 3),3,3, int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'])
     elif yaml['data'] == 'fashionmnist':
         fashionmnist_trainset = datasets.FashionMNIST(root=args.data_url, train=True, download=True, transform=rand_transform)
         fashionmnist_testset = datasets.FashionMNIST(root=args.data_url, train=False, download=True, transform=None)
@@ -223,7 +223,7 @@ if __name__ == "__main__":
         test_dataloader = DataLoader(test_data, batch_size=yaml['parameters']['batch_size'], shuffle=True,
                                      num_workers=4,
                                      drop_last=True)
-        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 28 * 28 * 1),1,1, int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False)
+        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 28 * 28 * 1),1,1, int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'])
     elif yaml['data'] == 'eeg':
         p=random.randint(0,4)
         print(p)
@@ -235,7 +235,7 @@ if __name__ == "__main__":
         test_dataloader = DataLoader(test_data, batch_size=yaml['parameters']['batch_size'], shuffle=True,
                                      num_workers=4,
                                      drop_last=True)
-        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 14 * 64 * 64),14,14, int(2),tmp_feature=yaml['parameters']['tmp_feature']*2,tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False)
+        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 14 * 32 * 32),14,14, int(2),tmp_feature=yaml['parameters']['tmp_feature']*2,tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'])
 
     else:
         raise KeyError('There is no corresponding dataset')

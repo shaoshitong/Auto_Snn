@@ -1,7 +1,7 @@
 
 experiment_name:
   Auto_config
-
+mult_k: 1
 set_seed:
   False
 pytorch_seed:
@@ -13,15 +13,15 @@ parameters:
   length:
     25
   tmp_feature:
-    64
+    20
   sigma:
     0.1
   batch_size:
-    32
+    16
   epoch:
-    100
+    400
   droupout:
-    0.2
+    0.5
   filter_tau_m:
     4
   filter_tau_s:
@@ -32,22 +32,23 @@ parameters:
     True
   membrane_filer:
     False
-shape: [[1,1,1]]
+shape: [[2,2,2]]
 optimizer:
   optimizer_choice:
-    'Adam'
+    'SGD'
   Adam:
     lr: 0.001
     weight_decay: 0
   AdamW:
     lr: 0.005
+    weight_decay: 1e-4
   SAM:
     lr: 0.005
     weight_decay: 1e-4
   SGD:
     momentum: 0.9
-    lr: 0.005
-    weight_decay: 1e-4
+    lr: 0.05
+    weight_decay: 0
   ASGD:
     lr: 0.0001
     weight_decay: 1e-4
@@ -61,8 +62,7 @@ scheduler:
     'SchedulerLR'
   SchedulerLR:
     milestones:
-      - 0.2
-      - 0.7
+      - 0.9
     gamma:
       0.1
   MultiStepLR:
