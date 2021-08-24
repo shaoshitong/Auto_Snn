@@ -13,7 +13,7 @@ def get_optimizer(params, conf, model):
     elif optimizer_choice == 'AdamW':
         lr = optimizer_conf['AdamW']['lr']
         print('optimizer:', optimizer_conf['optimizer_choice'], 'lr:', lr)
-        return torch.optim.AdamW(params, lr)
+        return torch.optim.AdamW(params=params, lr=lr,weight_decay=1e-4)
     elif optimizer_choice == 'SGD':
         lr = optimizer_conf['SGD']['lr']
         momentum = optimizer_conf['SGD']['momentum']
@@ -31,11 +31,11 @@ def get_optimizer(params, conf, model):
         print('optimizer:', optimizer_conf['optimizer_choice'], 'lr:', lr)
         return torch.optim.Rprop(params, lr=lr, etas=etas)
     elif optimizer_choice == 'SAM':
-        lr = optimizer_conf['Adam']['lr']
-        weight_decay=optimizer_conf['Adam']['weight_decay']
+        lr = optimizer_conf['SGD']['lr']
+        weight_decay=optimizer_conf['SGD']['weight_decay']
         print('optimizer:', optimizer_conf['optimizer_choice'], 'lr:', lr)
-        adam=torch.optim.Adam
-        optimizer=SAM(params,adam,lr=lr)
+        adam=torch.optim.SGD
+        optimizer=SAM(params,adam,lr=lr,momentum=0.9)
         return optimizer
     elif optimizer_choice == 'RMSprop':
         pass

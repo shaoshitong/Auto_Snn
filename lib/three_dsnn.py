@@ -38,7 +38,7 @@ def batch_norm(input):
     return torch.div(torch.sub(input, mean), std)
 
 
-yaml = yaml_config_get("./train_eeg.yaml")
+yaml = yaml_config_get("./train.yaml")
 # yaml = yaml_config_get("./train.yaml")
 dataoption = yaml['data']
 
@@ -87,8 +87,12 @@ class Shortcut(nn.Module):
 class block_in(nn.Module):
     def __init__(self, in_feature, out_feature=64):
         super(block_in, self).__init__()
-        print(out_feature//2)
-        self.block_in_layer=Denselayer([in_feature,out_feature//2,out_feature//2,out_feature,out_feature])
+        if dataoption in ["mnist","fashionmnist","cifar10"]:
+            self.block_in_layer=Denselayer([in_feature,out_feature//2,out_feature//2,out_feature,out_feature])
+        elif dataoption=="eeg":
+            self.block_in_layer = Denselayer([in_feature, out_feature // 2, out_feature])
+        else:
+            raise KeyError("not have this dataset")
         self.conv_cat=nn.Sequential(nn.ReflectionPad2d(1),
                                     nn.Conv2d(out_feature,3*out_feature,(4,4),stride=2,padding=0),
                                     nn.BatchNorm2d(3*out_feature),)
@@ -110,7 +114,12 @@ class block_out(nn.Module):
     def __init__(self,in_feature,out_feature,classes,size,use_pool='none'):
         print(in_feature//4)
         super(block_out,self).__init__()
-        self.block_out_layer=Denselayer([in_feature,in_feature//4,in_feature//4,out_feature,out_feature])
+        if dataoption in ["mnist","fashionmnist","cifar10"]:
+            self.block_out_layer=Denselayer([in_feature,in_feature//4,in_feature//4,out_feature,out_feature])
+        elif dataoption=="eeg":
+            self.block_out_layer=Denselayer([in_feature,in_feature//4,out_feature])
+        else:
+            raise KeyError("not have this dataset")
         if use_pool=='none':
             self.classifiar=nn.Sequential(nn.Flatten(),SNLinear(out_feature*size*size,classes))
         else:
@@ -578,7 +587,7 @@ class point_cul_Layer(nn.Module):
     def __init__(self, in_pointnum, out_pointnum, in_feature, out_feature, path_len, tau_m=4., tau_s=1.,
                  grad_small=False,
                  weight_require_grad=False,
-                 weight_rand=False, device=None, STuning=True, grad_lr=0.1, p=0.3, use_gauss=True):
+                 weight_rand=False, device=None, STuning=True, grad_lr=0.1, p=0.3, use_gauss=True,mult_k=2):
         """
         输入的张量维度为（batch_size,64,x//2,y//2）
         该层通过门机制后进行卷积与归一化
@@ -611,10 +620,10 @@ class point_cul_Layer(nn.Module):
                     self.gaussbur = guassNet(in_feature, out_feature, kernel_size=3, requires_grad=True)
             else:
                 if in_feature == out_feature:
-                    self.gaussbur = multi_block_eq(in_feature, multi_k=2, Use_Spactral=True,
+                    self.gaussbur = multi_block_eq(in_feature, multi_k=mult_k, Use_Spactral=True,
                                                    Use_fractal=True)
                 else:
-                    self.gaussbur = multi_block_neq(in_feature, out_feature, multi_k=2, Use_Spactral=True,
+                    self.gaussbur = multi_block_neq(in_feature, out_feature, multi_k=mult_k, Use_Spactral=True,
                                                     Use_fractal=True)
             # self.bn1 = nn.BatchNorm2d(out_feature)
         elif dataoption == 'cifar10':
@@ -625,9 +634,9 @@ class point_cul_Layer(nn.Module):
                     self.gaussbur = guassNet(in_feature, out_feature, kernel_size=3, requires_grad=True)
             else:
                 if in_feature == out_feature:
-                    self.gaussbur = multi_block_eq(in_feature, multi_k=2, Use_Spactral=True, Use_fractal=True)
+                    self.gaussbur = multi_block_eq(in_feature, multi_k=mult_k, Use_Spactral=True, Use_fractal=True)
                 else:
-                    self.gaussbur = multi_block_neq(in_feature, out_feature, multi_k=2, Use_Spactral=True,
+                    self.gaussbur = multi_block_neq(in_feature, out_feature, multi_k=mult_k, Use_Spactral=True,
                                                     Use_fractal=True)
             # self.bn1 = nn.BatchNorm2d(out_feature)
         elif dataoption == 'fashionmnist':
@@ -638,10 +647,10 @@ class point_cul_Layer(nn.Module):
                     self.gaussbur = guassNet(in_feature, out_feature, kernel_size=3, requires_grad=True)
             else:
                 if in_feature == out_feature:
-                    self.gaussbur = multi_block_eq(in_feature, multi_k=2, Use_Spactral=True,
+                    self.gaussbur = multi_block_eq(in_feature, multi_k=mult_k, Use_Spactral=True,
                                                    Use_fractal=True)
                 else:
-                    self.gaussbur = multi_block_neq(in_feature, out_feature, multi_k=2, Use_Spactral=True,
+                    self.gaussbur = multi_block_neq(in_feature, out_feature, multi_k=mult_k, Use_Spactral=True,
                                                     Use_fractal=True)
             # self.bn1 = nn.BatchNorm2d(out_feature)
         elif dataoption == 'eeg':
@@ -652,10 +661,10 @@ class point_cul_Layer(nn.Module):
                     self.gaussbur = guassNet(in_feature, out_feature, kernel_size=3, requires_grad=True)
             else:
                 if in_feature == out_feature:
-                    self.gaussbur = multi_block_eq(in_feature, multi_k=2, Use_Spactral=True,
+                    self.gaussbur = multi_block_eq(in_feature, multi_k=mult_k, Use_Spactral=True,
                                                    Use_fractal=True)
                 else:
-                    self.gaussbur = multi_block_neq(in_feature, out_feature, multi_k=2, Use_Spactral=True,
+                    self.gaussbur = multi_block_neq(in_feature, out_feature, multi_k=mult_k, Use_Spactral=True,
                                                     Use_fractal=True)
         else:
             raise KeyError("not import gaussbur!")
@@ -845,7 +854,7 @@ class three_dim_Layer(nn.Module):
         #                 tensor_prev[j][k]= self.dropout[0][j][k](tensor_prev[j][k])
         # return tensor_prev[-1][-1]
 
-    def initiate_layer(self, data, in_feature, out_feature, tau_m=4., tau_s=1., use_gauss=True):
+    def initiate_layer(self, data, in_feature, out_feature, tau_m=4., tau_s=1., use_gauss=True,mult_k=2):
         """
         three-dim层初始化节点
         """
@@ -886,6 +895,7 @@ class three_dim_Layer(nn.Module):
                             weight_require_grad=self.weight_require_grad,
                             weight_rand=self.weight_rand,
                             device=self.device,
+                            mult_k=mult_k,
                             # bool((i+j+k)%2),False
                             STuning=bool(
                                 (i + j + k) % 2),
@@ -904,6 +914,7 @@ class three_dim_Layer(nn.Module):
                             weight_require_grad=self.weight_require_grad,
                             weight_rand=self.weight_rand,
                             device=self.device,
+                            mult_k=mult_k,
                             # bool((i+j+k)%2),False
                             STuning=bool(
                                 (i + j + k) % 2),
@@ -950,7 +961,7 @@ class InputGenerateNet(nn.Module):
         return self.three_dim_layer(x, y, z)
 
     def initiate_layer(self, input, in_feature, out_feature, tau_m=4., tau_s=1., use_gauss=True, batchsize=64,
-                       old_in_feature=1, old_out_feature=1):
+                       old_in_feature=1, old_out_feature=1,mult_k=2):
         if dataoption == 'mnist' or dataoption == 'fashionmnist':
             input = torch.randn(input.shape[0], 1 * 32 * 32).to(input.device)
         elif dataoption == 'cifar10':
@@ -958,7 +969,7 @@ class InputGenerateNet(nn.Module):
         self.three_dim_layer.initiate_layer(
             torch.rand(batchsize, in_feature * (input.shape[1] // (old_out_feature * 4))),
             in_feature, out_feature, tau_m=tau_m, tau_s=tau_s,
-            use_gauss=use_gauss)
+            use_gauss=use_gauss,mult_k=mult_k)
         return self.three_dim_layer.feature_len
 
     def settest(self, test):
@@ -1003,7 +1014,7 @@ class merge_layer(nn.Module):
                 x = F.interpolate(x, (32, 32), mode='bilinear', align_corners=True)
                 # y = y.view(y.shape[0], 1, 28, 28)
             elif dataoption == 'eeg':
-                x = x.view(x.shape[0], 14,64, 64)
+                x = x.view(x.shape[0], 14,32, 32)
                 # 64,16,16
             else:
                 raise KeyError()
@@ -1014,7 +1025,7 @@ class merge_layer(nn.Module):
         return h
 
     def initiate_layer(self, input, in_feature, out_feature, classes, tmp_feature=64, tau_m=4., tau_s=1.,
-                       use_gauss=True, batchsize=64):
+                       use_gauss=True, batchsize=64,mult_k=2):
         """
         配置相应的层
         """
@@ -1031,7 +1042,7 @@ class merge_layer(nn.Module):
         self.block_in_x_y_z = block_in(in_feature, tmp_feature)
         feature_len = self.InputGenerateNet.initiate_layer(input, tmp_feature, tmp_feature, tau_m, tau_s, use_gauss,
                                                            batchsize,
-                                                           old_in_feature=in_feature, old_out_feature=out_feature)
+                                                           old_in_feature=in_feature, old_out_feature=out_feature,mult_k=mult_k)
         # self.block_out = block_out(tmp_feature, out_feature_lowbit, classes, use_pool='none')
         import copy
         feature_len.append(copy.deepcopy(feature_len[-1]))
@@ -1039,7 +1050,7 @@ class merge_layer(nn.Module):
         if dataoption == 'fashionmnist' or dataoption == 'mnist' or dataoption == 'cifar10':
             out_pointnum = max(16 // (feature_len[-1] // tmp_feature), 1)
         elif dataoption == 'eeg':
-            out_pointnum = max(32 // (feature_len[-1] // tmp_feature), 1)
+            out_pointnum = max(16 // (feature_len[-1] // tmp_feature), 1)
         else:
             raise KeyError("not import")
         self.out_classifier = block_out(feature_len[-1],32, classes=classes, size=out_pointnum,
@@ -1074,7 +1085,7 @@ class merge_layer(nn.Module):
                 layer.gauss_bias.data -= torch.randn_like(
                     layer.gauss_bias.data).abs()  # /math.sqrt(layer.gauss_bias.data.numel())
 
-    def L2_biasoption(self, sigma=0.1):
+    def L2_biasoption(self, sigma=1):
         loss = [torch.tensor(0.).float().cuda()]
         normlist = []
         loss_feature = torch.tensor([0.]).float().cuda()
@@ -1106,7 +1117,7 @@ class merge_layer(nn.Module):
         # loss_norm = ( torch.stack(loss_norm, dim=-1).min()-torch.stack(loss_norm, dim=-1))
         # loss_norm = (torch.exp(-loss_norm)/torch.exp(-loss_norm).sum(dim=-1)).std(dim=-1)
         loss_bias = torch.stack(loss, dim=-1).mean()
-        return (loss_tau + loss_bias +loss_feature) * sigma
+        return (loss_tau +loss_bias+loss_feature) * sigma
 
 
 """
