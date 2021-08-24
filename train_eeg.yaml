@@ -13,7 +13,7 @@ parameters:
   length:
     25
   tmp_feature:
-    20
+    28
   sigma:
     0.1
   batch_size:
@@ -32,7 +32,7 @@ parameters:
     True
   membrane_filer:
     False
-shape: [[2,2,2]]
+shape: [[1,1,1],[1,1,1],[1,1,1],[1,1,1],[1,1,1]]
 optimizer:
   optimizer_choice:
     'SGD'

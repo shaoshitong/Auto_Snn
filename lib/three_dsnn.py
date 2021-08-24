@@ -47,7 +47,11 @@ def size_change(f, s):
     def change(xx):
         xx: torch.Tensor
         xx = F.interpolate(xx, (s, s), mode='bilinear', align_corners=True)
-        xx = xx.repeat(1, f // xx.shape[1], 1, 1)
+        g=f // xx.shape[1]
+        if(int(g)==0):
+            xx=xx[:,::int(xx.shape[1]//f),:,:]
+        else:
+            xx = xx.repeat(1, f // xx.shape[1], 1, 1)
         return xx
 
     return change
@@ -766,7 +770,7 @@ class two_dim_layer(nn.Module):
                             (i + j) % 2),
                         grad_lr=grad_lr,
                         use_gauss=use_gauss)
-        self.point_layer_module=nn.ModuleDict(self.point_cul_layer)
+        self.point_layer_module = nn.ModuleDict(self.point_cul_layer)
         self.dropout = [[nn.Dropout(p) for i in range(self.x)] for j in range(self.y)]
 
     def forward(self, x, y, z):
@@ -805,12 +809,13 @@ class three_dim_Layer(nn.Module):
         y维度代表原始数据先获得grad后经过卷积变换到[batchsize,64,x//2,y//2]
         z维度目前用0向量填充，未来可以改进
         """
-        self.x, self.y, self.z = shape
+        self.x, self.y, self.z = len(shape), len(shape), len(shape)
+        self.shape = shape
         self.device = device
         self.use_gauss = use_gauss
         self.weight_require_grad = weight_require_grad
         self.weight_rand = weight_rand
-        self.p=p
+        self.p = p
         self.diag_T = Trinomial_operation(max(self.x, self.y, self.z))
         self.grad_lr = grad_lr
         self.feature_loss = DimIxLoss(max(self.x, self.y, self.z))
@@ -830,35 +835,35 @@ class three_dim_Layer(nn.Module):
         y = torch.tanh(y)
         z = torch.tanh(z)
         old = [[x, y, z], ]
-        for num in range(max(self.z,self.y,self.x)):
-            xx=x
-            yy=y
-            zz=z
+        for num in range(max(self.z, self.y, self.x)):
+            xx = x
+            yy = y
+            zz = z
 
-            if num<self.z:
-                out_1=self.point_layer_module[str(num)+'_'+str(0)](xx, yy, zz)
+            if num < self.z:
+                out_1 = self.point_layer_module[str(num) + '_' + str(0)](xx, yy, zz)
             else:
-                out_1=zz.clone()
-            xx=y
-            yy=z
-            zz=x
+                out_1 = zz.clone()
+            xx = y
+            yy = z
+            zz = size_change(xx.shape[1],xx.shape[2])(out_1)
 
-            if num<self.x:
-                out_2=self.point_layer_module[str(num)+'_'+str(1)](xx, yy, zz)
+            if num < self.x:
+                out_2 = self.point_layer_module[str(num) + '_' + str(1)](xx, yy, zz)
             else:
-                out_2=zz.clone()
+                out_2 = zz.clone()
             xx = z
-            yy = x
-            zz = y
+            yy = size_change(xx.shape[1], xx.shape[2])(out_1)
+            zz = size_change(xx.shape[1], xx.shape[2])(out_2)
 
             if num < self.x:
                 out_3 = self.point_layer_module[str(num) + '_' + str(2)](xx, yy, zz)
             else:
                 out_3 = zz.clone()
-            m = size_change(out_1.shape[1],out_1.shape[2])
-            x = batch_norm(torch.div((out_2 + m(x)), 1.2))
-            y = batch_norm(torch.div((out_3 + m(y)), 1.2))
-            z = batch_norm(torch.div((out_1 + m(z)), 1.2))
+            m = size_change(out_1.shape[1], out_1.shape[2])
+            x = batch_norm(torch.div((out_1 + m(x)), 1.2))
+            y = batch_norm(torch.div((out_2 + m(y)), 1.2))
+            z = batch_norm(torch.div((out_3 + m(z)), 1.2))
             old.append([x, y, z])
         del x, y, z, m
         self.losses = self.feature_loss(old)
@@ -903,14 +908,23 @@ class three_dim_Layer(nn.Module):
                 self.feature_len[i] = self.feature_len[i - 1]
                 self.div_len[i] = self.div_len[i - 1]
         for num in range(max(self.z, self.y, self.x)):
+            a,b,c=self.shape[num]
+            tmp_list=[a,b,c,a]
             in_pointnum = int(data.shape[1] // self.div_len[num])
             in_feature = self.feature_len[num]
             out_pointnum = int(data.shape[1] // self.div_len[num + 1])
             out_feature = self.feature_len[num + 1]
             for p in range(3):
-                self.point_layer[str(num)+"_"+str(p)]=two_dim_layer(in_feature=in_feature,out_feature=out_feature,in_pointnum=in_pointnum,out_pointnum=out_pointnum,mult_k=mult_k,use_gauss=use_gauss,
-                                                                    tau_m=tau_m,tau_s=tau_s,x=(2 if num!=max(self.z,self.y,self.x)-1 else 1),y=(2 if num!=max(self.z,self.y,self.x)-1 else 1),weight_rand=self.weight_rand,weight_require_grad=self.weight_require_grad,
-                                                                    p=self.p,device=self.device,grad_lr=self.grad_lr)
+                self.point_layer[str(num) + "_" + str(p)] = two_dim_layer(in_feature=in_feature,
+                                                                          out_feature=out_feature,
+                                                                          in_pointnum=in_pointnum,
+                                                                          out_pointnum=out_pointnum, mult_k=mult_k,
+                                                                          use_gauss=use_gauss,
+                                                                          tau_m=tau_m, tau_s=tau_s, x=(tmp_list[p]), y=(tmp_list[p+1]),
+                                                                          weight_rand=self.weight_rand,
+                                                                          weight_require_grad=self.weight_require_grad,
+                                                                          p=self.p, device=self.device,
+                                                                          grad_lr=self.grad_lr)
         self.point_layer_module = nn.ModuleDict(self.point_layer)
         del self.point_layer
         return self.feature_len[-1], data.shape[1] // self.div_len[-1]
@@ -948,7 +962,6 @@ class InputGenerateNet(nn.Module):
         self.three_dim_layer.settest(test)
 
 
-
 class merge_layer(nn.Module):
     def __init__(self, device, shape=None, weight_require_grad=True, weight_rand=True, grad_lr=0.01, dropout=0.3,
                  test=False):
@@ -957,11 +970,11 @@ class merge_layer(nn.Module):
         """
         super(merge_layer, self).__init__()
         if shape == None:
-            self.shape = [[3, 3, 3], ]
+            self.shape = [[2, 2, 2], [1, 1, 1]]
         else:
             self.shape = shape
         self.device = device
-        self.InputGenerateNet = InputGenerateNet(self.shape[0], self.device, weight_require_grad, weight_rand, grad_lr,
+        self.InputGenerateNet = InputGenerateNet(self.shape, self.device, weight_require_grad, weight_rand, grad_lr,
                                                  dropout,
                                                  test).to(device)
         self.time = 0
@@ -1028,8 +1041,6 @@ class merge_layer(nn.Module):
                                         use_pool='none')
         self._initialize()
 
-
-
     def settest(self, test=True):
         """
         令模型知道当前处理test
@@ -1082,7 +1093,7 @@ class merge_layer(nn.Module):
         # loss_norm = ( torch.stack(loss_norm, dim=-1).min()-torch.stack(loss_norm, dim=-1))
         # loss_norm = (torch.exp(-loss_norm)/torch.exp(-loss_norm).sum(dim=-1)).std(dim=-1)
         loss_bias = torch.stack(loss, dim=-1).mean()
-        return (loss_tau + loss_bias + loss_feature) * sigma
+        return (loss_tau + loss_bias + loss_feature*0.1) * sigma
 
 
 """
