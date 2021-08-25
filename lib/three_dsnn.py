@@ -99,7 +99,7 @@ class block_in(nn.Module):
                                       nn.Conv2d(out_feature, 3 * out_feature, (4, 4), stride=2, padding=0),
                                       nn.BatchNorm2d(3 * out_feature), )
         self.out_feature = out_feature
-        self.relu = nn.LeakyReLU(1e-1)
+        self.relu = nn.LeakyReLU(1e-2)
         self.f_conv = nn.ModuleList(
             [SNConv2d(3 * out_feature, out_feature, (1, 1), stride=1, padding=0) for _ in range(3)])
         self.training = False
@@ -831,9 +831,9 @@ class three_dim_Layer(nn.Module):
         """
         x,y=>[batchsize,64,x_pointnum//2,y_pointnum//2]
         """
-        x = torch.tanh(x)
-        y = torch.tanh(y)
-        z = torch.tanh(z)
+        # x = torch.tanh(x)
+        # y = torch.tanh(y)
+        # z = torch.tanh(z)
         old = [[x, y, z], ]
         for num in range(max(self.z, self.y, self.x)):
             xx = x
@@ -846,15 +846,15 @@ class three_dim_Layer(nn.Module):
                 out_1 = zz.clone()
             xx = y
             yy = z
-            zz = size_change(xx.shape[1],xx.shape[2])(out_1)
+            zz = x
 
             if num < self.x:
                 out_2 = self.point_layer_module[str(num) + '_' + str(1)](xx, yy, zz)
             else:
                 out_2 = zz.clone()
             xx = z
-            yy = size_change(xx.shape[1], xx.shape[2])(out_1)
-            zz = size_change(xx.shape[1], xx.shape[2])(out_2)
+            yy = x
+            zz = y
 
             if num < self.x:
                 out_3 = self.point_layer_module[str(num) + '_' + str(2)](xx, yy, zz)
@@ -1093,7 +1093,7 @@ class merge_layer(nn.Module):
         # loss_norm = ( torch.stack(loss_norm, dim=-1).min()-torch.stack(loss_norm, dim=-1))
         # loss_norm = (torch.exp(-loss_norm)/torch.exp(-loss_norm).sum(dim=-1)).std(dim=-1)
         loss_bias = torch.stack(loss, dim=-1).mean()
-        return (loss_tau + loss_bias + loss_feature*0.1) * sigma
+        return (loss_tau + loss_bias + loss_feature) * sigma
 
 
 """
