@@ -43,7 +43,7 @@ optimizer:
     lr: 0.005
     weight_decay: 1e-4
   SAM:
-    lr: 0.005
+    lr: 0.002
     weight_decay: 1e-4
   SGD:
     momentum: 0.9

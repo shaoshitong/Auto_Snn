@@ -52,8 +52,8 @@ class DimIxLoss(nn.Module):
                 xy=torch.exp(-xy+xy.min()-1e-1)
                 yz=torch.exp(-yz+yz.min()-1e-1)
                 zx=torch.exp(-zx+zx.min()-1e-1)
-                all_loss+=(xy+yz+zx)
-        return all_loss
+                all_loss+=((xy+yz+zx)/3)
+        return all_loss/len(mult_list)
 
 
 
