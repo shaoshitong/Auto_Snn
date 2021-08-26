@@ -281,11 +281,10 @@ class multi_block_neq(nn.Module):
             block_eq(self.in_feature, Use_Spectral=Use_Spactral, Use_fractal=Use_fractal) for _ in range(multi_k)
         ])
         if Use_Spactral == True:
-            self.out = nn.Sequential(nn.LeakyReLU(1e-2, inplace=True),
-                                     SNConv2d(in_feature, out_feature, (4, 4), stride=2, padding=1),
-                                     nn.BatchNorm2d(out_feature, affine=False))## change
+            self.out = nn.Sequential(
+                                     SNConv2d(in_feature, out_feature, (4, 4), stride=2, padding=1),)
         else:
-            self.out = nn.Sequential(nn.LeakyReLU(1e-2, inplace=True),
+            self.out = nn.Sequential(nn.LeakyReLU(1e-2, inplace=False),
                                      nn.Conv2d(in_feature, out_feature, (4, 4), stride=2, padding=1),
                                      nn.BatchNorm2d(out_feature, affine=False))
 
@@ -912,7 +911,7 @@ class three_dim_Layer(nn.Module):
                 self.div_len[i] = self.div_len[i - 1]
         for num in range(max(self.z, self.y, self.x)):
             a,b,c=self.shape[num]
-            tmp_list=[a,b,c,a]
+            tmp_list=[a,b,c]
             in_pointnum = int(data.shape[1] // self.div_len[num])
             in_feature = self.feature_len[num]
             out_pointnum = int(data.shape[1] // self.div_len[num + 1])
@@ -923,7 +922,7 @@ class three_dim_Layer(nn.Module):
                                                                           in_pointnum=in_pointnum,
                                                                           out_pointnum=out_pointnum, mult_k=mult_k,
                                                                           use_gauss=use_gauss,
-                                                                          tau_m=tau_m, tau_s=tau_s, x=(tmp_list[p]), y=(tmp_list[p+1]),
+                                                                          tau_m=tau_m, tau_s=tau_s, x=(tmp_list[p]), y=(tmp_list[p]),
                                                                           weight_rand=self.weight_rand,
                                                                           weight_require_grad=self.weight_require_grad,
                                                                           p=self.p, device=self.device,
