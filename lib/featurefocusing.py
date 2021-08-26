@@ -5,7 +5,6 @@ import os
 import random
 import numpy as np
 from torch.nn.modules.utils import _single, _pair, _triple
-from Snn_Auto_master.lib.activation import Activation
 from Snn_Auto_master.lib.data_loaders import revertNoramlImgae
 from Snn_Auto_master.lib.plt_analyze import vis_img
 from Snn_Auto_master.lib.parameters_check import pd_save, parametersgradCheck

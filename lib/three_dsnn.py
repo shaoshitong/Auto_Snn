@@ -233,10 +233,13 @@ class block_eq(nn.Module):
                                                                         padding=0, bias=True),
             nn.BatchNorm2d(eq_feature),
         ])
-        self.shortConv = nn.Sequential(*[
+        self.Use_fractal = Use_fractal
+        if Use_fractal==False:
+            self.shortConv = nn.Sequential(*[
             Shortcut(eq_feature, eq_feature, use_same=True),
         ])
-        self.shortConv_1 = nn.Sequential(*[
+        else:
+            self.shortConv = nn.Sequential(*[
             nn.ReflectionPad2d(1),
             nn.Conv2d(eq_feature, eq_feature, (3, 3), stride=_pair(1), padding=0,
                       bias=True) if Use_Spectral == False else SNConv2d(eq_feature, eq_feature, (3, 3), stride=1,
@@ -244,8 +247,6 @@ class block_eq(nn.Module):
             nn.BatchNorm2d(eq_feature),
             Shortcut(eq_feature, eq_feature, use_same=True),
         ])
-        self.bn_eq = nn.BatchNorm2d(eq_feature)
-        self.Use_fractal = Use_fractal
         if self.Use_fractal is True:
             self.merged = LastJoiner(2)
 
@@ -253,7 +254,7 @@ class block_eq(nn.Module):
         if self.Use_fractal == False:
             x1 = self.longConv(x) + self.shortConv(x)
         else:
-            x1 = self.merged([self.longConv(x), self.shortConv_1(x)])
+            x1 = self.merged([self.longConv(x), self.shortConv(x)])
         x2 = F.relu(x1, inplace=True)
         del x
         return x2
@@ -280,7 +281,9 @@ class multi_block_neq(nn.Module):
             block_eq(self.in_feature, Use_Spectral=Use_Spactral, Use_fractal=Use_fractal) for _ in range(multi_k)
         ])
         if Use_Spactral == True:
-            self.out = SNConv2d(in_feature, out_feature, (4, 4), stride=2, padding=1)
+            self.out = nn.Sequential(nn.LeakyReLU(1e-2, inplace=True),
+                                     SNConv2d(in_feature, out_feature, (4, 4), stride=2, padding=1),
+                                     nn.BatchNorm2d(out_feature, affine=False))## change
         else:
             self.out = nn.Sequential(nn.LeakyReLU(1e-2, inplace=True),
                                      nn.Conv2d(in_feature, out_feature, (4, 4), stride=2, padding=1),
@@ -846,15 +849,15 @@ class three_dim_Layer(nn.Module):
                 out_1 = zz.clone()
             xx = y
             yy = z
-            zz = x
+            zz = size_change(xx.shape[1],xx.shape[2])(out_1.clone())
 
             if num < self.x:
                 out_2 = self.point_layer_module[str(num) + '_' + str(1)](xx, yy, zz)
             else:
                 out_2 = zz.clone()
             xx = z
-            yy = x
-            zz = y
+            yy = size_change(xx.shape[1], xx.shape[2])(out_1.clone())
+            zz = size_change(xx.shape[1], xx.shape[2])(out_2.clone())
 
             if num < self.x:
                 out_3 = self.point_layer_module[str(num) + '_' + str(2)](xx, yy, zz)
