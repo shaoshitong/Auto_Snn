@@ -3,6 +3,7 @@
 """
 MNIST,CIFAR10,CIFAR100
 """
+import os
 
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
@@ -10,6 +11,8 @@ from torchvision import transforms, utils
 import torch
 import torchvision
 import torch.utils.data
+from data.car.cardataprocess import CarDateset
+from torch.utils.data import DataLoader
 import random
 import openpyxl
 
@@ -70,6 +73,16 @@ def get_rand_transform(transform_config):
 """
 CIFAR10
 """
+
+
+def load_data_car(train_batch_size, test_batch_size, shuffle=True, transform=True, tmp_size=96, result_size=64, ):
+    data_url = os.getcwd()
+    train_data = CarDateset(data_url, tmp_size=tmp_size, result_size=result_size, use_transform=transform,
+                            training=True)
+    test_data = CarDateset(data_url, tmp_size=tmp_size, result_size=result_size, use_transform=False, training=False)
+    train_loader = DataLoader(train_data, train_batch_size, shuffle=shuffle, num_workers=4, drop_last=True)
+    test_loader = DataLoader(test_data, test_batch_size, shuffle=shuffle, num_workers=4, drop_last=True)
+    return train_loader, test_loader
 
 
 def load_data(train_batch_size, test_batch_size, data_url=None):
@@ -134,11 +147,11 @@ class EEGDateset(Dataset):
                 repeat, scale * 100, label_selection, i)))
             self.test_y.append(np.load(file='./data/eeg/ytest_re%ds%d_%s_modelseed%d.npy' % (
                 repeat, scale * 100, label_selection, i)))
-        seed_indices=random
+        seed_indices = random
         self.test_X = self.test_X[seed_indices]
         self.train_X = self.train_X[seed_indices]
         self.test_y = self.test_y[seed_indices]
-        self.train_y =self.train_y[seed_indices]
+        self.train_y = self.train_y[seed_indices]
 
         if self.flatten == True:
             len = self.train_X.shape[0]
@@ -158,27 +171,28 @@ class EEGDateset(Dataset):
         return self.label.shape[0]
 
     def __getitem__(self, idx):
-        X = np.reshape(np.repeat(np.expand_dims(np.transpose(self.data[idx],(1,0)), axis=-1), repeats=16, axis=-1),([14,32,32]))
+        X = np.reshape(np.repeat(np.expand_dims(np.transpose(self.data[idx], (1, 0)), axis=-1), repeats=16, axis=-1),
+                       ([14, 32, 32]))
         y = self.label[idx]
-        if self.transform==True:
+        if self.transform == True:
             import random
             # if random.random() > 0.5:
             #     X = X.transpose((0, 2, 1))
             if random.random() > 0.5:
                 m = random.random()
                 if m > 0.25:
-                    X = np.concatenate((np.expand_dims(X[:, :, -1],axis=-1), X[:, :, :-1]), axis=-1)
+                    X = np.concatenate((np.expand_dims(X[:, :, -1], axis=-1), X[:, :, :-1]), axis=-1)
                 elif m >= 0.25 and m < 0.5:
-                    X = np.concatenate((np.expand_dims(X[:, -1, :],axis=1), X[:, :-1, :]), axis=1)
+                    X = np.concatenate((np.expand_dims(X[:, -1, :], axis=1), X[:, :-1, :]), axis=1)
                 elif m >= 0.5 and m < 0.75:
-                    X = np.concatenate((X[:, 1:, :], np.expand_dims(X[:, 0, :],axis=1)), axis=1)
+                    X = np.concatenate((X[:, 1:, :], np.expand_dims(X[:, 0, :], axis=1)), axis=1)
                 else:
-                    X = np.concatenate((X[:, :, 1:], np.expand_dims(X[:, :, 0],axis=-1)), axis=-1)
-        X=torch.Tensor(X)
+                    X = np.concatenate((X[:, :, 1:], np.expand_dims(X[:, :, 0], axis=-1)), axis=-1)
+        X = torch.Tensor(X)
         import torch.nn.functional as F
         with torch.no_grad():
-            X=X.unsqueeze(0)
-            X=F.interpolate(X,size=[32,32],mode='nearest')
-            X=X.squeeze(0)
-        y=torch.Tensor([y])
-        return X,y.long().squeeze(-1)
+            X = X.unsqueeze(0)
+            X = F.interpolate(X, size=[32, 32], mode='nearest')
+            X = X.squeeze(0)
+        y = torch.Tensor([y])
+        return X, y.long().squeeze(-1)

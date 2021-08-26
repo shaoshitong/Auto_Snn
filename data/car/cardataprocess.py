@@ -71,8 +71,38 @@ class dataprocess(object):
         else:
             self.test_list = list_data("test")
     def __call__(self):
-
-        self.IMG_CAR_GET()
+        tag=0
+        if os.path.isfile("car-train-list.txt"):
+            tag+=1
+        if os.path.isfile("car-val-list.txt"):
+            tag+=1
+        if os.path.isfile("car-test-list.txt"):
+            tag+=1
+        print(tag)
+        if tag==3:
+            self.train_list=[]
+            self.val_list=[]
+            self.test_list=[]
+            with open("car-train-list.txt","r") as f:
+                for line in f.readlines():
+                    self.train_list.append(line.strip())
+            with open("car-val-list.txt","r") as f:
+                for line in f.readlines():
+                    self.val_list.append(line.strip())
+            with open("car-test-list.txt","r") as f:
+                for line in f.readlines():
+                    self.test_list.append(line.strip())
+        else:
+            self.IMG_CAR_GET()
+        with open("car-train-list.txt","w") as f:
+            for line in self.train_list:
+                f.writelines(line+"\n")
+        with open("car-val-list.txt","w") as f:
+            for line in self.val_list:
+                f.writelines(line+"\n")
+        with open("car-test-list.txt","w") as f:
+            for line in self.test_list:
+                f.writelines(line+"\n")
         if self.call_mode=="return_list":
             return self.train_list,self.val_list,self.test_list
         elif self.call_mode=="return_image":
@@ -127,10 +157,56 @@ class dataprocess(object):
             raise NotImplementedError
     def setmode(self,mode):
         self.call_mode=mode
-DATA=dataprocess()
-DATA.setmode("return_image")
-print(DATA())
+class CarDateset(data.Dataset):
+    def __init__(self,path,mode="return_image",tmp_size=72,result_size=64,use_transform=True,training=True):
+        path=os.path.join(path,"../data")
+        if os.path.isdir(path):
+            sys.path.append(path)
+        path=os.path.join(path,"data")
+        if os.path.isdir(path):
+            sys.path.append(path)
+        DATA=dataprocess()
+        DATA.setmode(mode)
+        self.training=training
+        self.use_transform=use_transform
+        self.train_data,self.train_label,self.val_data,self.val_label,self.test_data,self.test_label=DATA()
+        import torchvision.transforms as transforms
+        self.transform=transforms.Compose([
+            transforms.Resize((tmp_size,tmp_size)),
+            transforms.RandomSizedCrop((result_size,result_size),scale=(0.9,1.0),ratio=(0.85,1.15)),
+            transforms.RandomHorizontalFlip(0.5),
+            transforms.RandomVerticalFlip(0.5),
+            transforms.ToTensor(),
+            transforms.Normalize((0.4914,0.4822,0.4455),(0.2023,0.1994,0.2010))
+        ])
+        self.transform_img=transforms.Compose([
+            transforms.Resize((tmp_size,tmp_size)),
+            transforms.RandomSizedCrop((result_size,result_size),scale=(0.9,1.0),ratio=(0.85,1.15)),
+            transforms.RandomHorizontalFlip(0.5),
+            transforms.RandomVerticalFlip(0.5),
+        ])
+    def __len__(self):
+        if self.training==True:
+            return len(self.train_label)
+        else:
+            return len(self.test_label)
+    def __getitem__(self,index):
+        # data_t=self.transform_img(self.train_data[index])
+        # import matplotlib.pyplot as plt
+        # plt.imshow(data_t,"viridis")
+        # plt.xticks([])
+        # plt.yticks([])
+        # plt.axis("off")
+        # plt.show()
+        if self.training==False:
+            data,label=self.test_data[index],self.test_label[index]
+        elif self.training==True and self.use_transform==False:
+            data,label=self.train_data[index],self.train_label[index]
+        else:
+            data,label=self.train_data[index],self.train_label[index]
+            data=self.transform(data)
 
+        return data,label
 
 
 
@@ -215,7 +291,9 @@ print(DATA())
 
 
 
-\
+
+
+
 
 
 
