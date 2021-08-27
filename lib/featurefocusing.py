@@ -90,10 +90,10 @@ class block_ad(nn.Module):
 def block_conv(eq_feature, groups=1):
     model1 = nn.Sequential(nn.BatchNorm2d(eq_feature * 3),
                            nn.LeakyReLU(1e-2),
-                           nn.Conv2d(eq_feature * 3, eq_feature, (3, 3), padding=1, stride=1, groups=groups),
-                           nn.BatchNorm2d(eq_feature),
+                           nn.Conv2d(eq_feature * 3, int(eq_feature//groups)*groups, (3, 3), padding=1, stride=1, groups=groups),
+                           nn.BatchNorm2d(int(eq_feature//groups)*groups),
                            nn.LeakyReLU(1e-1),
-                           nn.Conv2d(eq_feature, eq_feature * 3, (3, 3), padding=1, stride=1, groups=groups),
+                           nn.Conv2d(int(eq_feature//groups)*groups, eq_feature * 3, (3, 3), padding=1, stride=1, groups=groups),
                            )
     model2 = nn.Sequential(block_ad(eq_feature * 3, eq_feature * 3))
     return model1, model2
@@ -151,10 +151,12 @@ class Feature_parallel(nn.Module):
 
 
 class Feature_forward(nn.Module):
-    def __init__(self, feature_list):
+    def __init__(self, feature_list,p=0.2):
         super(Feature_forward, self).__init__()
         self.feature_list = feature_list
         self.Feature_parallel = []
+        self.p=p
+        self.dropout=nn.Dropout(p=p)
         self.feature_list2 = feature_list[2:]
         len_1 = len(self.feature_list)
         for i in range(len_1 - 1):

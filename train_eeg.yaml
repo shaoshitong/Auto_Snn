@@ -20,7 +20,7 @@ parameters:
     16
   epoch:
     400
-  droupout:
+  dropout:
     0.5
   filter_tau_m:
     4

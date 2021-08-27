@@ -7,7 +7,7 @@ set_seed:
 pytorch_seed:
   2021
 data:
-  cifar10
+  car
 parameters:
   # default parameters
   length:
@@ -17,7 +17,7 @@ parameters:
   sigma:
     0.1
   batch_size:
-    64
+    25
   epoch:
     200
   dropout:
@@ -43,11 +43,11 @@ optimizer:
     lr: 0.005
     weight_decay: 1e-4
   SAM:
-    lr: 0.002
+    lr: 0.005
     weight_decay: 1e-4
   SGD:
     momentum: 0.9
-    lr: 0.005
+    lr: 0.01
     weight_decay: 1e-4
   ASGD:
     lr: 0.0001
@@ -62,9 +62,8 @@ scheduler:
     'SchedulerLR'
   SchedulerLR:
     milestones:
-      - 0.4
-      - 0.7
-      - 0.95
+      - 0.5
+      - 0.75
     gamma:
       0.1
   MultiStepLR:

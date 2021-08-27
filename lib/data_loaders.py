@@ -79,9 +79,10 @@ def load_data_car(train_batch_size, test_batch_size, shuffle=True, transform=Tru
     data_url = os.getcwd()
     train_data = CarDateset(data_url, tmp_size=tmp_size, result_size=result_size, use_transform=transform,
                             training=True)
-    test_data = CarDateset(data_url, tmp_size=tmp_size, result_size=result_size, use_transform=False, training=False)
-    train_loader = DataLoader(train_data, train_batch_size, shuffle=shuffle, num_workers=4, drop_last=True)
-    test_loader = DataLoader(test_data, test_batch_size, shuffle=shuffle, num_workers=4, drop_last=True)
+    test_data = CarDateset(data_url, tmp_size=tmp_size, result_size=result_size, use_transform=transform,
+                           training=False)
+    train_loader = DataLoader(train_data, train_batch_size, shuffle=shuffle, num_workers=1, drop_last=True)
+    test_loader = DataLoader(test_data, test_batch_size, shuffle=shuffle, num_workers=1, drop_last=True)
     return train_loader, test_loader
 
 

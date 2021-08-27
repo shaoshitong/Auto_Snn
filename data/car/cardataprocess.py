@@ -8,20 +8,35 @@ import torch.utils.data as data
 import os.path as path
 import PIL.Image as Image
 class dataprocess(object):
-    def __init__(self,train_path=None,val_path=None,test_path=None):
-        if val_path==None:
-            self.val_path="val-car"
+    def __init__(self,dir,train_path=None,val_path=None,test_path=None):
+        self.root=dir
+        if dir==os.getcwd():
+            if val_path == None:
+                self.val_path = "val-car"
+            else:
+                self.val_path = val_path
+            if train_path == None:
+                self.train_path = "train-car"
+            else:
+                self.train_path = train_path
+            if test_path == None:
+                self.test_path = "test-car"
+            else:
+                self.test_path = test_path
         else:
-            self.val_path=val_path
-        if train_path==None:
-            self.train_path="train-car"
-        else:
-            self.train_path=train_path
-        if test_path==None:
-            self.test_path="test-car"
-        else:
-            self.test_path=test_path
-        self.call_mode="return_list"
+            if val_path == None:
+                self.val_path = os.path.join(dir,"val-car")
+            else:
+                self.val_path = val_path
+            if train_path == None:
+                self.train_path = os.path.join(dir,"train-car")
+            else:
+                self.train_path = train_path
+            if test_path == None:
+                self.test_path = os.path.join(dir,"test-car")
+            else:
+                self.test_path = test_path
+        self.call_mode = "return_list"
     def convert_to_rgb(self,path):
         return Image.open(path).convert('RGB')
     def flist_read_iterator(self,file_list):
@@ -70,58 +85,47 @@ class dataprocess(object):
             self.test_list=list_data("val")
         else:
             self.test_list = list_data("test")
-    def __call__(self):
+    def __call__(self,mode="train"):
         tag=0
-        if os.path.isfile("car-train-list.txt"):
+        if os.path.isfile(os.path.join(self.root,"car-train-list.txt")):
             tag+=1
-        if os.path.isfile("car-val-list.txt"):
+        if os.path.isfile(os.path.join(self.root,"car-val-list.txt")):
             tag+=1
-        if os.path.isfile("car-test-list.txt"):
+        if os.path.isfile(os.path.join(self.root,"car-test-list.txt")):
             tag+=1
-        print(tag)
+        if tag==3:
+            print("\ntrain data,val data,test data is alreadly!\n")
+        else:
+            print("\ncome to get the img list!\n")
         if tag==3:
             self.train_list=[]
             self.val_list=[]
             self.test_list=[]
-            with open("car-train-list.txt","r") as f:
+            with open(os.path.join(self.root,"car-train-list.txt"),"r") as f:
                 for line in f.readlines():
                     self.train_list.append(line.strip())
-            with open("car-val-list.txt","r") as f:
+            with open(os.path.join(self.root,"car-val-list.txt"),"r") as f:
                 for line in f.readlines():
                     self.val_list.append(line.strip())
-            with open("car-test-list.txt","r") as f:
+            with open(os.path.join(self.root,"car-test-list.txt"),"r") as f:
                 for line in f.readlines():
                     self.test_list.append(line.strip())
         else:
             self.IMG_CAR_GET()
-        with open("car-train-list.txt","w") as f:
+        with open(os.path.join(self.root,"car-train-list.txt"),"w") as f:
             for line in self.train_list:
                 f.writelines(line+"\n")
-        with open("car-val-list.txt","w") as f:
+        with open(os.path.join(self.root,"car-val-list.txt"),"w") as f:
             for line in self.val_list:
                 f.writelines(line+"\n")
-        with open("car-test-list.txt","w") as f:
+        with open(os.path.join(self.root,"car-test-list.txt"),"w") as f:
             for line in self.test_list:
                 f.writelines(line+"\n")
         if self.call_mode=="return_list":
             return self.train_list,self.val_list,self.test_list
         elif self.call_mode=="return_image":
-            label_dict={}
             tag=0
-            val_data = []
-            val_label = []
-            for path_add_label in self.val_list:
-                path_add_label=path_add_label.strip()
-                path,label=path_add_label.split(",")
-                if label not in label_dict.keys():
-                    now_tag=tag
-                    label_dict[label]=tag
-                    tag+=1
-                else:
-                    now_tag=label_dict[label]
-                image=self.convert_to_rgb(path)
-                val_data.append(image)
-                val_label.append(now_tag)
+            label_dict={}
             test_data = []
             test_label = []
             for path_add_label in self.test_list:
@@ -150,7 +154,7 @@ class dataprocess(object):
                 image = self.convert_to_rgb(path)
                 train_data.append(image)
                 train_label.append(now_tag)
-            return train_data,train_label,val_data,val_label,test_data,test_label
+            return train_data,train_label,test_data,test_label
 
 
         else:
@@ -159,54 +163,58 @@ class dataprocess(object):
         self.call_mode=mode
 class CarDateset(data.Dataset):
     def __init__(self,path,mode="return_image",tmp_size=72,result_size=64,use_transform=True,training=True):
-        path=os.path.join(path,"../data")
-        if os.path.isdir(path):
-            sys.path.append(path)
-        path=os.path.join(path,"data")
-        if os.path.isdir(path):
-            sys.path.append(path)
-        DATA=dataprocess()
+        path_1=os.path.join(path,"../data/car")
+        if os.path.isdir(path_1):
+            print(path_1)
+            sys.path.append(path_1)
+        path_1=os.path.join(path,"data/car")
+        if os.path.isdir(path_1):
+            print(path_1)
+            sys.path.append(path_1)
+        DATA=dataprocess(sys.path[-1])
         DATA.setmode(mode)
         self.training=training
         self.use_transform=use_transform
-        self.train_data,self.train_label,self.val_data,self.val_label,self.test_data,self.test_label=DATA()
+        self.train_data,self.train_label,self.test_data,self.test_label=DATA()
         import torchvision.transforms as transforms
         self.transform=transforms.Compose([
             transforms.Resize((tmp_size,tmp_size)),
-            transforms.RandomSizedCrop((result_size,result_size),scale=(0.9,1.0),ratio=(0.85,1.15)),
+        ])
+        self.transform_test=transforms.Compose([
+            transforms.Resize((result_size,result_size)),
+        ])
+        self.transform2=transforms.Compose([
+            transforms.RandomSizedCrop((result_size, result_size), scale=(0.9, 1.0), ratio=(0.85, 1.15)),
             transforms.RandomHorizontalFlip(0.5),
-            transforms.RandomVerticalFlip(0.5),
+            transforms.RandomVerticalFlip(0.2),
+            transforms.RandomRotation(30, center=(result_size // 2, result_size // 2)),
             transforms.ToTensor(),
-            transforms.Normalize((0.4914,0.4822,0.4455),(0.2023,0.1994,0.2010))
+            transforms.Normalize((0.4914, 0.4822, 0.4455), (0.2023, 0.1994, 0.2010))
         ])
-        self.transform_img=transforms.Compose([
-            transforms.Resize((tmp_size,tmp_size)),
-            transforms.RandomSizedCrop((result_size,result_size),scale=(0.9,1.0),ratio=(0.85,1.15)),
-            transforms.RandomHorizontalFlip(0.5),
-            transforms.RandomVerticalFlip(0.5),
+        self.transform2_test = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.4914, 0.4822, 0.4455), (0.2023, 0.1994, 0.2010))
         ])
+        if training == True:
+            del self.test_label, self.test_data
+            if use_transform==True:
+                for i in range(len(self.train_data)):
+                    self.train_data[i] = self.transform(self.train_data[i])
+        else:
+            del self.train_data, self.train_label
+            if use_transform==True:
+                for i in range(len(self.test_data)):
+                    self.test_data[i] = self.transform_test(self.test_data[i])
     def __len__(self):
         if self.training==True:
             return len(self.train_label)
         else:
             return len(self.test_label)
     def __getitem__(self,index):
-        # data_t=self.transform_img(self.train_data[index])
-        # import matplotlib.pyplot as plt
-        # plt.imshow(data_t,"viridis")
-        # plt.xticks([])
-        # plt.yticks([])
-        # plt.axis("off")
-        # plt.show()
-        if self.training==False:
-            data,label=self.test_data[index],self.test_label[index]
-        elif self.training==True and self.use_transform==False:
-            data,label=self.train_data[index],self.train_label[index]
-        else:
-            data,label=self.train_data[index],self.train_label[index]
-            data=self.transform(data)
-
-        return data,label
+       if self.training==True:
+           return self.transform2(self.train_data[index]),self.train_label[index]
+       else:
+           return self.transform2_test(self.test_data[index]), self.test_label[index]
 
 
 

@@ -16,11 +16,11 @@ from torchvision import datasets
 sys.path.append("/home/sst/product")
 from Snn_Auto_master.lib.accuracy import accuracy
 from Snn_Auto_master.lib.criterion import criterion
-from Snn_Auto_master.lib.data_loaders import MNISTDataset, get_rand_transform, load_data,EEGDateset
+from Snn_Auto_master.lib.data_loaders import MNISTDataset, get_rand_transform, load_data,EEGDateset,load_data_car
 from Snn_Auto_master.lib.log import Log
 from Snn_Auto_master.lib.optimizer import get_optimizer
 from Snn_Auto_master.lib.scheduler import get_scheduler, SchedulerLR
-from Snn_Auto_master.lib.three_dsnn import merge_layer
+from Snn_Auto_master.lib.three_dsnn import merge_layer,filename
 from Snn_Auto_master.lib.parameters_check import parametersgradCheck
 
 parser = argparse.ArgumentParser(description='SNN AUTO MASTER')
@@ -35,6 +35,7 @@ parser.add_argument('--data_url', dest='data_url',default='./data', type=str,
 parser.add_argument('--log_each', dest='log_each',default=100, type=int,
                     help='how many step log once')
 args = parser.parse_args()
+args.config_file=filename
 log = Log(log_each=args.log_each)
 def set_device():
     if torch.cuda.is_available():
@@ -78,6 +79,8 @@ def test2(model, data, yaml, criterion_loss):
                 input = input.float().to(device)
             elif yaml['data'] == 'eeg':
                 input = input.float().to(device).view(input.shape[0], -1)
+            elif yaml['data'] == 'car':
+                input = input.float().to(device).view(input.shape[0], -1)
             else:
                 raise KeyError('not have this dataset')
             target = target.to(device)
@@ -88,7 +91,7 @@ def test2(model, data, yaml, criterion_loss):
             loss = criterion(criterion_loss, output, target)
             if yaml['data'] == 'eeg':
                 prec1, prec5 = accuracy(output.data, target, topk=(1, 2))
-            elif yaml['data'] in ['mnist', 'fashionmnist', 'cifar10']:
+            elif yaml['data'] in ['mnist', 'fashionmnist', 'cifar10','car']:
                 prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
             log(model, loss.cpu(), prec1.cpu(), prec5.cpu())
     return log.epoch_state["top_1"] / log.epoch_state["steps"],log.epoch_state["loss"] / log.epoch_state["steps"]
@@ -97,15 +100,17 @@ def test2(model, data, yaml, criterion_loss):
 def test(path, data, yaml, criterion_loss):
     log.eval(len_dataset=len(data))
     torch.cuda.empty_cache()
-    the_model = merge_layer(set_device(), shape=yaml['shape'], dropout=yaml['parameters']['droupout'], test=True)
+    the_model = merge_layer(set_device(), shape=yaml['shape'], dropout=yaml['parameters']['dropout'], test=True)
     if yaml['data'] == 'mnist':
-        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],1,28,28), 1,1,int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'])
+        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],1,28,28), 1,1,int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'],p=yaml['parameters']['dropout'])
     elif yaml['data'] == 'cifar10':
-        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],3,32,32),3,3, int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'])
+        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],3,32,32),3,3, int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'],p=yaml['parameters']['dropout'])
     elif yaml['data']=='fashionmnist':
-        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],1,28,28),1,1,int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'])
+        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],1,28,28),1,1,int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'],p=yaml['parameters']['dropout'])
     elif yaml['data']=='eeg':
-        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],14,64,64),14,14,int(2),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'])
+        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],14,64,64),14,14,int(2),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'],p=yaml['parameters']['dropout'])
+    elif yaml['data']=='car':
+        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],3,64,64),3,3,int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'],p=yaml['parameters']['dropout'])
     else:
         raise KeyError('not have this dataset')
     the_model.load_state_dict(torch.load(path)['snn_state_dict'])
@@ -123,6 +128,8 @@ def test(path, data, yaml, criterion_loss):
                 input = input.float().to(device)
             elif yaml['data'] == 'eeg':
                 input = input.float().to(device).view(input.shape[0], -1)
+            elif yaml['data'] == 'car':
+                input = input.float().to(device).view(input.shape[0], -1)
             else:
                 raise KeyError()
             target = target.to(device)
@@ -133,7 +140,7 @@ def test(path, data, yaml, criterion_loss):
             loss = criterion(criterion_loss, output, target)
             if yaml['data'] == 'eeg':
                 prec1, prec5 = accuracy(output.data, target, topk=(1, 2))
-            elif yaml['data'] in ['mnist', 'fashionmnist', 'cifar10']:
+            elif yaml['data'] in ['mnist', 'fashionmnist', 'cifar10','car']:
                 prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
             log(model, loss.cpu(), prec1.cpu(), prec5.cpu())
     return log.epoch_state["top_1"] / log.epoch_state["steps"],log.epoch_state["loss"] / log.epoch_state["steps"]
@@ -151,6 +158,8 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
         elif yaml['data'] == 'fashionmnist':
             input = input.float().to(device)
         elif yaml['data'] == 'eeg':
+            input = input.float().to(device).view(input.shape[0], -1)
+        elif yaml['data'] == 'car':
             input = input.float().to(device).view(input.shape[0], -1)
         else:
             raise KeyError()
@@ -176,7 +185,7 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
         # pd_save(model.three_dim_layer.point_layerg+_module[str(0) + '_' + str(0) + '_' + str(0)].tensor_tau_m1.view(28,-1),"tau_m2/"+str(i))
         if yaml['data']=='eeg':
             prec1, prec5 = accuracy(output.data, target, topk=(1, 2))
-        elif yaml['data'] in ['mnist','fashionmnist','cifar10']:
+        elif yaml['data'] in ['mnist','fashionmnist','cifar10','car']:
             prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
         log(model, loss.cpu(), prec1.cpu(),prec5.cpu(),scheduler.lr())
         if isinstance(scheduler, torch.optim.lr_scheduler.CyclicLR):
@@ -193,9 +202,10 @@ if __name__ == "__main__":
     yaml = yaml_config_get(args)
     if yaml['set_seed'] is True:
         set_random_seed(yaml)
-    model = merge_layer(set_device(), shape=yaml['shape'], dropout=yaml['parameters']['droupout'],test=False)
+    model = merge_layer(set_device(), shape=yaml['shape'], dropout=yaml['parameters']['dropout'],test=False)
     writer = SummaryWriter()
     rand_transform = get_rand_transform(yaml['transform'])
+    print(args)
     if yaml['data'] == 'mnist':
         mnist_trainset = datasets.MNIST(root=args.data_url, train=True, download=True, transform=rand_transform)
         mnist_testset = datasets.MNIST(root=args.data_url, train=False, download=True, transform=None)
@@ -207,11 +217,16 @@ if __name__ == "__main__":
         test_dataloader = DataLoader(test_data, batch_size=yaml['parameters']['batch_size'], shuffle=True,
                                      num_workers=4,
                                      drop_last=True)
-        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 28 * 28 * 1),1,1, int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'])
+        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 28 * 28 * 1),1,1, int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k']
+                             ,p=yaml['parameters']['dropout'])
     elif yaml['data'] == 'cifar10':
         train_dataloader, test_dataloader = load_data(yaml['parameters']['batch_size'],
                                                       yaml['parameters']['batch_size'],args.data_url)
-        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 32 * 32 * 3),3,3, int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'])
+        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 32 * 32 * 3),3,3, int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'],p=yaml['parameters']['dropout'])
+    elif yaml['data'] == 'car':
+        train_dataloader, test_dataloader = load_data_car(yaml['parameters']['batch_size'],
+                                                      yaml['parameters']['batch_size'])
+        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 64 * 64 * 3),3,3, int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'],p=yaml['parameters']['dropout'])
     elif yaml['data'] == 'fashionmnist':
         fashionmnist_trainset = datasets.FashionMNIST(root=args.data_url, train=True, download=True, transform=rand_transform)
         fashionmnist_testset = datasets.FashionMNIST(root=args.data_url, train=False, download=True, transform=None)
@@ -223,7 +238,7 @@ if __name__ == "__main__":
         test_dataloader = DataLoader(test_data, batch_size=yaml['parameters']['batch_size'], shuffle=True,
                                      num_workers=4,
                                      drop_last=True)
-        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 28 * 28 * 1),1,1, int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'])
+        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 28 * 28 * 1),1,1, int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'],p=yaml['parameters']['dropout'])
     elif yaml['data'] == 'eeg':
         p=random.randint(0,4)
         print(p)
@@ -235,7 +250,7 @@ if __name__ == "__main__":
         test_dataloader = DataLoader(test_data, batch_size=yaml['parameters']['batch_size'], shuffle=True,
                                      num_workers=4,
                                      drop_last=True)
-        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 14 * 32 * 32),14,14, int(2),tmp_feature=yaml['parameters']['tmp_feature']*2,tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'])
+        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 14 * 32 * 32),14,14, int(2),tmp_feature=yaml['parameters']['tmp_feature']*2,tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'],p=yaml['parameters']['dropout'])
 
     else:
         raise KeyError('There is no corresponding dataset')
@@ -243,7 +258,7 @@ if __name__ == "__main__":
     params_sub=list(map(id,model.out_classifier.parameters()))
     params2 = list(filter(lambda i: i.requires_grad and id(i) not in params_sub, model.parameters()))
     dict_list1=dict(params=params1,weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay'])
-    dict_list2=dict(params=params2,)
+    dict_list2=dict(params=params2,weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay']/2)
     optimizer = get_optimizer([dict_list1,dict_list2], yaml, model)
     scheduler = get_scheduler(optimizer, yaml)
     criterion_loss = torch.nn.CrossEntropyLoss()

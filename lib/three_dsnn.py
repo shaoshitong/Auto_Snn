@@ -37,8 +37,8 @@ def batch_norm(input):
     std = input_linear.std(dim=1, keepdim=True).unsqueeze(-1).unsqueeze(-1)
     return torch.div(torch.sub(input, mean), std)
 
-
-yaml = yaml_config_get("./train.yaml")
+filename="./train_car.yaml"
+yaml = yaml_config_get(filename)
 # yaml = yaml_config_get("./train.yaml")
 dataoption = yaml['data']
 
@@ -87,9 +87,9 @@ class Shortcut(nn.Module):
 
 
 class block_in(nn.Module):
-    def __init__(self, in_feature, out_feature=64):
+    def __init__(self, in_feature, out_feature=64,p=0.2):
         super(block_in, self).__init__()
-        if dataoption in ["mnist", "fashionmnist", "cifar10"]:
+        if dataoption in ["mnist", "fashionmnist", "cifar10","car"]:
             self.block_in_layer = Denselayer([in_feature, out_feature // 2, out_feature // 2, out_feature, out_feature])
         elif dataoption == "eeg":
             self.block_in_layer = Denselayer([in_feature, out_feature // 2, out_feature])
@@ -103,6 +103,7 @@ class block_in(nn.Module):
         self.f_conv = nn.ModuleList(
             [SNConv2d(3 * out_feature, out_feature, (1, 1), stride=1, padding=0) for _ in range(3)])
         self.training = False
+        self.dropout=nn.Dropout(p=p)
 
     def settest(self, training_status):
         self.training = training_status
@@ -112,7 +113,7 @@ class block_in(nn.Module):
         m = size_change(3 * self.out_feature, x.size()[-1] // 2)
         x = self.relu(self.conv_cat(x) + m(x))
         a, b, c = torch.split(x, dim=1, split_size_or_sections=[x.size()[1] // 3, x.size()[1] // 3, x.size()[1] // 3])
-        a, b, c = a + self.f_conv[0](x), b + self.f_conv[1](x), c + self.f_conv[2](x)
+        a, b, c = a + self.f_conv[0](x), b+ self.f_conv[1](x), c + self.f_conv[2](x)
         del x
         return a, b, c
 
@@ -120,7 +121,7 @@ class block_in(nn.Module):
 class block_out(nn.Module):
     def __init__(self, in_feature, out_feature, classes, size, use_pool='none'):
         super(block_out, self).__init__()
-        if dataoption in ["mnist", "fashionmnist", "cifar10"]:
+        if dataoption in ["mnist", "fashionmnist", "cifar10","car"]:
             self.block_out_layer = Denselayer([in_feature, in_feature // 4, in_feature // 4, out_feature, out_feature])
         elif dataoption == "eeg":
             self.block_out_layer = Denselayer([in_feature, in_feature // 4, out_feature])
@@ -303,28 +304,14 @@ class threshold(torch.autograd.Function):
         ctx.save_for_backward(input)
         ctx.sigma = sigma
         output = input.clone()
-        if dataoption == 'mnist':
-            output = torch.max(torch.tensor(0.0, device=output.device), torch.sign(output))
-        elif dataoption == 'cifar10':
-            output = torch.max(torch.tensor(0.0, device=output.device), torch.sign(output))
-        elif dataoption == 'fashionmnist':
-            output = torch.max(torch.tensor(0.0, device=output.device), torch.sign(output))
-        else:
-            raise KeyError()
+        output = torch.max(torch.tensor(0.0, device=output.device), torch.sign(output))
         return output
 
     @staticmethod
     def backward(ctx, grad_output):
         input, = ctx.saved_tensors
         sigma = ctx.sigma
-        if dataoption == 'mnist':
-            exponent = -torch.pow((input), 2) / (2.0 * sigma ** 2)
-        elif dataoption == 'cifar10':
-            exponent = -torch.pow((input), 2) / (2.0 * sigma ** 2)
-        elif dataoption == 'fashionmnist':
-            exponent = -torch.pow((input), 2) / (2.0 * sigma ** 2)
-        else:
-            raise KeyError()
+        exponent = -torch.pow((input), 2) / (2.0 * sigma ** 2)
         exp = torch.exp(exponent)
         erfc_grad = exp / (2.506628 * sigma)
         grad = erfc_grad * grad_output
@@ -449,6 +436,8 @@ def DiffInitial(data, shape, in_feature, out_feature, group=1):
         kernel_gauss = guassNet(3, 3, kernel_size=5, requires_grad=False, group=group).cuda()
     elif dataoption == 'fashionmnist':
         kernel_gauss = guassNet(1, 1, kernel_size=5, requires_grad=False, group=group).cuda()
+    elif dataoption == 'car':
+        kernel_gauss = guassNet(3, 3, kernel_size=5, requires_grad=False, group=group).cuda()
     else:
         raise KeyError("error shape")
     tmp = kernel_gauss(tmp).cuda()
@@ -466,7 +455,7 @@ def DiffInitial(data, shape, in_feature, out_feature, group=1):
         mean = grad.mean(dim=-1, keepdim=True)
         std = grad.std(dim=-1, keepdim=True)
         return ((grad - mean) / (std + 1e-6)).view_as(data), mean, std
-    elif dataoption == 'cifar10':
+    elif dataoption in ['cifar10','car']:
         grad = grad.view(-1, 3, 32 * 32)
         mean = grad.mean(dim=-1, keepdim=True)
         std = grad.std(dim=-1, keepdim=True)
@@ -492,7 +481,7 @@ class axonLimit(torch.autograd.Function):
         # return v1
         if dataoption == 'mnist':
             return torch.min(torch.max(v1, torch.Tensor([-1.5]).cuda()), torch.Tensor([1.5]).cuda())
-        elif dataoption == 'cifar10':
+        elif dataoption in ['cifar10','car']:
             return torch.min(torch.max(v1, torch.Tensor([-1.5]).cuda()), torch.Tensor([1.5]).cuda())
         elif dataoption == 'fashionmnist':
             return torch.min(torch.max(v1, torch.Tensor([-1.5]).cuda()), torch.Tensor([1.5]).cuda())
@@ -510,7 +499,7 @@ class axonLimit(torch.autograd.Function):
             exponent = torch.where((input > 1.6) | (input < -1.6),
                                    (torch.exp(-((input.float()) ** 2) / 2) / 2.506628).cuda(), exponent)
             return exponent * grad_output
-        elif dataoption == 'cifar10':
+        elif dataoption in ['cifar10','car']:
             exponent = torch.where((input > -1.6) & (input < 1.6), torch.ones_like(input).cuda(),
                                    torch.zeros_like(input).cuda())
             exponent = torch.where((input > 1.6) | (input < -1.6),
@@ -652,6 +641,19 @@ class point_cul_Layer(nn.Module):
                     self.gaussbur = multi_block_neq(in_feature, out_feature, multi_k=mult_k, Use_Spactral=True,
                                                     Use_fractal=True)
             # self.bn1 = nn.BatchNorm2d(out_feature)
+        elif dataoption == 'car':
+            if use_gauss == True:
+                if in_feature == out_feature:
+                    self.gaussbur = guassNet(in_feature, in_feature, kernel_size=3, requires_grad=True)
+                else:
+                    self.gaussbur = guassNet(in_feature, out_feature, kernel_size=3, requires_grad=True)
+            else:
+                if in_feature == out_feature:
+                    self.gaussbur = multi_block_eq(in_feature, multi_k=mult_k, Use_Spactral=True, Use_fractal=True)
+                else:
+                    self.gaussbur = multi_block_neq(in_feature, out_feature, multi_k=mult_k, Use_Spactral=True,
+                                                    Use_fractal=True)
+            # self.bn1 = nn.BatchNorm2d(out_feature)
         elif dataoption == 'fashionmnist':
             if use_gauss == True:
                 if in_feature == out_feature:
@@ -704,10 +706,11 @@ class point_cul_Layer(nn.Module):
                 m = self.gaussbur(x)
             elif dataoption == 'cifar10':
                 m = self.gaussbur(x)
-
             elif dataoption == 'fashionmnist':
                 m = self.gaussbur(x)
             elif dataoption == 'eeg':
+                m = self.gaussbur(x)
+            elif dataoption == 'car':
                 m = self.gaussbur(x)
             else:
                 raise KeyError('not have this dataset')
@@ -949,11 +952,13 @@ class InputGenerateNet(nn.Module):
         return self.three_dim_layer(x, y, z)
 
     def initiate_layer(self, input, in_feature, out_feature, tau_m=4., tau_s=1., use_gauss=True, batchsize=64,
-                       old_in_feature=1, old_out_feature=1, mult_k=2):
+                       old_in_feature=1, old_out_feature=1, mult_k=2,p=0.2):
         if dataoption == 'mnist' or dataoption == 'fashionmnist':
             input = torch.randn(input.shape[0], 1 * 32 * 32).to(input.device)
-        elif dataoption == 'cifar10':
+        elif dataoption in ['cifar10','car']:
             input = torch.randn(input.shape[0], 3 * 32 * 32).to(input.device)
+        elif dataoption in ['eeg']:
+            input = torch.randn(input.shape[0], 14 * 64 * 64).to(input.device)
         self.three_dim_layer.initiate_layer(
             torch.rand(batchsize, in_feature * (input.shape[1] // (old_out_feature * 4))),
             in_feature, out_feature, tau_m=tau_m, tau_s=tau_s,
@@ -1001,6 +1006,9 @@ class merge_layer(nn.Module):
             elif dataoption == 'eeg':
                 x = x.view(x.shape[0], 14, 32, 32)
                 # 64,16,16
+            elif dataoption == 'car':
+                x = x.view(x.shape[0],3, 64, 64)
+                # 64,16,16
             else:
                 raise KeyError()
         a, b, c = self.block_in_x_y_z(x)
@@ -1010,7 +1018,7 @@ class merge_layer(nn.Module):
         return h
 
     def initiate_layer(self, input, in_feature, out_feature, classes, tmp_feature=64, tau_m=4., tau_s=1.,
-                       use_gauss=True, batchsize=64, mult_k=2):
+                       use_gauss=True, batchsize=64, mult_k=2,p=0.2):
         """
         配置相应的层
         """
@@ -1024,7 +1032,7 @@ class merge_layer(nn.Module):
             self.first = input.shape[0]
             self.second = input.numel() / self.first
 
-        self.block_in_x_y_z = block_in(in_feature, tmp_feature)
+        self.block_in_x_y_z = block_in(in_feature, tmp_feature,p=p)
         feature_len = self.InputGenerateNet.initiate_layer(input, tmp_feature, tmp_feature, tau_m, tau_s, use_gauss,
                                                            batchsize,
                                                            old_in_feature=in_feature, old_out_feature=out_feature,
@@ -1032,11 +1040,13 @@ class merge_layer(nn.Module):
         # self.block_out = block_out(tmp_feature, out_feature_lowbit, classes, use_pool='none')
         import copy
         feature_len.append(copy.deepcopy(feature_len[-1]))
-        self.feature_forward = Feature_forward(feature_len)
+        self.feature_forward = Feature_forward(feature_len,p=p)
         if dataoption == 'fashionmnist' or dataoption == 'mnist' or dataoption == 'cifar10':
             out_pointnum = max(16 // (feature_len[-1] // tmp_feature), 1)
         elif dataoption == 'eeg':
             out_pointnum = max(16 // (feature_len[-1] // tmp_feature), 1)
+        elif dataoption == 'car':
+            out_pointnum = max(32 // (feature_len[-1] // tmp_feature), 1)
         else:
             raise KeyError("not import")
         self.out_classifier = block_out(feature_len[-1], 32, classes=classes, size=out_pointnum,
