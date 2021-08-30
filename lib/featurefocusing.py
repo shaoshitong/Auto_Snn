@@ -170,10 +170,10 @@ class Feature_forward(nn.Module):
         for i, x_list in enumerate(x_lists):
             if len(begin) != 0:
                 if i != len(x_lists) - 1:
-                    begin.append(torch.cat((self.Feature_parallel[i](x_list),
-                                            F.interpolate(begin[-1], scale_factor=0.5).repeat(1, 2, 1, 1)), dim=1))
+                    begin.append(self.dropout(torch.cat((self.Feature_parallel[i](x_list),
+                                            F.interpolate(begin[-1], scale_factor=0.5).repeat(1, 2, 1, 1)), dim=1)))
                 else:
-                    begin.append(torch.cat((self.Feature_parallel[i](x_list), begin[-1]), dim=1))
+                    begin.append(self.dropout(torch.cat((self.Feature_parallel[i](x_list), begin[-1]), dim=1)))
                 begin[-1] = self.conv_list[i - 1](begin[-1])
             else:
                 begin.append(self.Feature_parallel[i](x_list))
