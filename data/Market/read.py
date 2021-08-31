@@ -26,6 +26,8 @@ b=np.ones((30))
 b[15:25]=0
 b=b.astype(np.bool)
 print(a,b,a[b])
+import sparseconvnet.submanifoldConvolution as submanifoldConvolution
+submanifoldConvolution
 """
 a:1-10 :1 10-20:0 20-30:1
 b:1-15 :1 15-25:0 25-30:1

@@ -37,7 +37,8 @@ def batch_norm(input):
     std = input_linear.std(dim=1, keepdim=True).unsqueeze(-1).unsqueeze(-1)
     return torch.div(torch.sub(input, mean), std)
 
-filename="./train_svhn.yaml"
+
+filename = "./train_svhn.yaml"
 yaml = yaml_config_get(filename)
 # yaml = yaml_config_get("./train.yaml")
 dataoption = yaml['data']
@@ -47,9 +48,9 @@ def size_change(f, s):
     def change(xx):
         xx: torch.Tensor
         xx = F.interpolate(xx, (s, s), mode='bilinear', align_corners=True)
-        g=f // xx.shape[1]
-        if(int(g)==0):
-            xx=xx[:,::int(xx.shape[1]//f),:,:]
+        g = f // xx.shape[1]
+        if (int(g) == 0):
+            xx = xx[:, ::int(xx.shape[1] // f), :, :]
         else:
             xx = xx.repeat(1, f // xx.shape[1], 1, 1)
         return xx
@@ -87,9 +88,9 @@ class Shortcut(nn.Module):
 
 
 class block_in(nn.Module):
-    def __init__(self, in_feature, out_feature=64,p=0.2):
+    def __init__(self, in_feature, out_feature=64, p=0.2):
         super(block_in, self).__init__()
-        if dataoption in ["mnist", "fashionmnist", "cifar10","car","svhn"]:
+        if dataoption in ["mnist", "fashionmnist", "cifar10", "car", "svhn"]:
             self.block_in_layer = Denselayer([in_feature, out_feature // 2, out_feature // 2, out_feature, out_feature])
         elif dataoption == "eeg":
             self.block_in_layer = Denselayer([in_feature, out_feature // 2, out_feature])
@@ -103,7 +104,7 @@ class block_in(nn.Module):
         self.f_conv = nn.ModuleList(
             [SNConv2d(3 * out_feature, out_feature, (1, 1), stride=1, padding=0) for _ in range(3)])
         self.training = False
-        self.dropout=nn.Dropout(p=p)
+        self.dropout = nn.Dropout(p=p)
 
     def settest(self, training_status):
         self.training = training_status
@@ -113,7 +114,7 @@ class block_in(nn.Module):
         m = size_change(3 * self.out_feature, x.size()[-1] // 2)
         x = self.relu(self.conv_cat(x) + m(x))
         a, b, c = torch.split(x, dim=1, split_size_or_sections=[x.size()[1] // 3, x.size()[1] // 3, x.size()[1] // 3])
-        a, b, c = a + self.f_conv[0](x), b+ self.f_conv[1](x), c + self.f_conv[2](x)
+        a, b, c = a + self.f_conv[0](x), b + self.f_conv[1](x), c + self.f_conv[2](x)
         del x
         return a, b, c
 
@@ -121,7 +122,7 @@ class block_in(nn.Module):
 class block_out(nn.Module):
     def __init__(self, in_feature, out_feature, classes, size, use_pool='none'):
         super(block_out, self).__init__()
-        if dataoption in ["mnist", "fashionmnist", "cifar10","car","svhn"]:
+        if dataoption in ["mnist", "fashionmnist", "cifar10", "car", "svhn"]:
             self.block_out_layer = Denselayer([in_feature, in_feature // 4, in_feature // 4, out_feature, out_feature])
         elif dataoption == "eeg":
             self.block_out_layer = Denselayer([in_feature, in_feature // 4, out_feature])
@@ -235,19 +236,19 @@ class block_eq(nn.Module):
             nn.BatchNorm2d(eq_feature),
         ])
         self.Use_fractal = Use_fractal
-        if Use_fractal==False:
+        if Use_fractal == False:
             self.shortConv = nn.Sequential(*[
-            Shortcut(eq_feature, eq_feature, use_same=True),
-        ])
+                Shortcut(eq_feature, eq_feature, use_same=True),
+            ])
         else:
             self.shortConv = nn.Sequential(*[
-            nn.ReflectionPad2d(1),
-            nn.Conv2d(eq_feature, eq_feature, (3, 3), stride=_pair(1), padding=0,
-                      bias=True) if Use_Spectral == False else SNConv2d(eq_feature, eq_feature, (3, 3), stride=1,
-                                                                        padding=0, bias=True),
-            nn.BatchNorm2d(eq_feature),
-            Shortcut(eq_feature, eq_feature, use_same=True),
-        ])
+                nn.ReflectionPad2d(1),
+                nn.Conv2d(eq_feature, eq_feature, (3, 3), stride=_pair(1), padding=0,
+                          bias=True) if Use_Spectral == False else SNConv2d(eq_feature, eq_feature, (3, 3), stride=1,
+                                                                            padding=0, bias=True),
+                nn.BatchNorm2d(eq_feature),
+                Shortcut(eq_feature, eq_feature, use_same=True),
+            ])
         if self.Use_fractal is True:
             self.merged = LastJoiner(2)
 
@@ -283,7 +284,7 @@ class multi_block_neq(nn.Module):
         ])
         if Use_Spactral == True:
             self.out = nn.Sequential(
-                                     SNConv2d(in_feature, out_feature, (4, 4), stride=2, padding=1),)
+                SNConv2d(in_feature, out_feature, (4, 4), stride=2, padding=1), )
         else:
             self.out = nn.Sequential(nn.LeakyReLU(1e-2, inplace=False),
                                      nn.Conv2d(in_feature, out_feature, (4, 4), stride=2, padding=1),
@@ -452,7 +453,7 @@ def DiffInitial(data, shape, in_feature, out_feature, group=1):
                        groups=group,
                        padding=(3 - 1) // 2)
     grad = -torch.sqrt(tmp_col ** 2 + tmp_row ** 2).float()
-    if  dataoption in ['cifar10','car',"mnist","fashionmnist","svhn"]:
+    if dataoption in ['cifar10', 'car', "mnist", "fashionmnist", "svhn"]:
         grad = grad.view(-1, 3, 32 * 32)
         mean = grad.mean(dim=-1, keepdim=True)
         std = grad.std(dim=-1, keepdim=True)
@@ -471,7 +472,7 @@ class axonLimit(torch.autograd.Function):
         ctx.save_for_backward(v1)
         # v1 = 1.3 * torch.sigmoid(v1) - 0.2
         # return v1
-        if   dataoption in ['cifar10','car',"svhn","mnist","fashionmnist"]:
+        if dataoption in ['cifar10', 'car', "svhn", "mnist", "fashionmnist"]:
             return torch.min(torch.max(v1, torch.Tensor([-1.5]).cuda()), torch.Tensor([1.5]).cuda())
         elif dataoption == 'eeg':
             return torch.min(torch.max(v1, torch.Tensor([-1.5]).cuda()), torch.Tensor([1.5]).cuda())
@@ -481,7 +482,7 @@ class axonLimit(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
         input, = ctx.saved_tensors
-        if  dataoption in ['cifar10','car',"fashionmnist","mnist","svhn"]:
+        if dataoption in ['cifar10', 'car', "fashionmnist", "mnist", "svhn"]:
             exponent = torch.where((input > -1.6) & (input < 1.6), torch.ones_like(input).cuda(),
                                    torch.zeros_like(input).cuda())
             exponent = torch.where((input > 1.6) | (input < -1.6),
@@ -508,29 +509,37 @@ class DoorMechanism(nn.Module):
         self.out_pointnum = out_pointnum
         self.in_feature = in_feature
         self.out_feature = out_feature
-        self.tau_m_weight1 = Parameter(torch.Tensor(in_feature, out_feature),
+        self.tau_m_weight1 = Parameter(torch.Tensor(in_feature * 2, out_feature),
                                        requires_grad=True)
         self.tau_m_weight2 = Parameter(torch.Tensor(in_feature, out_feature),
                                        requires_grad=True)
-        self.tau_s_weight1 = Parameter(torch.Tensor(in_feature, out_feature),
+        # self.tau_m_weight3 = Parameter(torch.Tensor(in_feature * 2, out_feature),
+        #                                requires_grad=True)
+        self.tau_s_weight1 = Parameter(torch.Tensor(in_feature * 2, out_feature),
                                        requires_grad=True)
         self.tau_s_weight2 = Parameter(torch.Tensor(in_feature, out_feature),
                                        requires_grad=True)
-        self.tau_sm_weight1 = Parameter(torch.Tensor(in_feature, out_feature),
+        # self.tau_s_weight3 = Parameter(torch.Tensor(in_feature * 2, out_feature),
+        #                                requires_grad=True)
+        self.tau_sm_weight1 = Parameter(torch.Tensor(in_feature * 2, out_feature),
                                         requires_grad=True)
         self.tau_sm_weight2 = Parameter(torch.Tensor(in_feature, out_feature),
                                         requires_grad=True)
+        self.tau_m_bias1 = Parameter(torch.randn((1, out_feature)).float(), requires_grad=True)
+        self.tau_s_bias1 = Parameter(torch.randn((1, out_feature)).float(), requires_grad=True)
+        self.tau_sm_bias1 = Parameter(torch.randn((1, out_feature)).float(), requires_grad=True)
+        # self.tau_sm_weight3 = Parameter(torch.Tensor(in_feature * 2, out_feature),
+        #                                requires_grad=True)
         stdv = 6. / math.sqrt((in_pointnum // in_feature) * (out_pointnum // out_feature))
-        self.tau_m_weight1.data.uniform_(-stdv, stdv)
+        self.tau_m_weight1.data.uniform_(-2*stdv, 2*stdv)
         self.tau_m_weight2.data.uniform_(-stdv, stdv)
-        self.tau_s_weight1.data.uniform_(-stdv, stdv)
+        self.tau_s_weight1.data.uniform_(-2*stdv, 2*stdv)
         self.tau_s_weight2.data.uniform_(-stdv, stdv)
-        self.tau_sm_weight1.data.uniform_(-stdv, stdv)
+        self.tau_sm_weight1.data.uniform_(-2*stdv, 2*stdv)
         self.tau_sm_weight2.data.uniform_(-stdv, stdv)
-        self.tau_m_bias = Parameter(torch.zeros((1, out_feature)).float(), requires_grad=True)
-        self.tau_s_bias = Parameter(torch.zeros((1, out_feature)).float(), requires_grad=True)
-        self.tau_sm_bias = Parameter(torch.zeros((1, out_feature)).float(), requires_grad=True)
-
+        # self.tau_m_weight3.data.uniform_(-2*stdv, 2*stdv)
+        # self.tau_s_weight3.data.uniform_(-2*stdv, 2*stdv)
+        # self.tau_sm_weight3.data.uniform_(-2*stdv, 2*stdv)
     def forward(self, x1, x2, x3, tau_m, tau_s, tau_sm) -> tuple:
         """
         input==>[batchsize,64,x_pointnum//2,y_pointnum//2]
@@ -544,15 +553,18 @@ class DoorMechanism(nn.Module):
         x1 = x1 + torch.eye(x1.shape[-1], dtype=torch.float32).to(x1.device).unsqueeze(0).unsqueeze(0)
         x2 = x2 + torch.eye(x2.shape[-1], dtype=torch.float32).to(x2.device).unsqueeze(0).unsqueeze(0)
         x3 = x3 + torch.eye(x3.shape[-1], dtype=torch.float32).to(x3.device).unsqueeze(0).unsqueeze(0)
-        men_1 = torch.sigmoid(y1 @ self.tau_m_weight2 + tau_m @ self.tau_m_weight1 + self.tau_m_bias)
-        men_2 = torch.sigmoid(y2 @ self.tau_s_weight2 + tau_s @ self.tau_s_weight1 + self.tau_s_bias)
-        men_3 = torch.sigmoid(y3 @ self.tau_sm_weight2 + tau_sm @ self.tau_sm_weight1 + self.tau_sm_bias)
+        men_1 = torch.sigmoid(torch.cat((y1, tau_m), dim=-1) @ self.tau_m_weight1+self.tau_m_bias1)
+        men_2 = torch.sigmoid(torch.cat((y2, tau_s), dim=-1) @ self.tau_s_weight1+self.tau_s_bias1)
+        men_3 = torch.sigmoid(torch.cat((y3, tau_sm), dim=-1) @ self.tau_sm_weight1+self.tau_sm_bias1)
         self.norm_mem_1 = men_1.norm(p=2, dim=0).mean() / (men_1.numel() / men_1.size()[0])
         self.norm_mem_2 = men_2.norm(p=2, dim=0).mean() / (men_2.numel() / men_2.size()[0])
         self.norm_mem_3 = men_3.norm(p=2, dim=0).mean() / (men_3.numel() / men_3.size()[0])
-        result = torch.tanh(
-            men_1.unsqueeze(-1).unsqueeze(-1) * x1 + men_2.unsqueeze(-1).unsqueeze(-1) * x2 + men_3.unsqueeze(
-                -1).unsqueeze(-1) * x3)
+        b, f, h, w = x1.shape
+        z1 = (men_1.unsqueeze(-1) * (self.tau_m_weight2 @ x1.view(x1.shape[0], x1.shape[1], -1))).view(b, f, h, w)
+        z2 = (men_2.unsqueeze(-1) * (self.tau_s_weight2 @ x2.view(x2.shape[0], x2.shape[1], -1))).view(b, f, h, w)
+        z3 = (men_3.unsqueeze(-1) * (self.tau_sm_weight2 @ x3.view(x3.shape[0], x3.shape[1], -1))).view(b, f, h, w)
+        # b,f,h*w
+        result = torch.tanh(z1+z2+z3)
         with torch.no_grad():
             men_1 = (men_1 * self.lr + (1. - self.lr) * tau_m)
             men_2 = (men_2 * self.lr + (1. - self.lr) * tau_s)
@@ -842,7 +854,7 @@ class three_dim_Layer(nn.Module):
                 out_1 = zz.clone()
             xx = y
             yy = z
-            zz = size_change(xx.shape[1],xx.shape[2])(out_1.clone())
+            zz = size_change(xx.shape[1], xx.shape[2])(out_1.clone())
 
             if num < self.x:
                 out_2 = self.point_layer_module[str(num) + '_' + str(1)](xx, yy, zz)
@@ -904,8 +916,8 @@ class three_dim_Layer(nn.Module):
                 self.feature_len[i] = self.feature_len[i - 1]
                 self.div_len[i] = self.div_len[i - 1]
         for num in range(max(self.z, self.y, self.x)):
-            a,b,c=self.shape[num]
-            tmp_list=[a,b,c]
+            a, b, c = self.shape[num]
+            tmp_list = [a, b, c]
             in_pointnum = int(data.shape[1] // self.div_len[num])
             in_feature = self.feature_len[num]
             out_pointnum = int(data.shape[1] // self.div_len[num + 1])
@@ -916,7 +928,8 @@ class three_dim_Layer(nn.Module):
                                                                           in_pointnum=in_pointnum,
                                                                           out_pointnum=out_pointnum, mult_k=mult_k,
                                                                           use_gauss=use_gauss,
-                                                                          tau_m=tau_m, tau_s=tau_s, x=(tmp_list[p]), y=(tmp_list[p]),
+                                                                          tau_m=tau_m, tau_s=tau_s, x=(tmp_list[p]),
+                                                                          y=(tmp_list[p]),
                                                                           weight_rand=self.weight_rand,
                                                                           weight_require_grad=self.weight_require_grad,
                                                                           p=self.p, device=self.device,
@@ -943,10 +956,10 @@ class InputGenerateNet(nn.Module):
         return self.three_dim_layer(x, y, z)
 
     def initiate_layer(self, input, in_feature, out_feature, tau_m=4., tau_s=1., use_gauss=True, batchsize=64,
-                       old_in_feature=1, old_out_feature=1, mult_k=2,p=0.2):
+                       old_in_feature=1, old_out_feature=1, mult_k=2, p=0.2):
         if dataoption == 'mnist' or dataoption == 'fashionmnist':
             input = torch.randn(input.shape[0], 1 * 32 * 32).to(input.device)
-        elif dataoption in ['cifar10','car',"svhn"]:
+        elif dataoption in ['cifar10', 'car', "svhn"]:
             input = torch.randn(input.shape[0], 3 * 32 * 32).to(input.device)
         elif dataoption in ['eeg']:
             input = torch.randn(input.shape[0], 14 * 64 * 64).to(input.device)
@@ -998,10 +1011,10 @@ class merge_layer(nn.Module):
                 x = x.view(x.shape[0], 14, 32, 32)
                 # 64,16,16
             elif dataoption == 'car':
-                x = x.view(x.shape[0],3, 64, 64)
+                x = x.view(x.shape[0], 3, 64, 64)
                 # 64,16,16
             elif dataoption == 'svhn':
-                x = x.view(x.shape[0],3, 32, 32)
+                x = x.view(x.shape[0], 3, 32, 32)
             else:
                 raise KeyError()
         a, b, c = self.block_in_x_y_z(x)
@@ -1011,7 +1024,7 @@ class merge_layer(nn.Module):
         return h
 
     def initiate_layer(self, input, in_feature, out_feature, classes, tmp_feature=64, tau_m=4., tau_s=1.,
-                       use_gauss=True, batchsize=64, mult_k=2,p=0.2):
+                       use_gauss=True, batchsize=64, mult_k=2, p=0.2):
         """
         配置相应的层
         """
@@ -1025,7 +1038,7 @@ class merge_layer(nn.Module):
             self.first = input.shape[0]
             self.second = input.numel() / self.first
 
-        self.block_in_x_y_z = block_in(in_feature, tmp_feature,p=p)
+        self.block_in_x_y_z = block_in(in_feature, tmp_feature, p=p)
         feature_len = self.InputGenerateNet.initiate_layer(input, tmp_feature, tmp_feature, tau_m, tau_s, use_gauss,
                                                            batchsize,
                                                            old_in_feature=in_feature, old_out_feature=out_feature,
@@ -1033,8 +1046,8 @@ class merge_layer(nn.Module):
         # self.block_out = block_out(tmp_feature, out_feature_lowbit, classes, use_pool='none')
         import copy
         feature_len.append(copy.deepcopy(feature_len[-1]))
-        self.feature_forward = Feature_forward(feature_len,p=p)
-        if dataoption in ['fashionmnist','mnist','cifar10','svhn']:
+        self.feature_forward = Feature_forward(feature_len, p=p)
+        if dataoption in ['fashionmnist', 'mnist', 'cifar10', 'svhn']:
             out_pointnum = max(16 // (feature_len[-1] // tmp_feature), 1)
         elif dataoption == 'eeg':
             out_pointnum = max(16 // (feature_len[-1] // tmp_feature), 1)
