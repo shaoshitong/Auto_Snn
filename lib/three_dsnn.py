@@ -5,7 +5,6 @@ import os
 import random
 import numpy as np
 from torch.nn.modules.utils import _single, _pair, _triple
-from Snn_Auto_master.lib.activation import Activation
 from Snn_Auto_master.lib.data_loaders import revertNoramlImgae
 from Snn_Auto_master.lib.plt_analyze import vis_img
 from Snn_Auto_master.lib.parameters_check import pd_save, parametersgradCheck
@@ -15,6 +14,7 @@ from Snn_Auto_master.lib.DenseNet import Denselayer
 from Snn_Auto_master.lib.cocoscontextloss import ContextualLoss_forward
 from Snn_Auto_master.lib.featurefocusing import Feature_forward
 from Snn_Auto_master.lib.dimixloss import DimIxLoss
+from lib.PointConv import PointConv
 import math
 import pandas as pd
 from torch.nn.utils import spectral_norm
@@ -39,7 +39,7 @@ def batch_norm(input):
     return torch.div(torch.sub(input, mean), std)
 
 
-filename = "./train_svhn.yaml"
+filename = "./train.yaml"
 yaml = yaml_config_get(filename)
 # yaml = yaml_config_get("./train.yaml")
 dataoption = yaml['data']
@@ -220,46 +220,35 @@ class block_out(nn.Module):
 
 
 class block_eq(nn.Module):
-    def __init__(self, eq_feature, Use_Spectral=False, Use_fractal=False):
+    def __init__(self, eq_feature,size, Use_Spectral=False, Use_fractal=False):
         super(block_eq, self).__init__()
         self.eq_feature = eq_feature
-        self.rowConv = nn.Sequential(*[
-            spectral_norm(nn.Conv2d(eq_feature, eq_feature, (1, 5), stride=_pair(1), padding=(0, 2),
-                                    bias=True) if Use_Spectral == False else SNConv2d(eq_feature, eq_feature, (1, 5),
-                                                                                      stride=_pair(1),
-                                                                                      padding=(0, 2), bias=True)),
-            spectral_norm(nn.BatchNorm2d(eq_feature))
-
-        ])
+        self.Conv = nn.Sequential(*[nn.BatchNorm2d(eq_feature),
+                                    nn.Conv2d(eq_feature, eq_feature, (3, 3), stride=_pair(1), padding=(1, 1),bias=True),
+                                    nn.ReLU(inplace=True),
+                                    nn.Conv2d(eq_feature, eq_feature, (3, 3), stride=_pair(1), padding=(1, 1),bias=True),
+                                    PointConv((min(4,size),min(4,size)),eq_feature,(size,size),(size,size)),
+                                    nn.LayerNorm([size,size])])
         self.Use_fractal = Use_fractal
-        self.colConv = nn.Sequential(*[
-            spectral_norm(nn.Conv2d(eq_feature, eq_feature, (5, 1), stride=_pair(1), padding=(2, 0),
-                                    bias=True) if Use_Spectral == False else SNConv2d(eq_feature, eq_feature, (5, 1),
-                                                                                      stride=_pair(1),
-                                                                                      padding=(2, 0), bias=True)),
-            spectral_norm(nn.BatchNorm2d(eq_feature))
-
-        ])
-
         if self.Use_fractal is True:
             self.merged = LastJoiner(2)
 
     def forward(self, x):
         if self.Use_fractal == False:
-            x1 = self.rowConv(x) + self.colConv(x)
+            x1 = self.Conv(x)
         else:
-            x1 = self.merged([self.rowConv(x), self.colConv(x)])
-        x2 = F.relu(x1, inplace=True)
-        del x
+            x1 = self.Conv(x)
+        x2 = F.relu(x1+x)
+        del x,x1
         return x2
 
 
 class multi_block_eq(nn.Module):
-    def __init__(self, eq_feature, multi_k=1, Use_Spactral=False, Use_fractal=False):
+    def __init__(self, eq_feature,size, multi_k=1,Use_Spactral=False, Use_fractal=False):
         super(multi_block_eq, self).__init__()
         self.eq_feature = eq_feature
         self.model = nn.Sequential(*[
-            block_eq(self.eq_feature, Use_Spectral=Use_Spactral, Use_fractal=Use_fractal) for _ in range(multi_k)
+            block_eq(self.eq_feature,size, Use_Spectral=Use_Spactral, Use_fractal=Use_fractal) for _ in range(multi_k)
         ])
 
     def forward(self, x):
@@ -267,20 +256,17 @@ class multi_block_eq(nn.Module):
 
 
 class multi_block_neq(nn.Module):
-    def __init__(self, in_feature, out_feature, multi_k=1, Use_Spactral=False, Use_fractal=False):
+    def __init__(self, in_feature, out_feature, size,multi_k=1, Use_Spactral=False, Use_fractal=False):
         super(multi_block_neq, self).__init__()
         self.in_feature = in_feature
         self.out_feature = out_feature
         self.model = nn.Sequential(*[
-            block_eq(self.in_feature, Use_Spectral=Use_Spactral, Use_fractal=Use_fractal) for _ in range(multi_k)
+            block_eq(self.in_feature,size, Use_Spectral=Use_Spactral, Use_fractal=Use_fractal) for _ in range(multi_k)
         ])
         if Use_Spactral == True:
-            self.out = nn.Sequential(
-                SNConv2d(in_feature, out_feature, (4, 4), stride=2, padding=1), )
+            self.out = nn.Sequential(SNConv2d(in_feature, out_feature, (4, 4), stride=2, padding=1),)
         else:
-            self.out = nn.Sequential(nn.LeakyReLU(1e-2, inplace=False),
-                                     nn.Conv2d(in_feature, out_feature, (4, 4), stride=2, padding=1),
-                                     nn.BatchNorm2d(out_feature, affine=False))
+            self.out = nn.Sequential(nn.Conv2d(in_feature, out_feature, (4, 4), stride=2, padding=1),)
 
     def forward(self, x):
         return self.out(self.model(x))
@@ -490,6 +476,7 @@ class axonLimit(torch.autograd.Function):
             raise KeyError('not have this dataset')
 
 
+
 class DoorMechanism(nn.Module):
     def __init__(self, in_pointnum, out_pointnum, in_feature, out_feature, lr=.9):
         """
@@ -501,37 +488,28 @@ class DoorMechanism(nn.Module):
         self.out_pointnum = out_pointnum
         self.in_feature = in_feature
         self.out_feature = out_feature
-        self.tau_m_weight1 = Parameter(torch.Tensor(in_feature * 2, out_feature),
+        self.tau_m_weight1 = Parameter(torch.Tensor(in_feature, out_feature),
                                        requires_grad=True)
         self.tau_m_weight2 = Parameter(torch.Tensor(in_feature, out_feature),
                                        requires_grad=True)
-        # self.tau_m_weight3 = Parameter(torch.Tensor(in_feature * 2, out_feature),
-        #                                requires_grad=True)
-        self.tau_s_weight1 = Parameter(torch.Tensor(in_feature * 2, out_feature),
+        self.tau_s_weight1 = Parameter(torch.Tensor(in_feature, out_feature),
                                        requires_grad=True)
         self.tau_s_weight2 = Parameter(torch.Tensor(in_feature, out_feature),
                                        requires_grad=True)
-        # self.tau_s_weight3 = Parameter(torch.Tensor(in_feature * 2, out_feature),
-        #                                requires_grad=True)
-        self.tau_sm_weight1 = Parameter(torch.Tensor(in_feature * 2, out_feature),
+        self.tau_sm_weight1 = Parameter(torch.Tensor(in_feature, out_feature),
                                         requires_grad=True)
         self.tau_sm_weight2 = Parameter(torch.Tensor(in_feature, out_feature),
                                         requires_grad=True)
-        self.tau_m_bias1 = Parameter(torch.randn((1, out_feature)).float(), requires_grad=True)
-        self.tau_s_bias1 = Parameter(torch.randn((1, out_feature)).float(), requires_grad=True)
-        self.tau_sm_bias1 = Parameter(torch.randn((1, out_feature)).float(), requires_grad=True)
-        # self.tau_sm_weight3 = Parameter(torch.Tensor(in_feature * 2, out_feature),
-        #                                requires_grad=True)
         stdv = 6. / math.sqrt((in_pointnum // in_feature) * (out_pointnum // out_feature))
-        self.tau_m_weight1.data.uniform_(-2 * stdv, 2 * stdv)
+        self.tau_m_weight1.data.uniform_(-stdv, stdv)
         self.tau_m_weight2.data.uniform_(-stdv, stdv)
-        self.tau_s_weight1.data.uniform_(-2 * stdv, 2 * stdv)
+        self.tau_s_weight1.data.uniform_(-stdv, stdv)
         self.tau_s_weight2.data.uniform_(-stdv, stdv)
-        self.tau_sm_weight1.data.uniform_(-2 * stdv, 2 * stdv)
+        self.tau_sm_weight1.data.uniform_(-stdv, stdv)
         self.tau_sm_weight2.data.uniform_(-stdv, stdv)
-        # self.tau_m_weight3.data.uniform_(-2*stdv, 2*stdv)
-        # self.tau_s_weight3.data.uniform_(-2*stdv, 2*stdv)
-        # self.tau_sm_weight3.data.uniform_(-2*stdv, 2*stdv)
+        self.tau_m_bias = Parameter(torch.zeros((1, out_feature)).float(), requires_grad=True)
+        self.tau_s_bias = Parameter(torch.zeros((1, out_feature)).float(), requires_grad=True)
+        self.tau_sm_bias = Parameter(torch.zeros((1, out_feature)).float(), requires_grad=True)
 
     def forward(self, x1, x2, x3, tau_m, tau_s, tau_sm) -> tuple:
         """
@@ -546,24 +524,21 @@ class DoorMechanism(nn.Module):
         x1 = x1 + torch.eye(x1.shape[-1], dtype=torch.float32).to(x1.device).unsqueeze(0).unsqueeze(0)
         x2 = x2 + torch.eye(x2.shape[-1], dtype=torch.float32).to(x2.device).unsqueeze(0).unsqueeze(0)
         x3 = x3 + torch.eye(x3.shape[-1], dtype=torch.float32).to(x3.device).unsqueeze(0).unsqueeze(0)
-        men_1 = torch.sigmoid(torch.cat((y1, tau_m), dim=-1) @ self.tau_m_weight1 + self.tau_m_bias1)
-        men_2 = torch.sigmoid(torch.cat((y2, tau_s), dim=-1) @ self.tau_s_weight1 + self.tau_s_bias1)
-        men_3 = torch.sigmoid(torch.cat((y3, tau_sm), dim=-1) @ self.tau_sm_weight1 + self.tau_sm_bias1)
-        self.norm_mem_1 = torch.exp(-men_1.std(dim=1).mean())
-        self.norm_mem_2 = torch.exp(-men_2.std(dim=1).mean())
-        self.norm_mem_3 = torch.exp(-men_3.std(dim=1).mean())
-        b, f, h, w = x1.shape
-        z1 = (self.tau_m_weight2 @ (men_1.unsqueeze(-1) * x1.view(x1.shape[0], x1.shape[1], -1))).view(b, f, h, w)
-        z2 = (self.tau_s_weight2 @ (men_2.unsqueeze(-1) * x2.view(x2.shape[0], x2.shape[1], -1))).view(b, f, h, w)
-        z3 = (self.tau_sm_weight2 @ (men_3.unsqueeze(-1) * x3.view(x3.shape[0], x3.shape[1], -1))).view(b, f, h, w)
-        # b,f,h*w
-        result = torch.tanh(z1 + z2 + z3)
-        men_1.detach_()
-        men_2.detach_()
-        men_3.detach_()
+        men_1 = torch.sigmoid(y1 @ self.tau_m_weight2 + tau_m @ self.tau_m_weight1 + self.tau_m_bias)
+        men_2 = torch.sigmoid(y2 @ self.tau_s_weight2 + tau_s @ self.tau_s_weight1 + self.tau_s_bias)
+        men_3 = torch.sigmoid(y3 @ self.tau_sm_weight2 + tau_sm @ self.tau_sm_weight1 + self.tau_sm_bias)
+        self.norm_mem_1 = men_1.norm(p=2, dim=0).mean() / (men_1.numel() / men_1.size()[0])
+        self.norm_mem_2 = men_2.norm(p=2, dim=0).mean() / (men_2.numel() / men_2.size()[0])
+        self.norm_mem_3 = men_3.norm(p=2, dim=0).mean() / (men_3.numel() / men_3.size()[0])
+        result = torch.tanh(
+            men_1.unsqueeze(-1).unsqueeze(-1) * x1 + men_2.unsqueeze(-1).unsqueeze(-1) * x2 + men_3.unsqueeze(
+                -1).unsqueeze(-1) * x3)
+        with torch.no_grad():
+            men_1 = (men_1 * self.lr + (1. - self.lr) * tau_m)
+            men_2 = (men_2 * self.lr + (1. - self.lr) * tau_s)
+            men_3 = (men_3 * self.lr + (1. - self.lr) * tau_sm)
         del tau_s, tau_m, tau_sm, x1, x2, x3, y1, y2, y3
         return (result, men_1, men_2, men_3)
-
 
 class point_cul_Layer(nn.Module):
     def __init__(self, in_pointnum, out_pointnum, in_feature, out_feature, path_len, tau_m=4., tau_s=1.,
@@ -602,10 +577,10 @@ class point_cul_Layer(nn.Module):
                     self.gaussbur = guassNet(in_feature, out_feature, kernel_size=3, requires_grad=True)
             else:
                 if in_feature == out_feature:
-                    self.gaussbur = multi_block_eq(in_feature, multi_k=mult_k, Use_Spactral=True,
+                    self.gaussbur = multi_block_eq(in_feature,self.in_size, multi_k=mult_k, Use_Spactral=True,
                                                    Use_fractal=True)
                 else:
-                    self.gaussbur = multi_block_neq(in_feature, out_feature, multi_k=mult_k, Use_Spactral=True,
+                    self.gaussbur = multi_block_neq(in_feature, out_feature, self.in_size,multi_k=mult_k, Use_Spactral=True,
                                                     Use_fractal=True)
             # self.bn1 = nn.BatchNorm2d(out_feature)
         elif dataoption == 'cifar10':
@@ -616,10 +591,10 @@ class point_cul_Layer(nn.Module):
                     self.gaussbur = guassNet(in_feature, out_feature, kernel_size=3, requires_grad=True)
             else:
                 if in_feature == out_feature:
-                    self.gaussbur = multi_block_eq(in_feature, multi_k=mult_k, Use_Spactral=True, Use_fractal=True)
+                    self.gaussbur = multi_block_eq(in_feature,self.in_size, multi_k=mult_k, Use_Spactral=True, Use_fractal=False)
                 else:
-                    self.gaussbur = multi_block_neq(in_feature, out_feature, multi_k=mult_k, Use_Spactral=True,
-                                                    Use_fractal=True)
+                    self.gaussbur = multi_block_neq(in_feature, out_feature,self.in_size, multi_k=mult_k, Use_Spactral=True,
+                                                    Use_fractal=False)
             # self.bn1 = nn.BatchNorm2d(out_feature)
         elif dataoption == 'svhn':
             if use_gauss == True:
@@ -629,9 +604,9 @@ class point_cul_Layer(nn.Module):
                     self.gaussbur = guassNet(in_feature, out_feature, kernel_size=3, requires_grad=True)
             else:
                 if in_feature == out_feature:
-                    self.gaussbur = multi_block_eq(in_feature, multi_k=mult_k, Use_Spactral=True, Use_fractal=False)
+                    self.gaussbur = multi_block_eq(in_feature,self.in_size, multi_k=mult_k, Use_Spactral=True, Use_fractal=False)
                 else:
-                    self.gaussbur = multi_block_neq(in_feature, out_feature, multi_k=mult_k, Use_Spactral=True,
+                    self.gaussbur = multi_block_neq(in_feature, out_feature,self.in_size ,multi_k=mult_k, Use_Spactral=True,
                                                     Use_fractal=False)
             # self.bn1 = nn.BatchNorm2d(out_feature)
         elif dataoption == 'car':
@@ -642,9 +617,9 @@ class point_cul_Layer(nn.Module):
                     self.gaussbur = guassNet(in_feature, out_feature, kernel_size=3, requires_grad=True)
             else:
                 if in_feature == out_feature:
-                    self.gaussbur = multi_block_eq(in_feature, multi_k=mult_k, Use_Spactral=True, Use_fractal=True)
+                    self.gaussbur = multi_block_eq(in_feature,self.in_size, multi_k=mult_k, Use_Spactral=True, Use_fractal=True)
                 else:
-                    self.gaussbur = multi_block_neq(in_feature, out_feature, multi_k=mult_k, Use_Spactral=True,
+                    self.gaussbur = multi_block_neq(in_feature, out_feature,self.in_size, multi_k=mult_k, Use_Spactral=True,
                                                     Use_fractal=True)
             # self.bn1 = nn.BatchNorm2d(out_feature)
         elif dataoption == 'fashionmnist':
@@ -655,10 +630,10 @@ class point_cul_Layer(nn.Module):
                     self.gaussbur = guassNet(in_feature, out_feature, kernel_size=3, requires_grad=True)
             else:
                 if in_feature == out_feature:
-                    self.gaussbur = multi_block_eq(in_feature, multi_k=mult_k, Use_Spactral=True,
+                    self.gaussbur = multi_block_eq(in_feature, self.in_size,multi_k=mult_k, Use_Spactral=True,
                                                    Use_fractal=True)
                 else:
-                    self.gaussbur = multi_block_neq(in_feature, out_feature, multi_k=mult_k, Use_Spactral=True,
+                    self.gaussbur = multi_block_neq(in_feature, out_feature, self.in_size,multi_k=mult_k, Use_Spactral=True,
                                                     Use_fractal=True)
             # self.bn1 = nn.BatchNorm2d(out_feature)
         elif dataoption == 'eeg':
@@ -669,10 +644,10 @@ class point_cul_Layer(nn.Module):
                     self.gaussbur = guassNet(in_feature, out_feature, kernel_size=3, requires_grad=True)
             else:
                 if in_feature == out_feature:
-                    self.gaussbur = multi_block_eq(in_feature, multi_k=mult_k, Use_Spactral=True,
+                    self.gaussbur = multi_block_eq(in_feature, self.in_size,multi_k=mult_k, Use_Spactral=True,
                                                    Use_fractal=True)
                 else:
-                    self.gaussbur = multi_block_neq(in_feature, out_feature, multi_k=mult_k, Use_Spactral=True,
+                    self.gaussbur = multi_block_neq(in_feature, out_feature, self.in_size,multi_k=mult_k, Use_Spactral=True,
                                                     Use_fractal=True)
         else:
             raise KeyError("not import gaussbur!")

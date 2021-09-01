@@ -13,7 +13,7 @@ def get_optimizer(params, conf, model):
     elif optimizer_choice == 'AdamW':
         lr = optimizer_conf['AdamW']['lr']
         print('optimizer:', optimizer_conf['optimizer_choice'], 'lr:', lr)
-        return torch.optim.AdamW(params=params, lr=lr,weight_decay=1e-4)
+        return torch.optim.AdamW(params=params, lr=lr,weight_decay=optimizer_conf['AdamW']['weight_decay'])
     elif optimizer_choice == 'SGD':
         lr = optimizer_conf['SGD']['lr']
         momentum = optimizer_conf['SGD']['momentum']
