@@ -78,23 +78,25 @@ class PointConv(nn.Module):
         # self.bias=nn.ParameterList(self.bias)
 
         self.weight = Parameter(
-            torch.Tensor(self.L,self.kernel_size[0] * self.kernel_size[1], self.kernel_size[0] * self.kernel_size[1]),
+            torch.Tensor(self.L,self.kernel_size[0] * self.kernel_size[1]*self.grouping, self.kernel_size[0] * self.kernel_size[1]*self.grouping),
             requires_grad=True)
         stdv = 6. / math.sqrt(self.weight.data.numel()//self.weight.data.shape[0])
         self.weight.data.uniform_(-stdv, stdv)
-        self.bias = Parameter(torch.zeros(1, 1, self.kernel_size[0] * self.kernel_size[1],self.L), requires_grad=True)
+        self.bias = Parameter(torch.zeros(1, 1, self.kernel_size[0] * self.kernel_size[1]*self.grouping,self.L), requires_grad=True)
 
     def add_pad(self, x):
         return self.usepad(x)
 
     def reshape(self, patch_image):
         B, C_kh_kw, L = patch_image.size()
-        patch_image = patch_image.view(B, self.in_feature, self.kernel_size[0] * self.kernel_size[1], L)
+        assert self.in_feature%self.grouping==0
+        patch_image = patch_image.view(B, self.in_feature//self.grouping, -1, L)
         return patch_image
 
     def patch_image_conv(self, patch_image_tuple):
-        m=torch.einsum("bcnl,lnp->bcpl",patch_image_tuple,self.weight)+self.bias
-        r=F.fold(m.view(m.size()[0],-1,m.size()[-1]),self.out_point,self.kernel_size,stride=self.kernel_size)
+        B,C,H,L=patch_image_tuple.size()
+        m=(torch.einsum("bcnl,lnp->bcpl",patch_image_tuple,self.weight)+self.bias).view(B,-1,L)
+        r=F.fold(m,self.out_point,self.kernel_size,stride=self.kernel_size)
 
         return r
 
@@ -104,15 +106,14 @@ class PointConv(nn.Module):
         patch_image = self.reshape(patch_image)
         return self.patch_image_conv(patch_image)
 #
-#
-# c = PointConv((4, 4), 1, (8, 8), (8, 8))
+# c = PointConv((4, 4), 10, (8, 8), (8, 8))
 # X=torch.tensor([[1,0,1,1,1,0,0,1],
-#                          [2,3,4,5,6,7,8,9],
-#                          [3,2,1,0,-1,-2,-3,-4],
-#                          [1,2,3,4,5,6,7,8],
-#                          [0,0,0,0,0,0,0,0],
-#                          [1,1,1,1,1,1,1,1],
-#                          [2,2,2,2,2,2,2,2],
-#                          [3,3,3,3,3,3,3,3]],dtype=torch.float32)
-# X=X.unsqueeze(0).unsqueeze(0)
+#                           [2,3,4,5,6,7,8,9],
+#                           [3,2,1,0,-1,-2,-3,-4],
+#                           [1,2,3,4,5,6,7,8],
+#                           [0,0,0,0,0,0,0,0],
+#                           [1,1,1,1,1,1,1,1],
+#                           [2,2,2,2,2,2,2,2],
+#                           [3,3,3,3,3,3,3,3]],dtype=torch.float32)
+# X=X.unsqueeze(0).unsqueeze(0).repeat(1,10,1,1)
 # print(c(X))

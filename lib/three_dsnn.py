@@ -223,22 +223,24 @@ class block_eq(nn.Module):
     def __init__(self, eq_feature,size, Use_Spectral=False, Use_fractal=False):
         super(block_eq, self).__init__()
         self.eq_feature = eq_feature
-        self.Conv = nn.Sequential(*[nn.BatchNorm2d(eq_feature),
-                                    nn.Conv2d(eq_feature, eq_feature, (3, 3), stride=_pair(1), padding=(1, 1),bias=True),
-                                    nn.ReLU(inplace=True),
-                                    nn.Conv2d(eq_feature, eq_feature, (3, 3), stride=_pair(1), padding=(1, 1),bias=True),
-                                    PointConv((min(4,size),min(4,size)),eq_feature,(size,size),(size,size)),
-                                    nn.LayerNorm([size,size])])
+        self.weight=Parameter(torch.eye(size**2,size**2)+torch.randn(size**2,size**2),requires_grad=True)
+        self.Conv = nn.Sequential(*[
+                                    nn.BatchNorm2d(eq_feature),
+                                    nn.GELU(),
+                                    PointConv((min(1,size),min(1,size)),eq_feature,(size,size),(size,size)),
+                                    nn.LayerNorm([size,size])]
+                                    )
         self.Use_fractal = Use_fractal
         if self.Use_fractal is True:
             self.merged = LastJoiner(2)
 
     def forward(self, x):
+        b,c,h,w=x.size()
         if self.Use_fractal == False:
-            x1 = self.Conv(x)
+            x1 = self.Conv((x.view(b,c,-1)@self.weight).view(b,c,h,w))+x
         else:
-            x1 = self.Conv(x)
-        x2 = F.relu(x1+x)
+            x1 = self.merged([self.Conv((x.view(b,c,-1)@self.weight).view(b,c,h,w)),x])
+        x2 = F.relu(x1)
         del x,x1
         return x2
 
