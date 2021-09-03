@@ -150,98 +150,71 @@ class block_out(nn.Module):
             return self.classifiar(F.avg_pool2d(x, x.shape[-1]))
 
 
-# class block_out(nn.Module):
-#     def __init__(self, in_feature, out_feature, classes, size, use_pool="max"):
-#         super(block_out, self).__init__()
-#         self.tmp_feature = int(math.sqrt(in_feature * out_feature))
-#         self.bn_out = nn.BatchNorm2d(in_feature)
-#         self.conv2 = nn.Conv2d(in_feature, self.tmp_feature, (2, 2), stride=2, padding=0, bias=True)
-#         self.bn2 = nn.BatchNorm2d(self.tmp_feature)
-#         self.conv2_1 = nn.Conv2d(in_feature, out_feature, (2, 2), stride=2, padding=0, bias=True)
-#         self.bn2_1 = nn.BatchNorm2d(out_feature)
-#         self.shortcut2 = Shortcut(in_feature, self.tmp_feature)
-#         self.shortcut2_1 = Shortcut(in_feature, out_feature)
-#         self.shortcut1 = Shortcut(self.tmp_feature, out_feature)
-#         self.shortcut0 = Shortcut(in_feature, out_feature, proportion=4)
-#         self.shortcut0_1 = Shortcut(in_feature, out_feature, proportion=2)
-#         self.conv1 = nn.Conv2d(self.tmp_feature, out_feature, (2, 2), stride=2, padding=0, bias=True)
-#         self.bn1 = nn.BatchNorm2d(out_feature)
-#         if use_pool == 'max':
-#             self.maxpool_1 = nn.MaxPool2d(kernel_size=_pair(1), padding=0, stride=1)
-#             self.maxpool = nn.MaxPool2d(kernel_size=_pair(1), padding=0, stride=1)
-#             self.linear = nn.Sequential(*[
-#                 nn.Flatten(),
-#                 nn.Linear(size * size * out_feature // 16, classes)
-#             ])
-#         elif use_pool == 'avg':
-#             self.maxpool_1 = nn.AvgPool2d(kernel_size=_pair(1), padding=0, stride=1)
-#             self.maxpool = nn.AvgPool2d(kernel_size=_pair(1), padding=0, stride=1)
-#             self.linear = nn.Sequential(*[
-#                 nn.Flatten(),
-#                 nn.Linear(size * size * out_feature // 16, classes)
-#             ])
-#         elif use_pool == 'none':
-#             self.linear_1 = nn.Sequential(*[
-#                 nn.Flatten(),
-#                 nn.Linear(size * size * out_feature // 16, classes)
-#             ])
-#             pass
-#         self.use_pool = use_pool
-#
-#     def forward(self, x):
-#         if dataoption == 'cifar10' or dataoption == 'fashionmnist' or dataoption == 'mnist':
-#             x1 = self.bn_out(x) + x
-#             x2 = self.bn2(self.conv2(F.relu_(x1)))  # + self.shortcut2(x1)  # [32,8,8]
-#             x3 = self.bn1(self.conv1(F.relu_(x2))) + self.shortcut0(x)  # + self.shortcut1(x2)+self.shortcut0(x)
-#             if self.use_pool != 'none':
-#                 x3 = self.maxpool(F.leaky_relu_(x3))
-#                 x3 = self.linear(x3)
-#             else:
-#                 x3 = self.linear_1(x3)
-#         else:
-#             raise KeyError("not import")
-#         # elif dataoption == 'mnist' or dataoption == 'fashionmnist':
-#         #     x1 = self.bn_out(x) + x
-#         #     x2 = self.bn2_1(self.conv2_1(F.relu_(x1))) + self.shortcut0_1(
-#         #         x)  # + self.shortcut2_1(x1)+self.shortcut0_1(x)  # [32,8,8]
-#         #     if self.use_pool != 'none':
-#         #         if self.use_pool == 'max':
-#         #             relu = F.relu_
-#         #         else:
-#         #             relu = F.leaky_relu_
-#         #         x2 = self.maxpool_1(relu(x2))
-#         #         x3 = self.linear2(x2)
-#         #     else:
-#         #         x3 = self.linear2_1(x2)
-#         #
-#         # else:
-#         #     raise KeyError('not is True')
-#         return x3
-
-
 class block_eq(nn.Module):
-    def __init__(self, eq_feature,size, Use_Spectral=False, Use_fractal=False):
+    def __init__(self, eq_feature, size,Use_Spectral=False, Use_fractal=False):
         super(block_eq, self).__init__()
         self.eq_feature = eq_feature
-        self.Conv = nn.Sequential(*[
-                                    nn.BatchNorm2d(eq_feature),
-                                    nn.GELU(),
-                                    nn.Conv2d(eq_feature,eq_feature,(5,5),(1,1),(2,2)),
-                                    nn.LayerNorm([size,size])]
-                                    )
+        self.longConv = nn.Sequential(*[
+            nn.ReflectionPad2d(1),
+            nn.Conv2d(eq_feature, eq_feature * 2, (3, 3), stride=_pair(1), padding=0,
+                      bias=True) if Use_Spectral == False else SNConv2d(eq_feature, eq_feature * 2, (3, 3), stride=1,
+                                                                        padding=0, bias=True),
+            nn.BatchNorm2d(eq_feature * 2),
+            nn.ReLU(inplace=True),
+            nn.ReflectionPad2d(1),
+            nn.Conv2d(eq_feature * 2, eq_feature, (3, 3), stride=_pair(1), padding=0,
+                      bias=True) if Use_Spectral == False else SNConv2d(eq_feature * 2, eq_feature, (3, 3), stride=1,
+                                                                        padding=0, bias=True),
+            nn.BatchNorm2d(eq_feature),
+        ])
+        self.shortConv = nn.Sequential(*[
+            Shortcut(eq_feature, eq_feature, use_same=True),
+        ])
+        self.shortConv_1 = nn.Sequential(*[
+            nn.ReflectionPad2d(1),
+            nn.Conv2d(eq_feature, eq_feature, (3, 3), stride=_pair(1), padding=0,
+                      bias=True) if Use_Spectral == False else SNConv2d(eq_feature, eq_feature, (3, 3), stride=1,
+                                                                        padding=0, bias=True),
+            nn.BatchNorm2d(eq_feature),
+            Shortcut(eq_feature, eq_feature, use_same=True),
+        ])
+        self.bn_eq = nn.BatchNorm2d(eq_feature)
         self.Use_fractal = Use_fractal
         if self.Use_fractal is True:
             self.merged = LastJoiner(2)
 
     def forward(self, x):
-        b,c,h,w=x.size()
         if self.Use_fractal == False:
-            x1 = self.Conv(x)+x
+            x1 = self.longConv(x) + self.shortConv(x)
         else:
-            x1 = self.merged([self.Conv(x),x])
-        x2 = F.relu(x1)
-        del x,x1
+            x1 = self.merged([self.longConv(x), self.shortConv_1(x)])
+        x2 = F.relu(x1, inplace=True)
+        del x
         return x2
+#
+# class block_eq(nn.Module):
+#     def __init__(self, eq_feature,size, Use_Spectral=False, Use_fractal=False):
+#         super(block_eq, self).__init__()
+#         self.eq_feature = eq_feature
+#         self.Conv = nn.Sequential(*[
+#                                     nn.BatchNorm2d(eq_feature),
+#                                     nn.GELU(),
+#                                     nn.Conv2d(eq_feature,eq_feature,(5,5),(1,1),(2,2)),
+#                                     nn.LayerNorm([size,size])]
+#                                     )
+#         self.Use_fractal = Use_fractal
+#         if self.Use_fractal is True:
+#             self.merged = LastJoiner(2)
+#
+#     def forward(self, x):
+#         b,c,h,w=x.size()
+#         if self.Use_fractal == False:
+#             x1 = self.Conv(x)+x
+#         else:
+#             x1 = self.merged([self.Conv(x),x])
+#         x2 = F.relu(x1)
+#         del x,x1
+#         return x2
 
 
 class multi_block_eq(nn.Module):
