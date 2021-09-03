@@ -107,21 +107,27 @@ def load_data_svhn(train_batch_size, test_batch_size, data_url=None):
     test_loader = DataLoader(test_data, test_batch_size, shuffle=True, num_workers=4, drop_last=True)
     return train_loader, test_loader
 
-def load_data(train_batch_size, test_batch_size, data_url=None):
+def load_data(train_batch_size, test_batch_size, data_url=None ,use_standard=True):
     if data_url == None:
         data_url = './data'
+    def get_statistics():
+        train_set=torchvision.datasets.CIFAR10(root=data_url,train=True,download=True,transform=transforms.ToTensor())
+        data=torch.cat([d[0] for d in DataLoader(train_set)])
+        return data.mean(dim=[0,2,3]),data.std(dim=[0,2,3])
+    mean,std=get_statistics()
     train_transform = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)) if use_standard==True else
+        transforms.Normalize(mean, std) ,
     ])
 
     test_trainsform = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)) if use_standard == True else
+        transforms.Normalize(mean, std),
     ])
-
     train_set = torchvision.datasets.CIFAR10(root=data_url, train=True,
                                              download=True, transform=train_transform)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=train_batch_size,

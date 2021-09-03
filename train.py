@@ -270,7 +270,9 @@ if __name__ == "__main__":
     params_sub=list(map(id,model.out_classifier.parameters()))
     params2 = list(filter(lambda i: i.requires_grad and id(i) not in params_sub, model.parameters()))
     dict_list1=dict(params=params1,weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay'])
-    dict_list2=dict(params=params2,weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay']/2)
+    dict_list2=dict(params=params2,
+                   # weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay']/2
+                    )
     optimizer = get_optimizer([dict_list1,dict_list2], yaml, model)
     scheduler = get_scheduler(optimizer, yaml)
     criterion_loss = torch.nn.CrossEntropyLoss()
@@ -278,7 +280,7 @@ if __name__ == "__main__":
     sum=0
     for parameter in model.named_parameters():
         sum+=parameter[1].numel()
-    print(sum)
+    print(f"{round(sum/1e6,2)}M")
 
     if torch.cuda.is_available():
         criterion_loss = criterion_loss.cuda()
