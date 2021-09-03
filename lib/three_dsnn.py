@@ -223,11 +223,10 @@ class block_eq(nn.Module):
     def __init__(self, eq_feature,size, Use_Spectral=False, Use_fractal=False):
         super(block_eq, self).__init__()
         self.eq_feature = eq_feature
-        self.weight=Parameter(torch.eye(size**2,size**2)+torch.randn(size**2,size**2),requires_grad=True)
         self.Conv = nn.Sequential(*[
                                     nn.BatchNorm2d(eq_feature),
                                     nn.GELU(),
-                                    PointConv((min(1,size),min(1,size)),eq_feature,(size,size),(size,size)),
+                                    nn.Conv2d(eq_feature,eq_feature,(5,5),(1,1),(2,2)),
                                     nn.LayerNorm([size,size])]
                                     )
         self.Use_fractal = Use_fractal
@@ -237,9 +236,9 @@ class block_eq(nn.Module):
     def forward(self, x):
         b,c,h,w=x.size()
         if self.Use_fractal == False:
-            x1 = self.Conv((x.view(b,c,-1)@self.weight).view(b,c,h,w))+x
+            x1 = self.Conv(x)+x
         else:
-            x1 = self.merged([self.Conv((x.view(b,c,-1)@self.weight).view(b,c,h,w)),x])
+            x1 = self.merged([self.Conv(x),x])
         x2 = F.relu(x1)
         del x,x1
         return x2
