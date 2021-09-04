@@ -150,79 +150,92 @@ class block_out(nn.Module):
             return self.classifiar(F.avg_pool2d(x, x.shape[-1]))
 
 
-class block_eq(nn.Module):
-    def __init__(self, eq_feature, size,Use_Spectral=False, Use_fractal=False):
-        super(block_eq, self).__init__()
-        self.eq_feature = eq_feature
-        self.longConv = nn.Sequential(*[
-            nn.ReflectionPad2d(1),
-            nn.Conv2d(eq_feature, eq_feature * 2, (3, 3), stride=_pair(1), padding=0,
-                      bias=True) if Use_Spectral == False else SNConv2d(eq_feature, eq_feature * 2, (3, 3), stride=1,
-                                                                        padding=0, bias=True),
-            nn.BatchNorm2d(eq_feature * 2),
-            nn.ReLU(inplace=True),
-            nn.ReflectionPad2d(1),
-            nn.Conv2d(eq_feature * 2, eq_feature, (3, 3), stride=_pair(1), padding=0,
-                      bias=True) if Use_Spectral == False else SNConv2d(eq_feature * 2, eq_feature, (3, 3), stride=1,
-                                                                        padding=0, bias=True),
-            nn.BatchNorm2d(eq_feature),
-        ])
-        self.shortConv = nn.Sequential(*[
-            Shortcut(eq_feature, eq_feature, use_same=True),
-        ])
-        self.shortConv_1 = nn.Sequential(*[
-            nn.ReflectionPad2d(1),
-            nn.Conv2d(eq_feature, eq_feature, (3, 3), stride=_pair(1), padding=0,
-                      bias=True) if Use_Spectral == False else SNConv2d(eq_feature, eq_feature, (3, 3), stride=1,
-                                                                        padding=0, bias=True),
-            nn.BatchNorm2d(eq_feature),
-            Shortcut(eq_feature, eq_feature, use_same=True),
-        ])
-        self.bn_eq = nn.BatchNorm2d(eq_feature)
-        self.Use_fractal = Use_fractal
-        if self.Use_fractal is True:
-            self.merged = LastJoiner(2)
 
-    def forward(self, x):
-        if self.Use_fractal == False:
-            x1 = self.longConv(x) + self.shortConv(x)
-        else:
-            x1 = self.merged([self.longConv(x), self.shortConv_1(x)])
-        x2 = F.relu(x1, inplace=True)
-        del x
-        return x2
-#
+class block_eq(nn.Module):
+ def __init__(self, eq_feature, size,Use_Spectral=False, Use_fractal=False):
+     super(block_eq, self).__init__()
+     self.eq_feature = eq_feature
+     self.longConv = nn.Sequential(*[
+         nn.ReflectionPad2d(1),
+         nn.Conv2d(eq_feature, eq_feature * 2, (3, 3), stride=_pair(1), padding=0,
+                   bias=True) if Use_Spectral == False else SNConv2d(eq_feature, eq_feature * 2, (3, 3), stride=1,
+                                                                     padding=0, bias=True),
+         nn.BatchNorm2d(eq_feature * 2),
+         nn.ReLU(inplace=True),
+         nn.ReflectionPad2d(1),
+         nn.Conv2d(eq_feature * 2, eq_feature, (3, 3), stride=_pair(1), padding=0,
+                   bias=True) if Use_Spectral == False else SNConv2d(eq_feature * 2, eq_feature, (3, 3), stride=1,
+                                                                     padding=0, bias=True),
+         nn.BatchNorm2d(eq_feature),
+     ])
+     self.shortConv = nn.Sequential(*[
+         Shortcut(eq_feature, eq_feature, use_same=True),
+     ])
+     self.shortConv_1 = nn.Sequential(*[
+         nn.ReflectionPad2d(1),
+         nn.Conv2d(eq_feature, eq_feature, (3, 3), stride=_pair(1), padding=0,
+                   bias=True) if Use_Spectral == False else SNConv2d(eq_feature, eq_feature, (3, 3), stride=1,
+                                                                     padding=0, bias=True),
+         nn.BatchNorm2d(eq_feature),
+         Shortcut(eq_feature, eq_feature, use_same=True),
+     ])
+     self.bn_eq = nn.BatchNorm2d(eq_feature)
+     self.Use_fractal = Use_fractal
+     if self.Use_fractal is True:
+         self.merged = LastJoiner(2)
+
+ def forward(self, x):
+     if self.Use_fractal == False:
+         x1 = self.longConv(x) + self.shortConv(x)
+     else:
+         x1 = self.merged([self.longConv(x), self.shortConv_1(x)])
+     x2 = F.relu(x1, inplace=True)
+     del x
+     return x2
+
 # class block_eq(nn.Module):
-#     def __init__(self, eq_feature,size, Use_Spectral=False, Use_fractal=False):
+#     def __init__(self, eq_feature, size, Use_Spectral=False, Use_fractal=False):
 #         super(block_eq, self).__init__()
 #         self.eq_feature = eq_feature
-#         self.Conv = nn.Sequential(*[
-#                                     nn.BatchNorm2d(eq_feature),
-#                                     nn.GELU(),
-#                                     nn.Conv2d(eq_feature,eq_feature,(5,5),(1,1),(2,2)),
-#                                     nn.LayerNorm([size,size])]
-#                                     )
+#         self.RowConv = nn.Sequential(*[
+#             nn.BatchNorm2d(eq_feature),
+#             nn.ReLU(inplace=True),
+#             nn.Conv2d(eq_feature, eq_feature, (1, 5), (1, 1), (0, 2)),
+#             nn.BatchNorm2d(eq_feature),
+#             nn.ReLU(inplace=True),
+#             nn.Conv2d(eq_feature, eq_feature, (5, 1), (1, 1), (2, 0)),
+#         ]
+#                                      )
+#         self.ColConv = nn.Sequential(*[
+#             nn.BatchNorm2d(eq_feature),
+#             nn.ReLU(inplace=True),
+#             nn.Conv2d(eq_feature, eq_feature, (5, 1), (1, 1), (2, 0)),
+#             nn.BatchNorm2d(eq_feature),
+#             nn.ReLU(inplace=True),
+#             nn.Conv2d(eq_feature, eq_feature, (1, 5), (1, 1), (0, 2)),
+#         ]
+#                                      )
 #         self.Use_fractal = Use_fractal
 #         if self.Use_fractal is True:
 #             self.merged = LastJoiner(2)
 #
 #     def forward(self, x):
-#         b,c,h,w=x.size()
+#         b, c, h, w = x.size()
 #         if self.Use_fractal == False:
-#             x1 = self.Conv(x)+x
+#             x1 = self.RowConv(x) + self.ColConv(x)
 #         else:
-#             x1 = self.merged([self.Conv(x),x])
+#             x1 = self.merged([self.RowConv(x), self.ColConv(x)])
 #         x2 = F.relu(x1)
-#         del x,x1
+#         del x, x1
 #         return x2
 
 
 class multi_block_eq(nn.Module):
-    def __init__(self, eq_feature,size, multi_k=1,Use_Spactral=False, Use_fractal=False):
+    def __init__(self, eq_feature, size, multi_k=1, Use_Spactral=False, Use_fractal=False):
         super(multi_block_eq, self).__init__()
         self.eq_feature = eq_feature
         self.model = nn.Sequential(*[
-            block_eq(self.eq_feature,size, Use_Spectral=Use_Spactral, Use_fractal=Use_fractal) for _ in range(multi_k)
+            block_eq(self.eq_feature, size, Use_Spectral=Use_Spactral, Use_fractal=Use_fractal) for _ in range(multi_k)
         ])
 
     def forward(self, x):
@@ -230,17 +243,17 @@ class multi_block_eq(nn.Module):
 
 
 class multi_block_neq(nn.Module):
-    def __init__(self, in_feature, out_feature, size,multi_k=1, Use_Spactral=False, Use_fractal=False):
+    def __init__(self, in_feature, out_feature, size, multi_k=1, Use_Spactral=False, Use_fractal=False):
         super(multi_block_neq, self).__init__()
         self.in_feature = in_feature
         self.out_feature = out_feature
         self.model = nn.Sequential(*[
-            block_eq(self.in_feature,size, Use_Spectral=Use_Spactral, Use_fractal=Use_fractal) for _ in range(multi_k)
+            block_eq(self.in_feature, size, Use_Spectral=Use_Spactral, Use_fractal=Use_fractal) for _ in range(multi_k)
         ])
         if Use_Spactral == True:
-            self.out = nn.Sequential(SNConv2d(in_feature, out_feature, (4, 4), stride=2, padding=1),)
+            self.out = nn.Sequential(SNConv2d(in_feature, out_feature, (4, 4), stride=2, padding=1), )
         else:
-            self.out = nn.Sequential(nn.Conv2d(in_feature, out_feature, (4, 4), stride=2, padding=1),)
+            self.out = nn.Sequential(nn.Conv2d(in_feature, out_feature, (4, 4), stride=2, padding=1), )
 
     def forward(self, x):
         return self.out(self.model(x))
@@ -450,7 +463,6 @@ class axonLimit(torch.autograd.Function):
             raise KeyError('not have this dataset')
 
 
-
 class DoorMechanism(nn.Module):
     def __init__(self, in_pointnum, out_pointnum, in_feature, out_feature, lr=.9):
         """
@@ -514,6 +526,7 @@ class DoorMechanism(nn.Module):
         del tau_s, tau_m, tau_sm, x1, x2, x3, y1, y2, y3
         return (result, men_1, men_2, men_3)
 
+
 class point_cul_Layer(nn.Module):
     def __init__(self, in_pointnum, out_pointnum, in_feature, out_feature, path_len, tau_m=4., tau_s=1.,
                  grad_small=False,
@@ -551,12 +564,13 @@ class point_cul_Layer(nn.Module):
                     self.gaussbur = guassNet(in_feature, out_feature, kernel_size=3, requires_grad=True)
             else:
                 if in_feature == out_feature:
-                    self.gaussbur = multi_block_eq(in_feature,self.in_size, multi_k=mult_k, Use_Spactral=True,
+                    self.gaussbur = multi_block_eq(in_feature, self.in_size, multi_k=mult_k, Use_Spactral=True,
                                                    Use_fractal=True)
                 else:
-                    self.gaussbur = multi_block_neq(in_feature, out_feature, self.in_size,multi_k=mult_k, Use_Spactral=True,
+                    self.gaussbur = multi_block_neq(in_feature, out_feature, self.in_size, multi_k=mult_k,
+                                                    Use_Spactral=True,
                                                     Use_fractal=True)
-            # self.bn1 = nn.BatchNorm2d(out_feature)
+            self.bn1 = nn.BatchNorm2d(out_feature)
         elif dataoption == 'cifar10':
             if use_gauss == True:
                 if in_feature == out_feature:
@@ -565,11 +579,13 @@ class point_cul_Layer(nn.Module):
                     self.gaussbur = guassNet(in_feature, out_feature, kernel_size=3, requires_grad=True)
             else:
                 if in_feature == out_feature:
-                    self.gaussbur = multi_block_eq(in_feature,self.in_size, multi_k=mult_k, Use_Spactral=True, Use_fractal=False)
+                    self.gaussbur = multi_block_eq(in_feature, self.in_size, multi_k=mult_k, Use_Spactral=True,
+                                                   Use_fractal=True)
                 else:
-                    self.gaussbur = multi_block_neq(in_feature, out_feature,self.in_size, multi_k=mult_k, Use_Spactral=True,
-                                                    Use_fractal=False)
-            # self.bn1 = nn.BatchNorm2d(out_feature)
+                    self.gaussbur = multi_block_neq(in_feature, out_feature, self.in_size, multi_k=mult_k,
+                                                    Use_Spactral=True,
+                                                    Use_fractal=True)
+            self.bn1 = nn.BatchNorm2d(out_feature)
         elif dataoption == 'svhn':
             if use_gauss == True:
                 if in_feature == out_feature:
@@ -578,11 +594,13 @@ class point_cul_Layer(nn.Module):
                     self.gaussbur = guassNet(in_feature, out_feature, kernel_size=3, requires_grad=True)
             else:
                 if in_feature == out_feature:
-                    self.gaussbur = multi_block_eq(in_feature,self.in_size, multi_k=mult_k, Use_Spactral=True, Use_fractal=False)
+                    self.gaussbur = multi_block_eq(in_feature, self.in_size, multi_k=mult_k, Use_Spactral=True,
+                                                   Use_fractal=True)
                 else:
-                    self.gaussbur = multi_block_neq(in_feature, out_feature,self.in_size ,multi_k=mult_k, Use_Spactral=True,
-                                                    Use_fractal=False)
-            # self.bn1 = nn.BatchNorm2d(out_feature)
+                    self.gaussbur = multi_block_neq(in_feature, out_feature, self.in_size, multi_k=mult_k,
+                                                    Use_Spactral=True,
+                                                    Use_fractal=True)
+            self.bn1 = nn.BatchNorm2d(out_feature)
         elif dataoption == 'car':
             if use_gauss == True:
                 if in_feature == out_feature:
@@ -591,11 +609,13 @@ class point_cul_Layer(nn.Module):
                     self.gaussbur = guassNet(in_feature, out_feature, kernel_size=3, requires_grad=True)
             else:
                 if in_feature == out_feature:
-                    self.gaussbur = multi_block_eq(in_feature,self.in_size, multi_k=mult_k, Use_Spactral=True, Use_fractal=True)
+                    self.gaussbur = multi_block_eq(in_feature, self.in_size, multi_k=mult_k, Use_Spactral=True,
+                                                   Use_fractal=True)
                 else:
-                    self.gaussbur = multi_block_neq(in_feature, out_feature,self.in_size, multi_k=mult_k, Use_Spactral=True,
+                    self.gaussbur = multi_block_neq(in_feature, out_feature, self.in_size, multi_k=mult_k,
+                                                    Use_Spactral=True,
                                                     Use_fractal=True)
-            # self.bn1 = nn.BatchNorm2d(out_feature)
+            self.bn1 = nn.BatchNorm2d(out_feature)
         elif dataoption == 'fashionmnist':
             if use_gauss == True:
                 if in_feature == out_feature:
@@ -604,12 +624,13 @@ class point_cul_Layer(nn.Module):
                     self.gaussbur = guassNet(in_feature, out_feature, kernel_size=3, requires_grad=True)
             else:
                 if in_feature == out_feature:
-                    self.gaussbur = multi_block_eq(in_feature, self.in_size,multi_k=mult_k, Use_Spactral=True,
+                    self.gaussbur = multi_block_eq(in_feature, self.in_size, multi_k=mult_k, Use_Spactral=True,
                                                    Use_fractal=True)
                 else:
-                    self.gaussbur = multi_block_neq(in_feature, out_feature, self.in_size,multi_k=mult_k, Use_Spactral=True,
+                    self.gaussbur = multi_block_neq(in_feature, out_feature, self.in_size, multi_k=mult_k,
+                                                    Use_Spactral=True,
                                                     Use_fractal=True)
-            # self.bn1 = nn.BatchNorm2d(out_feature)
+            self.bn1 = nn.BatchNorm2d(out_feature)
         elif dataoption == 'eeg':
             if use_gauss == True:
                 if in_feature == out_feature:
@@ -618,14 +639,15 @@ class point_cul_Layer(nn.Module):
                     self.gaussbur = guassNet(in_feature, out_feature, kernel_size=3, requires_grad=True)
             else:
                 if in_feature == out_feature:
-                    self.gaussbur = multi_block_eq(in_feature, self.in_size,multi_k=mult_k, Use_Spactral=True,
+                    self.gaussbur = multi_block_eq(in_feature, self.in_size, multi_k=mult_k, Use_Spactral=True,
                                                    Use_fractal=True)
                 else:
-                    self.gaussbur = multi_block_neq(in_feature, out_feature, self.in_size,multi_k=mult_k, Use_Spactral=True,
+                    self.gaussbur = multi_block_neq(in_feature, out_feature, self.in_size, multi_k=mult_k,
+                                                    Use_Spactral=True,
                                                     Use_fractal=True)
+            self.bn1 = nn.BatchNorm2d(out_feature)
         else:
             raise KeyError("not import gaussbur!")
-            # self.bn1 = nn.BatchNorm2d(out_feature)
         self.STuning = STuning
         self.grad_lr = grad_lr
         self.sigma = 1
@@ -780,9 +802,9 @@ class three_dim_Layer(nn.Module):
         """
         x,y=>[batchsize,64,x_pointnum//2,y_pointnum//2]
         """
-        # x = torch.tanh(x)
-        # y = torch.tanh(y)
-        # z = torch.tanh(z)
+        x = torch.tanh(x)
+        y = torch.tanh(y)
+        z = torch.tanh(z)
         old = [[x, y, z], ]
         for num in range(max(self.z, self.y, self.x)):
             xx = x
@@ -793,22 +815,25 @@ class three_dim_Layer(nn.Module):
                 out_1 = self.point_layer_module[str(num) + '_' + str(0)](xx, yy, zz)
             else:
                 out_1 = zz.clone()
+            print(x[0,0,0,0])
             xx = y
             yy = z
-            zz = size_change(xx.shape[1], xx.shape[2])(out_1.clone())
+            zz = x
 
             if num < self.x:
                 out_2 = self.point_layer_module[str(num) + '_' + str(1)](xx, yy, zz)
             else:
                 out_2 = zz.clone()
+            print(x[0,0,0,0])
             xx = z
-            yy = size_change(xx.shape[1], xx.shape[2])(out_1.clone())
-            zz = size_change(xx.shape[1], xx.shape[2])(out_2.clone())
+            yy = x
+            zz = y
 
             if num < self.x:
                 out_3 = self.point_layer_module[str(num) + '_' + str(2)](xx, yy, zz)
             else:
                 out_3 = zz.clone()
+            print(x[0,0,0,0])
             m = size_change(out_1.shape[1], out_1.shape[2])
             x = batch_norm(torch.div((out_1 + m(x)), 1.2))
             y = batch_norm(torch.div((out_2 + m(y)), 1.2))
@@ -840,7 +865,8 @@ class three_dim_Layer(nn.Module):
         #                 tensor_prev[j][k]= self.dropout[0][j][k](tensor_prev[j][k])
         # return tensor_prev[-1][-1]
 
-    def initiate_layer(self, data, in_feature, out_feature, tau_m=4., tau_s=1., use_gauss=True, mult_k=2):
+    def initiate_layer(self, data, in_feature, out_feature, tau_m=4., tau_s=1., use_gauss=True, mult_k=2,
+                       set_share_layer=True):
         """
         three-dim层初始化节点
         """
@@ -875,9 +901,24 @@ class three_dim_Layer(nn.Module):
                                                                           weight_require_grad=self.weight_require_grad,
                                                                           p=self.p, device=self.device,
                                                                           grad_lr=self.grad_lr)
+            if set_share_layer == True:
+                self.set_share_twodimlayer(self.point_layer[str(num)+"_0"],self.point_layer[str(num)+"_1"],self.point_layer[str(num)+"_2"],tmp_list)
         self.point_layer_module = nn.ModuleDict(self.point_layer)
         del self.point_layer
+
+
         return self.feature_len[-1], data.shape[1] // self.div_len[-1]
+
+    def set_share_twodimlayer(self, layer1, layer2, layer3, tmp_list):
+        layer1: two_dim_layer
+        layer2: two_dim_layer
+        layer3: two_dim_layer
+        layer3.point_layer_module[str(0) + '_' + str(0)] = layer2.point_layer_module[str(0) + '_' + str(0)] = \
+        layer1.point_layer_module[str(0) + '_' + str(0)]
+        for i in range(1, tmp_list[0]):
+            layer2.point_layer_module[str(0) + '_' + str(i)] = layer1.point_layer_module[str(i) + '_' + str(0)]
+            layer3.point_layer_module[str(0) + '_' + str(i)] = layer2.point_layer_module[str(i) + '_' + str(0)]
+            layer1.point_layer_module[str(0) + '_' + str(i)] = layer3.point_layer_module[str(i) + '_' + str(0)]
 
 
 class InputGenerateNet(nn.Module):
@@ -897,7 +938,7 @@ class InputGenerateNet(nn.Module):
         return self.three_dim_layer(x, y, z)
 
     def initiate_layer(self, input, in_feature, out_feature, tau_m=4., tau_s=1., use_gauss=True, batchsize=64,
-                       old_in_feature=1, old_out_feature=1, mult_k=2, p=0.2):
+                       old_in_feature=1, old_out_feature=1, mult_k=2, p=0.2,use_share_layer=True):
         if dataoption == 'mnist' or dataoption == 'fashionmnist':
             input = torch.randn(input.shape[0], 1 * 32 * 32).to(input.device)
         elif dataoption in ['cifar10', 'car', "svhn"]:
@@ -907,7 +948,7 @@ class InputGenerateNet(nn.Module):
         self.three_dim_layer.initiate_layer(
             torch.rand(batchsize, in_feature * (input.shape[1] // (old_out_feature * 4))),
             in_feature, out_feature, tau_m=tau_m, tau_s=tau_s,
-            use_gauss=use_gauss, mult_k=mult_k)
+            use_gauss=use_gauss, mult_k=mult_k,set_share_layer=use_share_layer)
         return self.three_dim_layer.feature_len
 
     def settest(self, test):
@@ -965,7 +1006,7 @@ class merge_layer(nn.Module):
         return h
 
     def initiate_layer(self, input, in_feature, out_feature, classes, tmp_feature=64, tau_m=4., tau_s=1.,
-                       use_gauss=True, batchsize=64, mult_k=2, p=0.2):
+                       use_gauss=True, batchsize=64, mult_k=2, p=0.2,use_share_layer=True):
         """
         配置相应的层
         """
@@ -983,7 +1024,7 @@ class merge_layer(nn.Module):
         feature_len = self.InputGenerateNet.initiate_layer(input, tmp_feature, tmp_feature, tau_m, tau_s, use_gauss,
                                                            batchsize,
                                                            old_in_feature=in_feature, old_out_feature=out_feature,
-                                                           mult_k=mult_k)
+                                                           mult_k=mult_k,use_share_layer=use_share_layer)
         # self.block_out = block_out(tmp_feature, out_feature_lowbit, classes, use_pool='none')
         import copy
         feature_len.append(copy.deepcopy(feature_len[-1]))
