@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import datasets
 
-sys.path.append("E:\FangC\SourceCode")
+sys.path.append("/home/sst/product")
 from Snn_Auto_master.lib.accuracy import accuracy
 from Snn_Auto_master.lib.criterion import criterion
 from Snn_Auto_master.lib.data_loaders import MNISTDataset, get_rand_transform, load_data,EEGDateset,load_data_car,load_data_svhn

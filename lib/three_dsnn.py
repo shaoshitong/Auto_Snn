@@ -807,33 +807,33 @@ class three_dim_Layer(nn.Module):
         z = torch.tanh(z)
         old = [[x, y, z], ]
         for num in range(max(self.z, self.y, self.x)):
-            xx = x
-            yy = y
-            zz = z
+            xx = y
+            yy = z
+            zz = x
 
             if num < self.z:
                 out_1 = self.point_layer_module[str(num) + '_' + str(0)](xx, yy, zz)
             else:
                 out_1 = zz.clone()
-            print(x[0,0,0,0])
-            xx = y
-            yy = z
-            zz = x
 
-            if num < self.x:
-                out_2 = self.point_layer_module[str(num) + '_' + str(1)](xx, yy, zz)
-            else:
-                out_2 = zz.clone()
-            print(x[0,0,0,0])
             xx = z
             yy = x
             zz = y
 
             if num < self.x:
+                out_2 = self.point_layer_module[str(num) + '_' + str(1)](xx, yy, zz)
+            else:
+                out_2 = zz.clone()
+
+            xx = x
+            yy = y
+            zz = z
+
+            if num < self.x:
                 out_3 = self.point_layer_module[str(num) + '_' + str(2)](xx, yy, zz)
             else:
                 out_3 = zz.clone()
-            print(x[0,0,0,0])
+
             m = size_change(out_1.shape[1], out_1.shape[2])
             x = batch_norm(torch.div((out_1 + m(x)), 1.2))
             y = batch_norm(torch.div((out_2 + m(y)), 1.2))
