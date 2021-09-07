@@ -12,7 +12,7 @@ from Snn_Auto_master.lib.SNnorm import SNConv2d, SNLinear
 from Snn_Auto_master.lib.fractallayer import LastJoiner
 from Snn_Auto_master.lib.DenseNet import Denselayer
 from Snn_Auto_master.lib.cocoscontextloss import ContextualLoss_forward
-from Snn_Auto_master.lib.featurefocusing import Feature_forward
+from Snn_Auto_master.lib.featurefocusing_v2 import Feature_forward
 from Snn_Auto_master.lib.dimixloss import DimIxLoss
 from lib.PointConv import PointConv
 import math
@@ -1010,12 +1010,11 @@ class merge_layer(nn.Module):
         """
         配置相应的层
         """
-        out_feature_lowbit = (int(out_feature) & int(-out_feature)) + out_feature
+        b,c,h,w=input.shape
         if len(input.shape) != 2:
             input = input.view(input.shape[0], -1)
             self.first = input.shape[0]
             self.second = input.numel() / self.first
-            self.input_shape = input.shape
         else:
             self.first = input.shape[0]
             self.second = input.numel() / self.first
@@ -1028,13 +1027,18 @@ class merge_layer(nn.Module):
         # self.block_out = block_out(tmp_feature, out_feature_lowbit, classes, use_pool='none')
         import copy
         feature_len.append(copy.deepcopy(feature_len[-1]))
-        self.feature_forward = Feature_forward(feature_len, p=p)
+        size_len=[]
+        h=h//2
+        for i in range(len(feature_len)-1):
+            size_len.append(int(max(h//(2**i),1)))
+        size_len.append(copy.deepcopy(size_len[-1]))
+        self.feature_forward = Feature_forward(feature_len,size_len, p=p)
         if dataoption in ['fashionmnist', 'mnist', 'cifar10', 'svhn']:
-            out_pointnum = max(16 // (feature_len[-1] // tmp_feature), 1)
+            out_pointnum = size_len[-1]
         elif dataoption == 'eeg':
-            out_pointnum = max(16 // (feature_len[-1] // tmp_feature), 1)
+            out_pointnum = size_len[-1]
         elif dataoption == 'car':
-            out_pointnum = max(32 // (feature_len[-1] // tmp_feature), 1)
+            out_pointnum = size_len[-1]
         else:
             raise KeyError("not import")
         self.out_classifier = block_out(feature_len[-1], 32, classes=classes, size=out_pointnum,

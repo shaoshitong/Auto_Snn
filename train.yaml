@@ -51,7 +51,7 @@ optimizer:
     weight_decay: 1e-4
   SGD:
     momentum: 0.9
-    lr: 0.005
+    lr: 0.01
     weight_decay: 1e-4
   ASGD:
     lr: 0.0001
@@ -67,7 +67,7 @@ scheduler:
   SchedulerLR:
     milestones:
       - 0.4
-      - 0.8
+      - 0.7
     gamma:
       0.1
   MultiStepLR:
