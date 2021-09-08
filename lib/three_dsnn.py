@@ -150,48 +150,47 @@ class block_out(nn.Module):
             return self.classifiar(F.avg_pool2d(x, x.shape[-1]))
 
 
-
 class block_eq(nn.Module):
- def __init__(self, eq_feature, size,Use_Spectral=False, Use_fractal=False):
-     super(block_eq, self).__init__()
-     self.eq_feature = eq_feature
-     self.longConv = nn.Sequential(*[
-         nn.ReflectionPad2d(1),
-         nn.Conv2d(eq_feature, eq_feature * 2, (3, 3), stride=_pair(1), padding=0,
-                   bias=True) if Use_Spectral == False else SNConv2d(eq_feature, eq_feature * 2, (3, 3), stride=1,
-                                                                     padding=0, bias=True),
-         nn.BatchNorm2d(eq_feature * 2),
-         nn.ReLU(inplace=True),
-         nn.ReflectionPad2d(1),
-         nn.Conv2d(eq_feature * 2, eq_feature, (3, 3), stride=_pair(1), padding=0,
-                   bias=True) if Use_Spectral == False else SNConv2d(eq_feature * 2, eq_feature, (3, 3), stride=1,
-                                                                     padding=0, bias=True),
-         nn.BatchNorm2d(eq_feature),
-     ])
-     self.shortConv = nn.Sequential(*[
-         Shortcut(eq_feature, eq_feature, use_same=True),
-     ])
-     self.shortConv_1 = nn.Sequential(*[
-         nn.ReflectionPad2d(1),
-         nn.Conv2d(eq_feature, eq_feature, (3, 3), stride=_pair(1), padding=0,
-                   bias=True) if Use_Spectral == False else SNConv2d(eq_feature, eq_feature, (3, 3), stride=1,
-                                                                     padding=0, bias=True),
-         nn.BatchNorm2d(eq_feature),
-         Shortcut(eq_feature, eq_feature, use_same=True),
-     ])
-     self.bn_eq = nn.BatchNorm2d(eq_feature)
-     self.Use_fractal = Use_fractal
-     if self.Use_fractal is True:
-         self.merged = LastJoiner(2)
+    def __init__(self, eq_feature, size, Use_Spectral=False, Use_fractal=False):
+        super(block_eq, self).__init__()
+        self.eq_feature = eq_feature
+        self.longConv = nn.Sequential(*[
+            nn.ReflectionPad2d(1),
+            nn.Conv2d(eq_feature, eq_feature * 2, (3, 3), stride=_pair(1), padding=0,
+                      bias=True) if Use_Spectral == False else SNConv2d(eq_feature, eq_feature * 2, (3, 3), stride=1,
+                                                                        padding=0, bias=True),
+            nn.BatchNorm2d(eq_feature * 2),
+            nn.ReLU(inplace=True),
+            nn.ReflectionPad2d(1),
+            nn.Conv2d(eq_feature * 2, eq_feature, (3, 3), stride=_pair(1), padding=0,
+                      bias=True) if Use_Spectral == False else SNConv2d(eq_feature * 2, eq_feature, (3, 3), stride=1,
+                                                                        padding=0, bias=True),
+            nn.BatchNorm2d(eq_feature),
+        ])
+        self.shortConv = nn.Sequential(*[
+            Shortcut(eq_feature, eq_feature, use_same=True),
+        ])
+        self.shortConv_1 = nn.Sequential(*[
+            nn.ReflectionPad2d(1),
+            nn.Conv2d(eq_feature, eq_feature, (3, 3), stride=_pair(1), padding=0,
+                      bias=True) if Use_Spectral == False else SNConv2d(eq_feature, eq_feature, (3, 3), stride=1,
+                                                                        padding=0, bias=True),
+            nn.BatchNorm2d(eq_feature),
+            Shortcut(eq_feature, eq_feature, use_same=True),
+        ])
+        self.Use_fractal = Use_fractal
+        if self.Use_fractal is True:
+            self.merged = LastJoiner(2)
 
- def forward(self, x):
-     if self.Use_fractal == False:
-         x1 = self.longConv(x) + self.shortConv(x)
-     else:
-         x1 = self.merged([self.longConv(x), self.shortConv_1(x)])
-     x2 = F.relu(x1, inplace=True)
-     del x
-     return x2
+    def forward(self, x):
+        if self.Use_fractal == False:
+            x1 = self.longConv(x) + self.shortConv(x)
+        else:
+            x1 = self.merged([self.longConv(x), self.shortConv_1(x)])
+        x2 = F.relu(x1, inplace=True)
+        del x
+        return x2
+
 
 # class block_eq(nn.Module):
 #     def __init__(self, eq_feature, size, Use_Spectral=False, Use_fractal=False):
@@ -680,6 +679,7 @@ class point_cul_Layer(nn.Module):
                 m = self.gaussbur(x)
             else:
                 raise KeyError('not have this dataset')
+            m = self.bn1(m)
             x = F.leaky_relu(m)
         return x
 
@@ -834,14 +834,17 @@ class three_dim_Layer(nn.Module):
             else:
                 out_3 = zz.clone()
 
-            m = size_change(out_1.shape[1], out_1.shape[2])
-            x = batch_norm(torch.div((out_1 + m(x)), 1.2))
-            y = batch_norm(torch.div((out_2 + m(y)), 1.2))
-            z = batch_norm(torch.div((out_3 + m(z)), 1.2))
+            x = torch.tanh(out_1 +self.change_conv[num*3+0](x)).clone()
+            y = torch.tanh(out_2 +self.change_conv[num*3+1](y)).clone()
+            z = torch.tanh(out_3 +self.change_conv[num*3+2](z)).clone()
             old.append([x, y, z])
-        del x, y, z, m
         self.losses = self.feature_loss(old)
-        return old
+        # old[2][0]=(old[0][0]+old[1][0]+old[2][0])
+        # old[2][1]=(old[0][1]+old[1][1]+old[2][1])
+        # old[2][2]=(old[0][2]+old[1][2]+old[2][2])
+        if self.change_conv[-1].weight.grad!=None:
+            print(self.change_conv[-1].weight.grad.abs().max())
+        return old[-1]
 
         # for i in range(self.z):
         #     for j in range(self.y):
@@ -873,7 +876,7 @@ class three_dim_Layer(nn.Module):
         self.use_gauss = use_gauss
         self.point_layer = {}
         self.in_shape = data.shape
-        self.feature_len = [int(in_feature * (2 ** _)) for _ in range(max(self.x, self.y, self.z) + 1)]
+        self.feature_len = [int(in_feature * (4 ** _)) for _ in range(max(self.x, self.y, self.z) + 1)]
         self.div_len = [2 ** _ for _ in range(max(self.x, self.y, self.z) + 1)]
         old_size = int(math.sqrt(data.shape[1] / in_feature))
         for i in range(max(self.x, self.y, self.z) + 1):
@@ -882,13 +885,14 @@ class three_dim_Layer(nn.Module):
             else:
                 self.feature_len[i] = self.feature_len[i - 1]
                 self.div_len[i] = self.div_len[i - 1]
+        self.change_conv=nn.ModuleList([])
         for num in range(max(self.z, self.y, self.x)):
             a, b, c = self.shape[num]
             tmp_list = [a, b, c]
             in_pointnum = int(data.shape[1] // self.div_len[num])
             in_feature = self.feature_len[num]
-            out_pointnum = int(data.shape[1] // self.div_len[num + 1])
-            out_feature = self.feature_len[num + 1]
+            out_pointnum = int(data.shape[1] // self.div_len[num+1])
+            out_feature = self.feature_len[num+1]
             for p in range(3):
                 self.point_layer[str(num) + "_" + str(p)] = two_dim_layer(in_feature=in_feature,
                                                                           out_feature=out_feature,
@@ -901,11 +905,14 @@ class three_dim_Layer(nn.Module):
                                                                           weight_require_grad=self.weight_require_grad,
                                                                           p=self.p, device=self.device,
                                                                           grad_lr=self.grad_lr)
+                self.change_conv.append(nn.Conv2d(in_feature,out_feature,(2,2),(2,2)))
+
+
             if set_share_layer == True:
-                self.set_share_twodimlayer(self.point_layer[str(num)+"_0"],self.point_layer[str(num)+"_1"],self.point_layer[str(num)+"_2"],tmp_list)
+                self.set_share_twodimlayer(self.point_layer[str(num) + "_0"], self.point_layer[str(num) + "_1"],
+                                           self.point_layer[str(num) + "_2"], tmp_list)
         self.point_layer_module = nn.ModuleDict(self.point_layer)
         del self.point_layer
-
 
         return self.feature_len[-1], data.shape[1] // self.div_len[-1]
 
@@ -914,7 +921,7 @@ class three_dim_Layer(nn.Module):
         layer2: two_dim_layer
         layer3: two_dim_layer
         layer3.point_layer_module[str(0) + '_' + str(0)] = layer2.point_layer_module[str(0) + '_' + str(0)] = \
-        layer1.point_layer_module[str(0) + '_' + str(0)]
+            layer1.point_layer_module[str(0) + '_' + str(0)]
         for i in range(1, tmp_list[0]):
             layer2.point_layer_module[str(0) + '_' + str(i)] = layer1.point_layer_module[str(i) + '_' + str(0)]
             layer3.point_layer_module[str(0) + '_' + str(i)] = layer2.point_layer_module[str(i) + '_' + str(0)]
@@ -938,7 +945,7 @@ class InputGenerateNet(nn.Module):
         return self.three_dim_layer(x, y, z)
 
     def initiate_layer(self, input, in_feature, out_feature, tau_m=4., tau_s=1., use_gauss=True, batchsize=64,
-                       old_in_feature=1, old_out_feature=1, mult_k=2, p=0.2,use_share_layer=True):
+                       old_in_feature=1, old_out_feature=1, mult_k=2, p=0.2, use_share_layer=True):
         if dataoption == 'mnist' or dataoption == 'fashionmnist':
             input = torch.randn(input.shape[0], 1 * 32 * 32).to(input.device)
         elif dataoption in ['cifar10', 'car', "svhn"]:
@@ -948,7 +955,7 @@ class InputGenerateNet(nn.Module):
         self.three_dim_layer.initiate_layer(
             torch.rand(batchsize, in_feature * (input.shape[1] // (old_out_feature * 4))),
             in_feature, out_feature, tau_m=tau_m, tau_s=tau_s,
-            use_gauss=use_gauss, mult_k=mult_k,set_share_layer=use_share_layer)
+            use_gauss=use_gauss, mult_k=mult_k, set_share_layer=use_share_layer)
         return self.three_dim_layer.feature_len
 
     def settest(self, test):
@@ -1001,16 +1008,18 @@ class merge_layer(nn.Module):
                 raise KeyError()
         a, b, c = self.block_in_x_y_z(x)
         x_lists = self.InputGenerateNet(a, b, c)
+        # print(torch.norm(x_lists[0],p=1)/x_lists[0].numel())
         x = self.feature_forward(x_lists)
+        # print(torch.norm(x,p=1)/x.numel())
         h = self.out_classifier(x)
         return h
 
     def initiate_layer(self, input, in_feature, out_feature, classes, tmp_feature=64, tau_m=4., tau_s=1.,
-                       use_gauss=True, batchsize=64, mult_k=2, p=0.2,use_share_layer=True):
+                       use_gauss=True, batchsize=64, mult_k=2, p=0.2, use_share_layer=True,  push_num=5, s=2):
         """
         配置相应的层
         """
-        b,c,h,w=input.shape
+        b, c, h, w = input.shape
         if len(input.shape) != 2:
             input = input.view(input.shape[0], -1)
             self.first = input.shape[0]
@@ -1023,16 +1032,17 @@ class merge_layer(nn.Module):
         feature_len = self.InputGenerateNet.initiate_layer(input, tmp_feature, tmp_feature, tau_m, tau_s, use_gauss,
                                                            batchsize,
                                                            old_in_feature=in_feature, old_out_feature=out_feature,
-                                                           mult_k=mult_k,use_share_layer=use_share_layer)
+                                                           mult_k=mult_k, use_share_layer=use_share_layer)
         # self.block_out = block_out(tmp_feature, out_feature_lowbit, classes, use_pool='none')
         import copy
         feature_len.append(copy.deepcopy(feature_len[-1]))
-        size_len=[]
-        h=h//2
-        for i in range(len(feature_len)-1):
-            size_len.append(int(max(h//(2**i),1)))
+        size_len = []
+        h = h // 2
+        for i in range(len(feature_len) - 1):
+            size_len.append(int(max(h // (2 ** i), 1)))
         size_len.append(copy.deepcopy(size_len[-1]))
-        self.feature_forward = Feature_forward(feature_len,size_len, p=p)
+        multi_num=int(size_len[-1]//s)**2
+        self.feature_forward = Feature_forward(feature_len, size_len, multi_num=multi_num, push_num=push_num, s=s, p=p)
         if dataoption in ['fashionmnist', 'mnist', 'cifar10', 'svhn']:
             out_pointnum = size_len[-1]
         elif dataoption == 'eeg':
@@ -1041,8 +1051,12 @@ class merge_layer(nn.Module):
             out_pointnum = size_len[-1]
         else:
             raise KeyError("not import")
-        self.out_classifier = block_out(feature_len[-1], 32, classes=classes, size=out_pointnum,
+        # self.out_classifier_2 = nn.Sequential(nn.Flatten(), nn.Linear(multi_num * feature_len[0], feature_len[0]),
+        #                                       nn.ReLU(), nn.Linear(feature_len[0], classes)
+        #                                       )
+        self.out_classifier = block_out(feature_len[-1], 32, classes=classes, size=int(out_pointnum),
                                         use_pool='none')
+
         self._initialize()
 
     def settest(self, test=True):
@@ -1097,7 +1111,10 @@ class merge_layer(nn.Module):
         # loss_norm = ( torch.stack(loss_norm, dim=-1).min()-torch.stack(loss_norm, dim=-1))
         # loss_norm = (torch.exp(-loss_norm)/torch.exp(-loss_norm).sum(dim=-1)).std(dim=-1)
         loss_bias = torch.stack(loss, dim=-1).mean()
-        return (loss_tau + loss_bias + loss_feature) * sigma
+        return (
+                  loss_tau
+                + loss_bias
+                + loss_feature) * sigma
 
 
 """

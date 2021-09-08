@@ -20,118 +20,134 @@ import copy
 import torch
 import torch.nn.init as init
 import math
+from einops import rearrange
+
+
 class linear(nn.Module):
-    def __init__(self,in_feature,out_feature):
-        super(linear,self).__init__()
-        self.weight=Parameter(torch.Tensor(in_feature,out_feature))
-        self.bias=Parameter(torch.Tensor(1,out_feature))
+    def __init__(self, in_feature, out_feature):
+        super(linear, self).__init__()
+        self.weight = Parameter(torch.Tensor(in_feature, out_feature))
+        self.bias = Parameter(torch.Tensor(1, 1, out_feature))
+        self.feature = 6. / math.sqrt(in_feature * out_feature)
         self._initialize()
-    def forward(self,x):
-        x=x@self.weight+self.bias
+
+    def forward(self, x):
+        x = x @ self.weight + self.bias
         return x
+
     def _initialize(self):
-        self.weight.data.fill_(1.)
+        self.weight.data.uniform_(-self.feature, self.feature)
         self.bias.data.fill_(0.)
 
 
 class MLP(nn.Sequential):
-    def __init__(self,in_feature,out_feature,p=0.2000000000001):
-        tmp_feature=int(math.sqrt(in_feature*out_feature)//4)
-        super(MLP,self).__init__()
-        self.add_module("linear_1",linear(in_feature,tmp_feature))
-        self.add_module("gelu",nn.GELU())
-        self.add_module("linear_2",linear(tmp_feature,out_feature))
-        self.p=p
-        self.dropout=nn.Dropout(p=p)
-    def forward(self,x):
-        x=super(MLP,self).forward(x)
-        if abs(self.p-0.2000000000001)<0.000001:
-            x=self.dropout(x)
+    def __init__(self, in_feature, out_feature, p=0.2000000000001):
+        tmp_feature = int(math.sqrt(in_feature * out_feature) // 4)
+        super(MLP, self).__init__()
+        self.add_module("linear_1", linear(in_feature, tmp_feature))
+        self.add_module("gelu", nn.GELU())
+        self.add_module("linear_2", linear(tmp_feature, out_feature))
+
+    def forward(self, x):
+        x = super(MLP, self).forward(x)
         return x
-class multi_MLP(nn.Module):
-    def __init__(self,in_feature,out_feature,size,p,split_num=4):
-        super(multi_MLP,self).__init__()
-        self.size=size
-        self.in_feature=in_feature
-        self.out_feature=out_feature
-        assert int(math.sqrt(split_num))**2==split_num
-        if math.sqrt(split_num)<=size:
-            assert size%int(math.sqrt(split_num))==0
-        self.sqrt_size=max(int(size//math.sqrt(split_num)),1)
-        split_num=int((size//self.sqrt_size)**2)
-        self.split_num = split_num
-        self.linear_list=nn.ModuleList([MLP(in_feature*self.sqrt_size*self.sqrt_size,out_feature*self.sqrt_size*self.sqrt_size,p) for _ in range(split_num)])
-    def unfold(self,x):
-        return F.unfold(x,_pair(self.sqrt_size),stride=self.sqrt_size ,)  # [B, C* sqrt_size*sqrt_size, L]
-    def fold(self,x):
-        return F.fold(x,(self.size,self.size),(self.sqrt_size,self.sqrt_size),stride=self.sqrt_size)
-    def forward(self,x):
-        x_L=self.unfold(x)
-        B,C_S,L=x_L.shape
-        result=[]
-        for i in range(L):
-            result.append(self.linear_list[i](x_L[...,i].view(B,-1)).unsqueeze(-1))
-        result=torch.cat(result,dim=-1)
-        result=self.fold(result)
+
+
+class mixer_Layer(nn.Module):
+    def __init__(self, feature, size, s):
+        super(mixer_Layer, self).__init__()
+        self.T_MLP = MLP(feature, feature)
+        self.size = int(size // s)
+        self.F_MLP = MLP(self.size ** 2, self.size ** 2)
+        self.s = s
+        self.Layernorm = nn.ModuleList([nn.LayerNorm([self.size ** 2, feature]),
+                                        nn.LayerNorm([self.size ** 2, feature]), ])
+        self.batchnorm = nn.BatchNorm1d(feature)
+
+    def forward(self, x):  # b h*w c
+        # x=rearrange(x,"b c h w -> b (h w) c")
+        y = self.Layernorm[0](x)
+        y = y.permute(0, 2, 1)
+        y = self.F_MLP(y)
+        x = y.permute(0, 2, 1) + x
+        y = self.Layernorm[1](x)
+        y = self.T_MLP(y) + x
+        y = self.batchnorm(y.permute(0, 2, 1)).permute(0, 2, 1)
+        return y
+
+
+class multi_mixer_layer(nn.Module):
+    def __init__(self, feature, size, s, multi_num=1, push_num=10):
+        super(multi_mixer_layer, self).__init__()
+        self.pre_conv = nn.ModuleList([nn.Conv2d(feature, feature, (s, s), (s, s)) for _ in range(multi_num)])
+        self.mixer_layer = nn.ModuleList(
+            [(nn.Sequential(*[mixer_Layer(feature, size, s) for j in range(push_num)])) for i in range(multi_num)])
+        self.multi_num = multi_num
+        self.layernorm = nn.LayerNorm([feature])
+        """
+        self.weight=Parameter(torch.Tensor(multi_num,multi_num))
+        self.weight.data.fill_(1./multi_num)
+        self.weight.data+=torch.clamp(torch.randn(multi_num,multi_num),-.3/multi_num,.3/multi_num)
+        """
+
+    def forward(self, x):
+        result = []
+        for i in range(self.multi_num):
+            x_1 = self.pre_conv[i](x)
+            x_1 = rearrange(x_1, "b c h w -> b (h w) c")
+            x_1 = self.mixer_layer[i](x_1)
+            # x_1 = torch.mean(x_1, dim=1, keepdim=True)
+            result.append(x_1)
+        result = self.layernorm(torch.cat(result, dim=1)).permute(0, 2, 1)
+        # result=result@self.weight  #b,c,multi_num
         return result
-class parallel_multi_MLP(nn.Module):
-    def __init__(self,in_feature,out_feature,size,p,split_num=4):
-        super(parallel_multi_MLP, self).__init__()
-        self.mylti_MLP_list=nn.ModuleList([multi_MLP(in_feature,out_feature,size,p,split_num) for _ in range(3)])
-    def forward(self,x):
-        a,b,c=x
-        a=self.mylti_MLP_list[0](a)
-        b=self.mylti_MLP_list[1](b)
-        c=self.mylti_MLP_list[2](c)
-        return (a,b,c)
-class multi_parallel_multi_MLP(nn.Module):
-    def __init__(self,in_feature,out_feature,size,out_size,p,split_num=4,parallel_num=1):
-        super(multi_parallel_multi_MLP, self).__init__()
-        self.parallel_multi_MLP_list=nn.ModuleList([parallel_multi_MLP(in_feature,in_feature,size,p,split_num) for _ in range(parallel_num-1)])
-        self.parallel_multi_MLP_list.append(parallel_multi_MLP(in_feature,out_feature,size,p,split_num)) # error
-        self.p=int(size//out_size[0])
-        self.multi_conv=nn.ModuleList([nn.Conv2d(in_feature,out_feature,_pair(self.p),_pair(self.p),0),
-                                       nn.Conv2d(in_feature,out_feature,_pair(self.p),_pair(self.p),0),
-                                       nn.Conv2d(in_feature,out_feature,_pair(self.p),_pair(self.p),0),])
-        self.mulit_pool=nn.ModuleList([nn.AvgPool2d(_pair(self.p),_pair(self.p),0),
-                                       nn.AvgPool2d(_pair(self.p),_pair(self.p),0),
-                                       nn.AvgPool2d(_pair(self.p),_pair(self.p),0),])
-        self.out_conv=nn.Conv2d(out_feature*3,out_feature,(1,1),(1,1))
-        self.out_size=out_size
-    def forward(self,x):
-        a,b,c=x
-        a_1,b_1,c_1=a.clone(),b.clone(),c.clone()
-        for i in range(len(self.parallel_multi_MLP_list)-1):
-            a,b,c=self.parallel_multi_MLP_list[i]((a,b,c))
-        # a=self.multi_conv[0](a_1)+a
-        # b=self.multi_conv[1](b_1)+b
-        # c=self.multi_conv[2](c_1)+c
-        # a_1, b_1, c_1 = a.clone(), b.clone(), c.clone()
-        a,b,c=self.parallel_multi_MLP_list[-1]((a,b,c))
-        a=self.multi_conv[0](a_1)+self.mulit_pool[0](a)
-        b=self.multi_conv[0](b_1)+self.mulit_pool[0](b)
-        c=self.multi_conv[0](c_1)+self.mulit_pool[0](c)
-        return self.out_conv(torch.cat((a,b,c),dim=1))
+
+
+class multi_attention(nn.Module):
+    def __init__(self, feature, multi_num, p=0.2,temperate=1.):
+        super(multi_attention, self).__init__()
+        self.linear = nn.ModuleList([linear(multi_num, multi_num) for _ in range(3)])
+        self.dropout = nn.Dropout(p=p)
+        self.temperate=temperate
+        self.layernorm=nn.LayerNorm(feature)
+
+    def forward(self, k, q, v):
+        p=k+q+v
+        k = self.linear[0](k-v)
+        q = self.linear[1](q-v)
+        v_1 = self.linear[2](p)
+        c = torch.matmul(k/self.temperate, q.permute(0, 2, 1))  # b,c,c
+        c = self.dropout(F.softmax(c, dim=-1))
+        c = torch.matmul(c, v_1).permute(0,2,1) #b,c,l
+        return self.layernorm(c + v).permute(0,2,1)
+
+
 class Feature_forward(nn.Module):
-    def __init__(self, feature_list,size_list,split_num=16, p=0.2):
+    def __init__(self, feature_list, size_list, multi_num=4, push_num=5, s=4, p=0.2):
         """
         include in_feature,tmp_feature_1,.....,tmp_feature_n,out_feature
         """
         super(Feature_forward, self).__init__()
         self.feature_list = feature_list
-        self.size_list=size_list
-        self.multi_multi_parallel_multi_MLP_list=nn.ModuleList([multi_parallel_multi_MLP(self.feature_list[i],self.feature_list[-1],
-                                                                                         self.size_list[i],(self.size_list[-1],self.size_list[-1]),p,
-                                                                                         split_num=split_num,parallel_num=1) for i in range(len(self.feature_list)-1)])
+        self.size_list = size_list
+        assert (
+                    multi_num == 1 or multi_num == 2 or multi_num == 4 or multi_num == 8 or multi_num == 16 or multi_num == 64)
+        self.multi_mix_layer = nn.ModuleList(
+            [multi_mixer_layer(feature_list[-1], size_list[-1], s, multi_num=multi_num, push_num=push_num)])
+        self.multi_attention = multi_attention(feature_list[-1], multi_num * s * s, p)
+        self.batchnorm = nn.ModuleList([nn.BatchNorm2d(feature_list[-1])])
         """
         self.out_conv=nn.Sequential(nn.Conv2d(3*self.feature_list[-1],self.feature_list[-1],(1,1),(1,1)),
                                     nn.BatchNorm2d(self.feature_list[-1]))
         """
+
     def forward(self, x_lists):
-        for i in range(len(x_lists)):
-            x_lists[i]=self.multi_multi_parallel_multi_MLP_list[i](x_lists[i])
-        for i in range(len(x_lists)-1):
-            x_lists[i+1]+=x_lists[i]/2
-        result=x_lists[-1].clone()
-        del x_lists
+        k, q, v = x_lists
+        b, c, h, w = q.shape
+        k = k.view(b, c, -1)
+        q = q.view(b, c, -1)
+        v = v.view(b, c, -1)
+        result = self.multi_attention(q, k, v).view(b, c, h, w)
+        result = self.batchnorm[0](result)
+        result = self.multi_mix_layer[0](result).view(b, c, h, w)
         return result

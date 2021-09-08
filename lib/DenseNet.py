@@ -36,7 +36,7 @@ class Denselayer(nn.Module):
         self.joinlist=nn.ModuleList([
             nn.Sequential(nn.BatchNorm2d(feature_list[i]),
                           nn.ReLU(),
-                          SNConv2d(feature_list[i],self.old_feature_list[i],(1,1),stride=1,padding=0)) for i in range(1,len(feature_list))
+                          SNConv2d(feature_list[i],self.old_feature_list[i],(1,1),stride=1,padding=0)) for i in range(1,len(feature_list)-1)
         ])
     def forward(self,x,training=True):
         pre=x
