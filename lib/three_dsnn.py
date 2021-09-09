@@ -842,8 +842,8 @@ class three_dim_Layer(nn.Module):
         # old[2][0]=(old[0][0]+old[1][0]+old[2][0])
         # old[2][1]=(old[0][1]+old[1][1]+old[2][1])
         # old[2][2]=(old[0][2]+old[1][2]+old[2][2])
-        if self.change_conv[-1].weight.grad!=None:
-            print(self.change_conv[-1].weight.grad.abs().max())
+        # if self.change_conv[-1].weight.grad!=None:
+        #     print(self.change_conv[-1].weight.grad.abs().max())
         return old[-1]
 
         # for i in range(self.z):
@@ -1041,7 +1041,7 @@ class merge_layer(nn.Module):
         for i in range(len(feature_len) - 1):
             size_len.append(int(max(h // (2 ** i), 1)))
         size_len.append(copy.deepcopy(size_len[-1]))
-        multi_num=int(size_len[-1]//s)**2
+        multi_num=int((size_len[-1]**2)//(size_len[-1]//s)**2)
         self.feature_forward = Feature_forward(feature_len, size_len, multi_num=multi_num, push_num=push_num, s=s, p=p)
         if dataoption in ['fashionmnist', 'mnist', 'cifar10', 'svhn']:
             out_pointnum = size_len[-1]

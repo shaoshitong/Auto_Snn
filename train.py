@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import datasets
 
+sys.path.append("F:\Snn_Auto")
 sys.path.append("/home/sst/product")
 from Snn_Auto_master.lib.accuracy import accuracy
 from Snn_Auto_master.lib.criterion import criterion
@@ -33,7 +34,7 @@ parser.add_argument('--test', dest='test', default=True, type=bool,
                     help='test model')
 parser.add_argument('--data_url', dest='data_url',default='./data', type=str,
                     help='test model')
-parser.add_argument('--log_each', dest='log_each',default=25, type=int,
+parser.add_argument('--log_each', dest='log_each',default=100, type=int,
                     help='how many step log once')
 args = parser.parse_args()
 args.config_file=filename

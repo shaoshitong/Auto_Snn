@@ -118,8 +118,8 @@ class multi_attention(nn.Module):
         v_1 = self.linear[2](p)
         c = torch.matmul(k/self.temperate, q.permute(0, 2, 1))  # b,c,c
         c = self.dropout(F.softmax(c, dim=-1))
-        c = torch.matmul(c, v_1).permute(0,2,1) #b,c,l
-        return self.layernorm(c + v).permute(0,2,1)
+        c = torch.matmul(c, v_1)
+        return self.layernorm((c + v).permute(0,2,1)).permute(0,2,1)
 
 
 class Feature_forward(nn.Module):
@@ -134,7 +134,7 @@ class Feature_forward(nn.Module):
                     multi_num == 1 or multi_num == 2 or multi_num == 4 or multi_num == 8 or multi_num == 16 or multi_num == 64)
         self.multi_mix_layer = nn.ModuleList(
             [multi_mixer_layer(feature_list[-1], size_list[-1], s, multi_num=multi_num, push_num=push_num)])
-        self.multi_attention = multi_attention(feature_list[-1], multi_num * s * s, p)
+        self.multi_attention = multi_attention(feature_list[-1], int(multi_num * (size_list[-1]//s)**2), p)
         self.batchnorm = nn.ModuleList([nn.BatchNorm2d(feature_list[-1])])
         """
         self.out_conv=nn.Sequential(nn.Conv2d(3*self.feature_list[-1],self.feature_list[-1],(1,1),(1,1)),
