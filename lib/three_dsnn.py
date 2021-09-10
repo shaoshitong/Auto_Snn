@@ -810,7 +810,6 @@ class three_dim_Layer(nn.Module):
             xx = y
             yy = z
             zz = x
-
             if num < self.z:
                 out_1 = self.point_layer_module[str(num) + '_' + str(0)](xx, yy, zz)
             else:
@@ -833,17 +832,18 @@ class three_dim_Layer(nn.Module):
                 out_3 = self.point_layer_module[str(num) + '_' + str(2)](xx, yy, zz)
             else:
                 out_3 = zz.clone()
-
-            x = torch.tanh(out_1 +self.change_conv[num*3+0](x)).clone()
-            y = torch.tanh(out_2 +self.change_conv[num*3+1](y)).clone()
-            z = torch.tanh(out_3 +self.change_conv[num*3+2](z)).clone()
+            m= size_change(out_1.shape[1],out_1.shape[2])
+            x = torch.tanh(out_1 +m(x))
+            y = torch.tanh(out_2 +m(y))
+            z = torch.tanh(out_3 +m(z))
             old.append([x, y, z])
         self.losses = self.feature_loss(old)
-        # old[2][0]=(old[0][0]+old[1][0]+old[2][0])
-        # old[2][1]=(old[0][1]+old[1][1]+old[2][1])
-        # old[2][2]=(old[0][2]+old[1][2]+old[2][2])
-        # if self.change_conv[-1].weight.grad!=None:
-        #     print(self.change_conv[-1].weight.grad.abs().max())
+        for i in range(len(old[:-1])):
+            for j in range(3):
+                old[-1][j]=old[-1][j]+self.change_conv[i*3+j](old[i][j])
+        m=len(old)
+        for i in range(m-1):
+            del old[0]
         return old[-1]
 
         # for i in range(self.z):
@@ -876,7 +876,7 @@ class three_dim_Layer(nn.Module):
         self.use_gauss = use_gauss
         self.point_layer = {}
         self.in_shape = data.shape
-        self.feature_len = [int(in_feature * (4 ** _)) for _ in range(max(self.x, self.y, self.z) + 1)]
+        self.feature_len = [int(in_feature * (2 ** _)) for _ in range(max(self.x, self.y, self.z) + 1)]
         self.div_len = [2 ** _ for _ in range(max(self.x, self.y, self.z) + 1)]
         old_size = int(math.sqrt(data.shape[1] / in_feature))
         for i in range(max(self.x, self.y, self.z) + 1):
@@ -885,6 +885,7 @@ class three_dim_Layer(nn.Module):
             else:
                 self.feature_len[i] = self.feature_len[i - 1]
                 self.div_len[i] = self.div_len[i - 1]
+
         self.change_conv=nn.ModuleList([])
         for num in range(max(self.z, self.y, self.x)):
             a, b, c = self.shape[num]
@@ -905,7 +906,8 @@ class three_dim_Layer(nn.Module):
                                                                           weight_require_grad=self.weight_require_grad,
                                                                           p=self.p, device=self.device,
                                                                           grad_lr=self.grad_lr)
-                self.change_conv.append(nn.Conv2d(in_feature,out_feature,(2,2),(2,2)))
+                size_m=int(self.feature_len[max(self.z, self.y, self.x)]//in_feature)
+                self.change_conv.append(nn.Conv2d(in_feature,self.feature_len[max(self.z, self.y, self.x)],(size_m,size_m),(size_m,size_m)))
 
 
             if set_share_layer == True:
@@ -1011,7 +1013,7 @@ class merge_layer(nn.Module):
         # print(torch.norm(x_lists[0],p=1)/x_lists[0].numel())
         x = self.feature_forward(x_lists)
         # print(torch.norm(x,p=1)/x.numel())
-        h = self.out_classifier(x)
+        h = self.out_classifier(x_lists[0]+x_lists[1]+x_lists[2])
         return h
 
     def initiate_layer(self, input, in_feature, out_feature, classes, tmp_feature=64, tau_m=4., tau_s=1.,

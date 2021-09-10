@@ -15,7 +15,7 @@ set_share_layer:
 parameters:
   # default parameters
   s:
-    2
+    4
   push_num:
     5
   length:
@@ -29,7 +29,7 @@ parameters:
   epoch:
     200
   dropout:
-    0.2
+    0.5
   filter_tau_m:
     4
   filter_tau_s:
@@ -40,7 +40,7 @@ parameters:
     True
   membrane_filer:
     False
-shape: [[2,2,2],[1,1,1]]
+shape: [[2,2,2]]
 optimizer:
   optimizer_choice:
     'SGD'
@@ -54,7 +54,7 @@ optimizer:
     lr: 0.002
     weight_decay: 1e-4
   SGD:
-    momentum: 0.9
+    momentum: 0.7
     lr: 0.005
     weight_decay: 1e-4
   ASGD:

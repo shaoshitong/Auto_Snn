@@ -104,22 +104,29 @@ class multi_mixer_layer(nn.Module):
 
 
 class multi_attention(nn.Module):
-    def __init__(self, feature, multi_num, p=0.2,temperate=1.):
+    def __init__(self, feature, multi_num,p=0.2, temperate=1.,a_head=8,n_dv=64):
         super(multi_attention, self).__init__()
+        h=int(a_head*n_dv)
         self.linear = nn.ModuleList([linear(multi_num, multi_num) for _ in range(3)])
+        self.linear2 = nn.ModuleList([linear(multi_num, h) for _ in range(3)])
+        self.linear3 = nn.ModuleList([linear(h,multi_num) for _ in range(1)])
         self.dropout = nn.Dropout(p=p)
-        self.temperate=temperate
-        self.layernorm=nn.LayerNorm(feature)
+        self.temperate = temperate
+        self.layernorm = nn.LayerNorm(feature)
+        self.a_head=int(a_head)
+        self.n_dv=int(n_dv)
 
     def forward(self, k, q, v):
-        p=k+q+v
-        k = self.linear[0](k-v)
-        q = self.linear[1](q-v)
-        v_1 = self.linear[2](p)
-        c = torch.matmul(k/self.temperate, q.permute(0, 2, 1))  # b,c,c
+        m = k + q + v
+        p = self.linear[0](k) + self.linear[1](q) + self.linear[2](v)
+        b,c,n=p.shape
+        k = self.linear2[0](p+k).view(b,c,self.a_head,self.n_dv).permute(0,2,1,3)
+        q = self.linear2[1](p+q).view(b,c,self.a_head,self.n_dv).permute(0,2,1,3)
+        v = self.linear2[2](p+v).view(b,c,self.a_head,self.n_dv).permute(0,2,1,3)
+        c = torch.matmul(k / self.temperate, q.permute(0, 1, 3,2))  # b,c,c
         c = self.dropout(F.softmax(c, dim=-1))
-        c = torch.matmul(c, v_1)
-        return self.layernorm((c + v).permute(0,2,1)).permute(0,2,1)
+        c = self.linear3[0](rearrange(torch.matmul(c, v),"a b c d -> a c ( b d )"))
+        return self.layernorm((c + m).permute(0, 2, 1)).permute(0, 2, 1)
 
 
 class Feature_forward(nn.Module):
@@ -130,11 +137,12 @@ class Feature_forward(nn.Module):
         super(Feature_forward, self).__init__()
         self.feature_list = feature_list
         self.size_list = size_list
+        print(p)
         assert (
-                    multi_num == 1 or multi_num == 2 or multi_num == 4 or multi_num == 8 or multi_num == 16 or multi_num == 64)
+                multi_num == 1 or multi_num == 2 or multi_num == 4 or multi_num == 8 or multi_num == 16 or multi_num == 64)
         self.multi_mix_layer = nn.ModuleList(
             [multi_mixer_layer(feature_list[-1], size_list[-1], s, multi_num=multi_num, push_num=push_num)])
-        self.multi_attention = multi_attention(feature_list[-1], int(multi_num * (size_list[-1]//s)**2), p)
+        self.multi_attention = multi_attention(feature_list[-1], int(multi_num * (size_list[-1] // s) ** 2), p)
         self.batchnorm = nn.ModuleList([nn.BatchNorm2d(feature_list[-1])])
         """
         self.out_conv=nn.Sequential(nn.Conv2d(3*self.feature_list[-1],self.feature_list[-1],(1,1),(1,1)),
