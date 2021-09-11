@@ -7,7 +7,7 @@ set_seed:
 pytorch_seed:
   2021
 data:
-  cifar10
+  cifar100
 use_standard:
   True
 set_share_layer:

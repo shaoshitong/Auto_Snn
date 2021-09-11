@@ -18,7 +18,7 @@ sys.path.append("F:\Snn_Auto")
 sys.path.append("/home/sst/product")
 from Snn_Auto_master.lib.accuracy import accuracy
 from Snn_Auto_master.lib.criterion import criterion
-from Snn_Auto_master.lib.data_loaders import MNISTDataset, get_rand_transform, load_data,EEGDateset,load_data_car,load_data_svhn
+from Snn_Auto_master.lib.data_loaders import MNISTDataset, get_rand_transform, load_data,EEGDateset,load_data_car,load_data_svhn,load_data_c100
 from Snn_Auto_master.lib.log import Log
 from Snn_Auto_master.lib.optimizer import get_optimizer
 from Snn_Auto_master.lib.scheduler import get_scheduler, SchedulerLR
@@ -86,6 +86,8 @@ def test2(model, data, yaml, criterion_loss):
                 input = input.float().to(device)
             elif yaml['data'] == 'cifar10':
                 input = input.float().to(device).view(input.shape[0], -1)
+            elif yaml['data'] == 'cifar100':
+                input = input.float().to(device).view(input.shape[0], -1)
             elif yaml['data'] == 'svhn':
                 input = input.float().to(device).view(input.shape[0], -1)
             elif yaml['data']=='fashionmnist':
@@ -104,7 +106,7 @@ def test2(model, data, yaml, criterion_loss):
             loss = criterion(criterion_loss, output, target)
             if yaml['data'] == 'eeg':
                 prec1, prec5 = accuracy(output.data, target, topk=(1, 2))
-            elif yaml['data'] in ['mnist', 'fashionmnist', 'cifar10','car','svhn']:
+            elif yaml['data'] in ['mnist', 'fashionmnist', 'cifar10','car','svhn','cifar100']:
                 prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
             log(model, loss.cpu(), prec1.cpu(), prec5.cpu())
     return log.epoch_state["top_1"] / log.epoch_state["steps"],log.epoch_state["loss"] / log.epoch_state["steps"]
@@ -118,6 +120,8 @@ def test(path, data, yaml, criterion_loss):
         the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],1,28,28), 1,1,int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'],p=yaml['parameters']['dropout'],use_share_layer=yaml['set_share_layer'],  push_num=yaml['parameters']['push_num'], s=yaml['parameters']['s'])
     elif yaml['data'] == 'cifar10':
         the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],3,32,32),3,3, int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'],p=yaml['parameters']['dropout'],use_share_layer=yaml['set_share_layer'],  push_num=yaml['parameters']['push_num'], s=yaml['parameters']['s'])
+    elif yaml['data'] == 'cifar100':
+        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],3,32,32),3,3, int(100),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'],p=yaml['parameters']['dropout'],use_share_layer=yaml['set_share_layer'],  push_num=yaml['parameters']['push_num'], s=yaml['parameters']['s'])
     elif yaml['data']=='fashionmnist':
         the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],1,28,28),1,1,int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'],p=yaml['parameters']['dropout'],use_share_layer=yaml['set_share_layer'],  push_num=yaml['parameters']['push_num'], s=yaml['parameters']['s'])
     elif yaml['data']=='eeg':
@@ -139,6 +143,8 @@ def test(path, data, yaml, criterion_loss):
                 input = input.float().to(device)
             elif yaml['data'] == 'cifar10':
                 input = input.float().to(device).view(input.shape[0], -1)
+            elif yaml['data'] == 'cifar100':
+                input = input.float().to(device).view(input.shape[0], -1)
             elif yaml['data']=='fashionmnist':
                 input = input.float().to(device)
             elif yaml['data'] == 'eeg':
@@ -157,7 +163,7 @@ def test(path, data, yaml, criterion_loss):
             loss = criterion(criterion_loss, output, target)
             if yaml['data'] == 'eeg':
                 prec1, prec5 = accuracy(output.data, target, topk=(1, 2))
-            elif yaml['data'] in ['mnist', 'fashionmnist', 'cifar10','car','svhn']:
+            elif yaml['data'] in ['mnist', 'fashionmnist', 'cifar10','car','svhn','cifar100']:
                 prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
             log(model, loss.cpu(), prec1.cpu(), prec5.cpu())
     return log.epoch_state["top_1"] / log.epoch_state["steps"],log.epoch_state["loss"] / log.epoch_state["steps"]
@@ -172,6 +178,8 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
         if yaml['data'] == 'mnist':
             input = input.float().to(device)
         elif yaml['data'] == 'cifar10':
+            input = input.float().to(device).view(input.shape[0], -1)
+        elif yaml['data'] == 'cifar100':
             input = input.float().to(device).view(input.shape[0], -1)
         elif yaml['data'] == 'fashionmnist':
             input = input.float().to(device)
@@ -205,7 +213,7 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
         # pd_save(model.three_dim_layer.point_layerg+_module[str(0) + '_' + str(0) + '_' + str(0)].tensor_tau_m1.view(28,-1),"tau_m2/"+str(i))
         if yaml['data']=='eeg':
             prec1, prec5 = accuracy(output.data, target, topk=(1, 2))
-        elif yaml['data'] in ['mnist','fashionmnist','cifar10','car','svhn']:
+        elif yaml['data'] in ['mnist','fashionmnist','cifar10','car','svhn','cifar100']:
             prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
         log(model, loss.cpu(), prec1.cpu(),prec5.cpu(),scheduler.lr())
         if isinstance(scheduler, torch.optim.lr_scheduler.CyclicLR):
@@ -245,6 +253,10 @@ if __name__ == "__main__":
         train_dataloader, test_dataloader = load_data(yaml['parameters']['batch_size'],
                                                       yaml['parameters']['batch_size'],args.data_url,yaml['use_standard'])
         model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],3,32,32),3,3, int(10),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'],p=yaml['parameters']['dropout'],use_share_layer=yaml['set_share_layer'],  push_num=yaml['parameters']['push_num'], s=yaml['parameters']['s'])
+    elif yaml['data'] == 'cifar100':
+        train_dataloader, test_dataloader = load_data_c100(yaml['parameters']['batch_size'],
+                                                      yaml['parameters']['batch_size'],args.data_url,yaml['use_standard'])
+        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'],3, 32,32),3,3, int(100),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'],p=yaml['parameters']['dropout'],use_share_layer=yaml['set_share_layer'],  push_num=yaml['parameters']['push_num'], s=yaml['parameters']['s'])
     elif yaml['data'] == 'car':
         train_dataloader, test_dataloader = load_data_car(yaml['parameters']['batch_size'],
                                                       yaml['parameters']['batch_size'])

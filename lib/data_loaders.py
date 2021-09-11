@@ -140,7 +140,38 @@ def load_data(train_batch_size, test_batch_size, data_url=None ,use_standard=Tru
 
     return train_loader, test_loader
 
+def load_data_c100(train_batch_size, test_batch_size, data_url=None ,use_standard=True):
+    if data_url == None:
+        data_url = './data'
+    def get_statistics():
+        train_set=torchvision.datasets.CIFAR10(root=data_url,train=True,download=True,transform=transforms.ToTensor())
+        data=torch.cat([d[0] for d in DataLoader(train_set)])
+        return data.mean(dim=[0,2,3]),data.std(dim=[0,2,3])
+    mean,std=get_statistics()
+    train_transform = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)) if use_standard==True else
+        transforms.Normalize(mean, std) ,
+    ])
 
+    test_trainsform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)) if use_standard == True else
+        transforms.Normalize(mean, std),
+    ])
+    train_set = torchvision.datasets.CIFAR100(root=data_url, train=True,
+                                             download=True, transform=train_transform)
+    train_loader = torch.utils.data.DataLoader(train_set, batch_size=train_batch_size,
+                                               shuffle=True, num_workers=4, drop_last=False)
+
+    test_set = torchvision.datasets.CIFAR100(root=data_url, train=False,
+                                            download=True, transform=test_trainsform)
+    test_loader = torch.utils.data.DataLoader(test_set, batch_size=test_batch_size,
+                                              shuffle=False, num_workers=4, drop_last=False)
+
+    return train_loader, test_loader
 def revertNoramlImgae(image):
     image: torch.Tensor
     if image.shape[-1] == 1:
