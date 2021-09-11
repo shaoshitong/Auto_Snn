@@ -844,8 +844,10 @@ class three_dim_Layer(nn.Module):
         m=len(old)
         for i in range(m-1):
             del old[0]
-        return old[-1]
-
+        v, self.tensor_tau_m1, self.tensor_tau_s1, self.tensor_tau_sm1 = self.out_door(old[-1][0],old[-1][1],old[-1][2], self.tensor_tau_m1,
+                                                                                       self.tensor_tau_s1,
+                                                                                       self.tensor_tau_sm1)
+        return v
         # for i in range(self.z):
         #     for j in range(self.y):
         #         for k in range(self.x):
@@ -914,6 +916,13 @@ class three_dim_Layer(nn.Module):
                 self.set_share_twodimlayer(self.point_layer[str(num) + "_0"], self.point_layer[str(num) + "_1"],
                                            self.point_layer[str(num) + "_2"], tmp_list)
         self.point_layer_module = nn.ModuleDict(self.point_layer)
+        self.out_door=DoorMechanism(int(data.shape[1]//self.div_len[-1]),int(data.shape[1]//self.div_len[-1]),self.feature_len[-1],self.feature_len[-1])
+        self.tensor_tau_m1 = torch.rand((1, self.feature_len[-1]), dtype=torch.float32, requires_grad=False).to(
+            self.device)
+        self.tensor_tau_s1 = torch.rand((1, self.feature_len[-1]), dtype=torch.float32, requires_grad=False).to(
+            self.device)
+        self.tensor_tau_sm1 = torch.rand((1, self.feature_len[-1]), dtype=torch.float32, requires_grad=False).to(
+            self.device)
         del self.point_layer
 
         return self.feature_len[-1], data.shape[1] // self.div_len[-1]
@@ -1013,7 +1022,7 @@ class merge_layer(nn.Module):
         # print(torch.norm(x_lists[0],p=1)/x_lists[0].numel())
         x = self.feature_forward(x_lists)
         # print(torch.norm(x,p=1)/x.numel())
-        h = self.out_classifier(x_lists[0]+x_lists[1]+x_lists[2])
+        h = self.out_classifier(x)
         return h
 
     def initiate_layer(self, input, in_feature, out_feature, classes, tmp_feature=64, tau_m=4., tau_s=1.,

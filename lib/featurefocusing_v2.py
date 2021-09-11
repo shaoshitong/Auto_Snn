@@ -116,17 +116,16 @@ class multi_attention(nn.Module):
         self.a_head=int(a_head)
         self.n_dv=int(n_dv)
 
-    def forward(self, k, q, v):
-        m = k + q + v
-        p = self.linear[0](k) + self.linear[1](q) + self.linear[2](v)
-        b,c,n=p.shape
-        k = self.linear2[0](p+k).view(b,c,self.a_head,self.n_dv).permute(0,2,1,3)
-        q = self.linear2[1](p+q).view(b,c,self.a_head,self.n_dv).permute(0,2,1,3)
-        v = self.linear2[2](p+v).view(b,c,self.a_head,self.n_dv).permute(0,2,1,3)
-        c = torch.matmul(k / self.temperate, q.permute(0, 1, 3,2))  # b,c,c
+    def forward(self,x):
+        b,c,n=x.shape
+        k = self.linear2[0](x).view(b,c,self.a_head,self.n_dv).permute(0,2,1,3) # b,a_head,c,n_dv
+        q = self.linear2[1](x).view(b,c,self.a_head,self.n_dv).permute(0,2,1,3)
+        v = self.linear2[2](x).view(b,c,self.a_head,self.n_dv).permute(0,2,1,3)
+        c = torch.matmul(k / self.temperate, q.permute(0, 1, 3,2))  # b,a_head,c,c
         c = self.dropout(F.softmax(c, dim=-1))
-        c = self.linear3[0](rearrange(torch.matmul(c, v),"a b c d -> a c ( b d )"))
-        return self.layernorm((c + m).permute(0, 2, 1)).permute(0, 2, 1)
+        c = rearrange(torch.matmul(c, v),"a b c d -> a ( b d ) c")
+        k = rearrange(k,"b a c n -> b ( a n ) c")
+        return self.linear3[0](self.layernorm(c + k).permute(0, 2, 1))
 
 
 class Feature_forward(nn.Module):
@@ -149,13 +148,10 @@ class Feature_forward(nn.Module):
                                     nn.BatchNorm2d(self.feature_list[-1]))
         """
 
-    def forward(self, x_lists):
-        k, q, v = x_lists
-        b, c, h, w = q.shape
-        k = k.view(b, c, -1)
-        q = q.view(b, c, -1)
-        v = v.view(b, c, -1)
-        result = self.multi_attention(q, k, v).view(b, c, h, w)
+    def forward(self, x):
+        b, c, h, w = x.shape
+        x = x.view(b, c, -1)
+        result = self.multi_attention(x).view(b, c, h, w)
         result = self.batchnorm[0](result)
         result = self.multi_mix_layer[0](result).view(b, c, h, w)
         return result
