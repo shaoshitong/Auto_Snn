@@ -7,11 +7,11 @@ set_seed:
 pytorch_seed:
   2021
 data:
-  cifar100
+  cifar10
 use_standard:
   True
 set_share_layer:
-  False
+  True
 parameters:
   # default parameters
   s:
@@ -29,7 +29,7 @@ parameters:
   epoch:
     200
   dropout:
-    0.5
+    0.2
   filter_tau_m:
     4
   filter_tau_s:
@@ -54,7 +54,7 @@ optimizer:
     lr: 0.002
     weight_decay: 1e-4
   SGD:
-    momentum: 0.7
+    momentum: 0.9
     lr: 0.005
     weight_decay: 1e-4
   ASGD:

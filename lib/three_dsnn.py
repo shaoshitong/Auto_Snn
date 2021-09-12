@@ -859,14 +859,15 @@ class three_dim_Layer(nn.Module):
         self.losses = self.feature_loss(old)
         for i in range(len(old[:-1])):
             for j in range(3):
-                old[-1][j]=old[-1][j]+self.change_conv[i*3+j](old[i][j])
+                old[i][j]=self.change_conv[i*3+j](old[i][j])
+                old[-1][j]=old[-1][j]+old[i][j]
         m=len(old)
         for i in range(m-1):
             del old[0]
         v, self.tensor_tau_m1, self.tensor_tau_s1, self.tensor_tau_sm1 = self.out_door(old[-1][0],old[-1][1],old[-1][2], self.tensor_tau_m1,
                                                                                        self.tensor_tau_s1,
                                                                                        self.tensor_tau_sm1)
-        return v
+        return v,old[-1]
         # for i in range(self.z):
         #     for j in range(self.y):
         #         for k in range(self.x):
@@ -1040,7 +1041,7 @@ class merge_layer(nn.Module):
         x_lists = self.InputGenerateNet(a, b, c)
         # print(torch.norm(x_lists[0],p=1)/x_lists[0].numel())
         x = self.feature_forward(x_lists)
-        # print(torch.norm(x,p=1)/x.numel())
+        #1 print(torch.norm(x,p=1)/x.numel())
         h = self.out_classifier(x)
         return h
 
@@ -1145,7 +1146,6 @@ class merge_layer(nn.Module):
                   loss_tau
                 + loss_bias
                 + loss_feature) * sigma
-
 
 """
 高斯卷积

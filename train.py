@@ -47,6 +47,20 @@ def set_device():
     return device
 
 device = set_device()
+def Loss_get(name="cross"):
+    def smooth_crossentropy(pred,gold,smoothing=0.1):
+        n_class = pred.size(1)
+        one_hot=torch.full_like(pred,fill_value=smoothing/(n_class-1))
+        one_hot.scatter_(dim=1,index=gold.unsqueeze(1),src=1.-smoothing)
+        log_prob=torch.nn.functional.log_softmax(pred,dim=1)
+        return torch.nn.functional.kl_div(input=log_prob,target=one_hot,reduction='none').sum(dim=-1)
+    if name=="cross":
+        return torch.nn.CrossEntropyLoss()
+    elif name=="smooth_cross":
+        return smooth_crossentropy
+    else:
+        return None
+
 def get_params_numeric(model):
     sum=0
     set_id=[]
@@ -297,7 +311,7 @@ if __name__ == "__main__":
                     )
     optimizer = get_optimizer([dict_list1,dict_list2], yaml, model)
     scheduler = get_scheduler(optimizer, yaml)
-    criterion_loss = torch.nn.CrossEntropyLoss()
+    criterion_loss = Loss_get("cross")
     model.to(set_device())
     get_params_numeric(model) # 5.261376
     if torch.cuda.is_available():

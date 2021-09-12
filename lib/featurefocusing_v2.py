@@ -96,36 +96,116 @@ class multi_mixer_layer(nn.Module):
             x_1 = self.pre_conv[i](x)
             x_1 = rearrange(x_1, "b c h w -> b (h w) c")
             x_1 = self.mixer_layer[i](x_1)
-            # x_1 = torch.mean(x_1, dim=1, keepdim=True)
             result.append(x_1)
         result = self.layernorm(torch.cat(result, dim=1)).permute(0, 2, 1)
-        # result=result@self.weight  #b,c,multi_num
         return result
+class ScaledDotProductAttention(nn.Module):
+    ''' Scaled Dot-Product Attention '''
+
+    def __init__(self, temperature, attn_dropout=0.1):
+        super().__init__()
+        self.temperature = temperature
+        self.dropout = nn.Dropout(attn_dropout)
+
+    def forward(self, q, k, v, mask=None):
+
+        attn = torch.matmul(q / self.temperature, k.transpose(2, 3))
+
+        if mask is not None:
+            attn = attn.masked_fill(mask == 0, -1e9)
+
+        attn = self.dropout(F.softmax(attn, dim=-1))
+        attn = torch.matmul(attn, v)
+
+        return attn
+
+class MultiHeadAttention(nn.Module):
+    ''' Multi-Head Attention module '''
+
+    def __init__(self, feature,n_head=8, d_k=64, d_v=64, dropout=0.1):
+        super().__init__()
+
+        self.n_head = n_head
+        self.d_k = d_k
+        self.d_v = d_v
+
+        self.w_qs = nn.Linear(feature, n_head * d_k, bias=False)
+        self.w_ks = nn.Linear(feature, n_head * d_k, bias=False)
+        self.w_vs = nn.Linear(feature, n_head * d_v, bias=False)
+        self.fc =   nn.Linear(n_head * d_v, feature, bias=False)
+
+        self.attention = ScaledDotProductAttention(temperature=d_k ** 0.5)
+
+        self.dropout = nn.Dropout(dropout)
+        self.layer_norm = nn.LayerNorm(feature, eps=1e-6)
 
 
-class multi_attention(nn.Module):
-    def __init__(self, feature, multi_num,p=0.2, temperate=1.,a_head=8,n_dv=64):
-        super(multi_attention, self).__init__()
-        h=int(a_head*n_dv)
-        self.linear = nn.ModuleList([linear(multi_num, multi_num) for _ in range(3)])
-        self.linear2 = nn.ModuleList([linear(multi_num, h) for _ in range(3)])
-        self.linear3 = nn.ModuleList([linear(h,multi_num) for _ in range(1)])
-        self.dropout = nn.Dropout(p=p)
-        self.temperate = temperate
-        self.layernorm = nn.LayerNorm(feature)
-        self.a_head=int(a_head)
-        self.n_dv=int(n_dv)
+    def forward(self, q, k, v, mask=None):
 
-    def forward(self,x):
-        b,c,n=x.shape
-        k = self.linear2[0](x).view(b,c,self.a_head,self.n_dv).permute(0,2,1,3) # b,a_head,c,n_dv
-        q = self.linear2[1](x).view(b,c,self.a_head,self.n_dv).permute(0,2,1,3)
-        v = self.linear2[2](x).view(b,c,self.a_head,self.n_dv).permute(0,2,1,3)
-        c = torch.matmul(k / self.temperate, q.permute(0, 1, 3,2))  # b,a_head,c,c
-        c = self.dropout(F.softmax(c, dim=-1))
-        c = rearrange(torch.matmul(c, v),"a b c d -> a ( b d ) c")
-        k = rearrange(k,"b a c n -> b ( a n ) c")
-        return self.linear3[0](self.layernorm(c + k).permute(0, 2, 1))
+        d_k, d_v, n_head = self.d_k, self.d_v, self.n_head
+        sz_b, len_q, len_k, len_v = q.size(0), q.size(1), k.size(1), v.size(1)
+
+        residual = q
+
+        # Pass through the pre-attention projection: b x lq x (n*dv)
+        # Separate different heads: b x lq x n x dv
+        q = self.w_qs(q).view(sz_b, len_q, n_head, d_k)
+        k = self.w_ks(k).view(sz_b, len_k, n_head, d_k)
+        v = self.w_vs(v).view(sz_b, len_v, n_head, d_v)
+
+        # Transpose for attention dot product: b x n x lq x dv
+        q, k, v = q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2)
+
+        if mask is not None:
+            mask = mask.unsqueeze(1)   # For head axis broadcasting.
+
+        q = self.attention(q, k, v, mask=mask)
+
+        # Transpose to move the head dimension back: b x lq x n x dv
+        # Combine the last two dimensions to concatenate all the heads together: b x lq x (n*dv)
+        q = rearrange(q,"a b c d -> a c ( b d )")
+        q = self.dropout(self.fc(q))
+        q += residual
+
+        q = self.layer_norm(q)
+
+        return q
+
+
+
+
+class Resnet_forward(nn.Module):
+    def __init__(self, in_feature, tmp_feature, size, p=0.2):
+        super(Resnet_forward, self).__init__()
+        self.lnet = nn.Sequential()
+        self.in_feature = in_feature
+        self.tmp_feature = tmp_feature
+        self.lnet.add_module("batchnorm_0", nn.BatchNorm2d(in_feature))
+        self.lnet.add_module("gelu", nn.GELU())
+        self.lnet.add_module("conv1", nn.Conv2d(in_feature, tmp_feature, (3, 3), (1, 1), (1, 1)))
+        self.lnet.add_module("batchnorm_1", nn.BatchNorm2d(tmp_feature))
+        self.lnet.add_module("relu", nn.ReLU(inplace=True))
+        self.lnet.add_module("dropout", nn.Dropout(p=p))
+        self.lnet.add_module("conv2", nn.Conv2d(tmp_feature, in_feature, (3, 3), (1, 1), (1, 1)))
+
+        self.attention = nn.Sequential(*[
+            nn.MaxPool2d(int(size // 2), (int(size // 2), int(size // 2))),
+            nn.AvgPool2d(int(size // 2), (int(size // 2), int(size // 2))),
+            nn.Flatten(),
+            nn.Linear(in_feature, int(tmp_feature // 4)),
+            nn.Linear(int(tmp_feature // 4), in_feature),
+            nn.Sigmoid(),
+            nn.Unflatten(1, (in_feature, 1, 1))
+        ])
+
+    def forward(self, x):
+        """
+        y = self.norm_act(x)
+        y = y + self.lnet(y)
+        y = y * self.attention(x)
+        """
+        y = x + self.lnet(x)
+        return y
 
 
 class Feature_forward(nn.Module):
@@ -134,24 +214,41 @@ class Feature_forward(nn.Module):
         include in_feature,tmp_feature_1,.....,tmp_feature_n,out_feature
         """
         super(Feature_forward, self).__init__()
-        self.feature_list = feature_list
-        self.size_list = size_list
-        print(p)
+        assert push_num >= 1
         assert (
                 multi_num == 1 or multi_num == 2 or multi_num == 4 or multi_num == 8 or multi_num == 16 or multi_num == 64)
-        self.multi_mix_layer = nn.ModuleList(
-            [multi_mixer_layer(feature_list[-1], size_list[-1], s, multi_num=multi_num, push_num=push_num)])
-        self.multi_attention = multi_attention(feature_list[-1], int(multi_num * (size_list[-1] // s) ** 2), p)
-        self.batchnorm = nn.ModuleList([nn.BatchNorm2d(feature_list[-1])])
+        self.feature_list = feature_list
+        self.size_list = size_list
+        self.p = p
+        self.multi_attention = nn.ModuleList(
+            [MultiHeadAttention(int(multi_num * (size_list[-1] // s) ** 2),dropout=p) for _ in range(push_num)])
+        self.resnet_forward = nn.ModuleList([nn.Sequential(
+            *[Resnet_forward(feature_list[-1], feature_list[-1] * 2, size_list[-1], p=p) for _ in range(2)])
+            for _ in range(push_num)])
         """
         self.out_conv=nn.Sequential(nn.Conv2d(3*self.feature_list[-1],self.feature_list[-1],(1,1),(1,1)),
                                     nn.BatchNorm2d(self.feature_list[-1]))
+        self.multi_mix_layer = nn.ModuleList(
+            [multi_mixer_layer(feature_list[-1], size_list[-1], s, multi_num=multi_num, push_num=push_num)])
         """
 
     def forward(self, x):
-        b, c, h, w = x.shape
-        x = x.view(b, c, -1)
-        result = self.multi_attention(x).view(b, c, h, w)
-        result = self.batchnorm[0](result)
-        result = self.multi_mix_layer[0](result).view(b, c, h, w)
-        return result
+        x, pre_feature = x
+        len_n = len(pre_feature)
+        count = 0
+        for attention, forward in zip(self.multi_attention, self.resnet_forward):
+            b, c, h, w = x.shape
+            """pre_feature[count%len_n]"""
+            x = x.view(b, c, -1)
+            x = attention(x, x, x)
+            count += 1
+            x_1 = x.view(b, c, h, w)
+            x_1 = forward(x_1)
+            if x_1.requires_grad == True:
+                x_1 = F.dropout(x_1, p=self.p)
+            else:
+                x_1 = x_1
+            x = x_1 + x.view(b,c,h,w)
+        # result = self.batchnorm[0](result)
+        # result = self.multi_mix_layer[0](result).view(b, c, h, w)
+        return x
