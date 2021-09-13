@@ -53,30 +53,8 @@ def parametersgradCheck(model):
             paramdict[name] = -1
             # print(name, param.requires_grad, type(param.grad), torch.max(param.data).item(),
             #       torch.min(param.data).item())
-    x=np.linspace(0,10,len(paramdict))
-    figure1=go.Scatter(x=x,y=list(paramdict.values()),mode='markers',fillcolor='green',marker=dict(size=2,color='red'))
-    data=[figure1]
-    layout = dict(
-        title="grad",
-        font=dict(
-            family="宋体",
-            size=10,
-            color="black",
-        ),
-        xaxis=dict(tickmode='array', tickvals=x, ticktext=list(paramdict.keys()),visible =True,tickfont= dict(family='宋体',
-                                                                                                              size=5,
-                                                                                                              color="black")),
-        xaxis_title="x",
-        yaxis_title="y",
-        legend=dict(
-            x=0.8,
-            y=0.9,
-            bgcolor="white",
-            bordercolor="black",
-            borderwidth=2)
-    )
-    fig=Figure(data=data,layout=layout)
-    fig.show()
+    for key in paramdict.keys():
+        print(key,paramdict[key])
 
 def pd_save(tensor, name):
     df = pd.DataFrame()

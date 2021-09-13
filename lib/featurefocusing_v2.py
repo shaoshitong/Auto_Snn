@@ -99,6 +99,8 @@ class multi_mixer_layer(nn.Module):
             result.append(x_1)
         result = self.layernorm(torch.cat(result, dim=1)).permute(0, 2, 1)
         return result
+
+
 class ScaledDotProductAttention(nn.Module):
     ''' Scaled Dot-Product Attention '''
 
@@ -108,7 +110,6 @@ class ScaledDotProductAttention(nn.Module):
         self.dropout = nn.Dropout(attn_dropout)
 
     def forward(self, q, k, v, mask=None):
-
         attn = torch.matmul(q / self.temperature, k.transpose(2, 3))
 
         if mask is not None:
@@ -119,10 +120,11 @@ class ScaledDotProductAttention(nn.Module):
 
         return attn
 
+
 class MultiHeadAttention(nn.Module):
     ''' Multi-Head Attention module '''
 
-    def __init__(self, feature,n_head=8, d_k=64, d_v=64, dropout=0.1):
+    def __init__(self, feature, n_head=8, d_k=64, d_v=64, dropout=0.1):
         super().__init__()
 
         self.n_head = n_head
@@ -132,16 +134,14 @@ class MultiHeadAttention(nn.Module):
         self.w_qs = nn.Linear(feature, n_head * d_k, bias=False)
         self.w_ks = nn.Linear(feature, n_head * d_k, bias=False)
         self.w_vs = nn.Linear(feature, n_head * d_v, bias=False)
-        self.fc =   nn.Linear(n_head * d_v, feature, bias=False)
+        self.fc = nn.Linear(n_head * d_v, feature, bias=False)
 
         self.attention = ScaledDotProductAttention(temperature=d_k ** 0.5)
 
         self.dropout = nn.Dropout(dropout)
         self.layer_norm = nn.LayerNorm(feature, eps=1e-6)
 
-
     def forward(self, q, k, v, mask=None):
-
         d_k, d_v, n_head = self.d_k, self.d_v, self.n_head
         sz_b, len_q, len_k, len_v = q.size(0), q.size(1), k.size(1), v.size(1)
 
@@ -157,13 +157,13 @@ class MultiHeadAttention(nn.Module):
         q, k, v = q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2)
 
         if mask is not None:
-            mask = mask.unsqueeze(1)   # For head axis broadcasting.
+            mask = mask.unsqueeze(1)  # For head axis broadcasting.
 
         q = self.attention(q, k, v, mask=mask)
 
         # Transpose to move the head dimension back: b x lq x n x dv
         # Combine the last two dimensions to concatenate all the heads together: b x lq x (n*dv)
-        q = rearrange(q,"a b c d -> a c ( b d )")
+        q = rearrange(q, "a b c d -> a c ( b d )")
         q = self.dropout(self.fc(q))
         q += residual
 
@@ -172,10 +172,62 @@ class MultiHeadAttention(nn.Module):
         return q
 
 
+class semhash(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, v1, v2, training=True):
+        index = torch.randint(low=0, high=v1.shape[0], size=[int(v1.shape[1] / 2)]).long()
+        v1[index] = v2[index]
+        return v1
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return grad_output, None, None
+
+
+class block_ad(nn.Module):
+
+    def __init__(self, in_channel, out_channel, tag=True, T=4):
+        super(block_ad, self).__init__()
+        self.in_channel = in_channel
+        self.out_channel = out_channel
+        self.fc1 = nn.Linear(in_channel, max(int(in_channel / T), 1))  ##全连接
+        self.fc2 = nn.Linear(max(1, int(in_channel / T)), out_channel)
+        self.training = True
+        self.count = 0
+        self.v1 = torch.randn(1, out_channel).cuda()
+        self.sig = lambda x: torch.sigmoid(x) * 1.2 - 0.1
+        # init.kaiming_normal(self.fc1.weight)
+        self.fc1.weight.data.fill_(0)
+        init.kaiming_normal_(self.fc2.weight)
+        self.fc1.bias.data.fill_(1)
+        self.fc2.bias.data.fill_(1)  ##数据用1填充
+        self.tag = tag
+        self.eps = 1e-3
+        if tag == 0:
+            self.fc1.weight.requires_grad = False
+            self.fc1.bias.requires_grad = False
+            self.fc2.weight.requires_grad = False
+            self.fc2.bias.requires_grad = False
+
+    def forward(self, input):
+        x = F.avg_pool2d(input, input.shape[-1])
+        x = x.view(x.size(0), -1)
+        y = F.relu(self.fc1(x))
+        y = self.fc2(y)
+        if y.requires_grad == True:
+            g = torch.randn(y.shape).to(y.device)
+            g = g + y
+            v1 = torch.clamp(torch.sigmoid(g) * 1.2 - 0.1, torch.Tensor([0]).to(g.device),
+                             torch.Tensor([1]).to(g.device))
+            v2 = torch.gt(g, torch.Tensor([0]).to(g.device)).float()
+            predict_bin = semhash.apply(v1, v2, self.training)
+        else:
+            predict_bin = (y > 0).float()
+        return predict_bin.unsqueeze(-1).unsqueeze(-1)
 
 
 class Resnet_forward(nn.Module):
-    def __init__(self, in_feature, tmp_feature, size, p=0.2):
+    def __init__(self, in_feature, tmp_feature, p=0.2):
         super(Resnet_forward, self).__init__()
         self.lnet = nn.Sequential()
         self.in_feature = in_feature
@@ -185,31 +237,40 @@ class Resnet_forward(nn.Module):
         self.lnet.add_module("conv1", nn.Conv2d(in_feature, tmp_feature, (3, 3), (1, 1), (1, 1)))
         self.lnet.add_module("batchnorm_1", nn.BatchNorm2d(tmp_feature))
         self.lnet.add_module("relu", nn.ReLU(inplace=True))
-        self.lnet.add_module("dropout", nn.Dropout(p=p))
+        self.lnet.add_module("dropout", nn.Dropout(p=0.1))
         self.lnet.add_module("conv2", nn.Conv2d(tmp_feature, in_feature, (3, 3), (1, 1), (1, 1)))
-
-        self.attention = nn.Sequential(*[
-            nn.MaxPool2d(int(size // 2), (int(size // 2), int(size // 2))),
-            nn.AvgPool2d(int(size // 2), (int(size // 2), int(size // 2))),
-            nn.Flatten(),
-            nn.Linear(in_feature, int(tmp_feature // 4)),
-            nn.Linear(int(tmp_feature // 4), in_feature),
-            nn.Sigmoid(),
-            nn.Unflatten(1, (in_feature, 1, 1))
-        ])
+        self.lnet.add_module("batchnorm_2", nn.BatchNorm2d(in_feature, momentum=0.9))
+        self.attention = block_ad(in_feature, in_feature)
 
     def forward(self, x):
-        """
-        y = self.norm_act(x)
-        y = y + self.lnet(y)
-        y = y * self.attention(x)
-        """
-        y = x + self.lnet(x)
-        return y
+        x = self.attention(x) * self.lnet(x) + x
+        x = F.relu_(x)
+        return x
+
+
+class Resnet_forward_block(nn.Module):
+    def __init__(self, in_feature, tmp_feature, out_feature, depth, p=0.2, use_change=False):
+        super(Resnet_forward_block, self).__init__()
+        self.block_layer = nn.Sequential(*[
+            Resnet_forward(in_feature, tmp_feature, p=p) for _ in range(depth)
+
+        ], nn.BatchNorm2d(in_feature))
+        self.p = p
+        self.use_change = use_change
+        if use_change == True:
+            self.conv = nn.Conv2d(in_feature, out_feature, (2, 2), (2, 2),bias=False)
+
+    def forward(self, x):
+        x = self.block_layer(x)
+        if self.use_change == True:
+            x = self.conv(x)
+        if x.requires_grad == True:
+            x = F.dropout(x, p=self.p)
+        return x
 
 
 class Feature_forward(nn.Module):
-    def __init__(self, feature_list, size_list, multi_num=4, push_num=5, s=4, p=0.2):
+    def __init__(self, feature, size, multi_num=4, push_num=5, s=4, p=0.2):
         """
         include in_feature,tmp_feature_1,.....,tmp_feature_n,out_feature
         """
@@ -217,38 +278,30 @@ class Feature_forward(nn.Module):
         assert push_num >= 1
         assert (
                 multi_num == 1 or multi_num == 2 or multi_num == 4 or multi_num == 8 or multi_num == 16 or multi_num == 64)
-        self.feature_list = feature_list
-        self.size_list = size_list
+        self.feature = feature
+        self.size = size
         self.p = p
-        self.multi_attention = nn.ModuleList(
-            [MultiHeadAttention(int(multi_num * (size_list[-1] // s) ** 2),dropout=p) for _ in range(push_num)])
-        self.resnet_forward = nn.ModuleList([nn.Sequential(
-            *[Resnet_forward(feature_list[-1], feature_list[-1] * 2, size_list[-1], p=p) for _ in range(2)])
-            for _ in range(push_num)])
-        """
-        self.out_conv=nn.Sequential(nn.Conv2d(3*self.feature_list[-1],self.feature_list[-1],(1,1),(1,1)),
-                                    nn.BatchNorm2d(self.feature_list[-1]))
-        self.multi_mix_layer = nn.ModuleList(
-            [multi_mixer_layer(feature_list[-1], size_list[-1], s, multi_num=multi_num, push_num=push_num)])
-        """
+        self.resnet_forward = nn.ModuleList([
+            Resnet_forward_block(feature[0], feature[0] * 2, feature[1], depth=push_num, p=p, use_change=True),
+            Resnet_forward_block(feature[1], feature[1] * 2, feature[1], depth=push_num, p=p, use_change=False),
+            Resnet_forward_block(feature[1], feature[1] * 2, feature[1], depth=push_num, p=p, use_change=False),
+        ])
+        self.transition_layer = nn.ModuleList([
+            nn.Conv2d(feature[1] + feature[0] * 3, feature[1], (1, 1), (1, 1),bias=False),
+            nn.Conv2d(feature[1] + feature[0] * 3, feature[1], (1, 1), (1, 1),bias=False,),
+            nn.Conv2d(feature[1] + feature[0] * 3, feature[1], (1, 1), (1, 1),bias=False),
+        ])
 
     def forward(self, x):
         x, pre_feature = x
-        len_n = len(pre_feature)
+        pre_feature=F.avg_pool2d(pre_feature,2)
         count = 0
-        for attention, forward in zip(self.multi_attention, self.resnet_forward):
+        for transition,forward in zip(self.transition_layer,self.resnet_forward):
             b, c, h, w = x.shape
             """pre_feature[count%len_n]"""
-            x = x.view(b, c, -1)
-            x = attention(x, x, x)
-            count += 1
-            x_1 = x.view(b, c, h, w)
-            x_1 = forward(x_1)
-            if x_1.requires_grad == True:
-                x_1 = F.dropout(x_1, p=self.p)
-            else:
-                x_1 = x_1
-            x = x_1 + x.view(b,c,h,w)
+            x = forward(x)
+            x=transition(torch.cat((x,pre_feature),dim=1))
+        #  x = x_1  + x.view(b,c,h,w)
         # result = self.batchnorm[0](result)
         # result = self.multi_mix_layer[0](result).view(b, c, h, w)
         return x

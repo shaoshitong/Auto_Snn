@@ -14,10 +14,12 @@ set_share_layer:
   True
 parameters:
   # default parameters
+  loss_option:
+    smooth_cross
   s:
     4
   push_num:
-    5
+    3
   length:
     25
   tmp_feature:
@@ -29,7 +31,7 @@ parameters:
   epoch:
     200
   dropout:
-    0.2
+    0.1
   filter_tau_m:
     4
   filter_tau_s:
@@ -55,7 +57,7 @@ optimizer:
     weight_decay: 1e-4
   SGD:
     momentum: 0.9
-    lr: 0.005
+    lr: 0.05
     weight_decay: 1e-4
   ASGD:
     lr: 0.0001

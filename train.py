@@ -48,16 +48,22 @@ def set_device():
 
 device = set_device()
 def Loss_get(name="cross"):
-    def smooth_crossentropy(pred,gold,smoothing=0.1):
-        n_class = pred.size(1)
-        one_hot=torch.full_like(pred,fill_value=smoothing/(n_class-1))
-        one_hot.scatter_(dim=1,index=gold.unsqueeze(1),src=1.-smoothing)
-        log_prob=torch.nn.functional.log_softmax(pred,dim=1)
-        return torch.nn.functional.kl_div(input=log_prob,target=one_hot,reduction='none').sum(dim=-1)
+    class smooth_crossentropy(object):
+        def __init__(self):
+            pass
+        def __call__(self, pred,gold,smoothing=0.1,*args, **kwargs):
+            n_class = pred.size(1)
+            gold=gold.to(pred.device)
+            one_hot = torch.full_like(pred, fill_value=smoothing / (n_class - 1)).to(pred.device)
+            one_hot.scatter_(dim=1, index=gold.unsqueeze(1), value=1. - smoothing)
+            log_prob = torch.nn.functional.log_softmax(pred, dim=1)
+            return torch.nn.functional.kl_div(input=log_prob, target=one_hot, reduction='none').sum(dim=-1).mean()
+        def cuda(self,):
+            return self
     if name=="cross":
         return torch.nn.CrossEntropyLoss()
     elif name=="smooth_cross":
-        return smooth_crossentropy
+        return smooth_crossentropy()
     else:
         return None
 
@@ -222,7 +228,7 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
             loss.backward(retain_graph=False)
             # model.subWeightGrad(epoch, yaml['parameters']['epoch'], .5)
             optimizer.step()
-            # if i==600:
+            # if i==10:
             #      parametersgradCheck(model)
         # pd_save(model.three_dim_layer.point_layerg+_module[str(0) + '_' + str(0) + '_' + str(0)].tensor_tau_m1.view(28,-1),"tau_m2/"+str(i))
         if yaml['data']=='eeg':
@@ -311,7 +317,7 @@ if __name__ == "__main__":
                     )
     optimizer = get_optimizer([dict_list1,dict_list2], yaml, model)
     scheduler = get_scheduler(optimizer, yaml)
-    criterion_loss = Loss_get("cross")
+    criterion_loss = Loss_get(yaml["parameters"]["loss_option"])
     model.to(set_device())
     get_params_numeric(model) # 5.261376
     if torch.cuda.is_available():
