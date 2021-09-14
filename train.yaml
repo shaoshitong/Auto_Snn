@@ -11,7 +11,7 @@ data:
 use_standard:
   True
 set_share_layer:
-  True
+  False
 parameters:
   # default parameters
   loss_option:
@@ -45,7 +45,7 @@ parameters:
 shape: [[2,2,2]]
 optimizer:
   optimizer_choice:
-    'SGD'
+    'SAM'
   Adam:
     lr: 0.005
     weight_decay: 0
@@ -53,12 +53,12 @@ optimizer:
     lr: 0.005
     weight_decay: 1e-4
   SAM:
-    lr: 0.002
-    weight_decay: 1e-4
+    lr: 0.05
+    weight_decay: 4e-5
   SGD:
     momentum: 0.9
     lr: 0.05
-    weight_decay: 1e-4
+    weight_decay: 4e-5
   ASGD:
     lr: 0.0001
     weight_decay: 1e-4

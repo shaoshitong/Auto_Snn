@@ -35,7 +35,7 @@ def get_optimizer(params, conf, model):
         weight_decay=optimizer_conf['SGD']['weight_decay']
         print('optimizer:', optimizer_conf['optimizer_choice'], 'lr:', lr)
         adam=torch.optim.SGD
-        optimizer=SAM(params,adam,lr=lr,momentum=0.9)
+        optimizer=SAM(params,adam,lr=lr,momentum=0.9,weight_decay=weight_decay)
         return optimizer
     elif optimizer_choice == 'RMSprop':
         pass

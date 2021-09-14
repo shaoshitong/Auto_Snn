@@ -162,13 +162,13 @@ class block_eq(nn.Module):
             nn.ReflectionPad2d(1),
             nn.Conv2d(eq_feature, eq_feature * 2, (3, 3), stride=_pair(1), padding=0,
                       bias=True) if Use_Spectral == False else SNConv2d(eq_feature, eq_feature * 2, (3, 3), stride=1,
-                                                                        padding=0, bias=True),
+                                                                        padding=0, bias=False),
             nn.BatchNorm2d(eq_feature * 2),
             nn.ReLU(inplace=True),
             nn.ReflectionPad2d(1),
             nn.Conv2d(eq_feature * 2, eq_feature, (3, 3), stride=_pair(1), padding=0,
                       bias=True) if Use_Spectral == False else SNConv2d(eq_feature * 2, eq_feature, (3, 3), stride=1,
-                                                                        padding=0, bias=True),
+                                                                        padding=0, bias=False),
             nn.BatchNorm2d(eq_feature),
         ])
         self.shortConv = nn.Sequential(*[
@@ -902,7 +902,7 @@ class three_dim_Layer(nn.Module):
                 size_m = int(self.feature_len[max(self.z, self.y, self.x)] // in_feature)
                 self.change_conv.append(
                     nn.Conv2d(in_feature, self.feature_len[max(self.z, self.y, self.x)], (size_m, size_m),
-                              (size_m, size_m)))
+                              (size_m, size_m),bias=False))
 
             if set_share_layer == True:
                 self.set_share_twodimlayer(self.point_layer[str(num) + "_0"], self.point_layer[str(num) + "_1"],
@@ -1119,8 +1119,8 @@ class merge_layer(nn.Module):
         # loss_norm = (torch.exp(-loss_norm)/torch.exp(-loss_norm).sum(dim=-1)).std(dim=-1)
         loss_bias = torch.stack(loss, dim=-1).mean()
         return (
-                       loss_tau
-                       + loss_bias
+                       0.5*loss_tau
+                       + 0.5*loss_bias
                        + loss_feature) * sigma
 
 
