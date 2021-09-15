@@ -123,12 +123,7 @@ class block_in(nn.Module):
 class block_out(nn.Module):
     def __init__(self, feature, classes, size, use_pool='none'):
         super(block_out, self).__init__()
-        if dataoption in ["mnist", "fashionmnist", "cifar100", "cifar10", "car", "svhn"]:
-            self.block_out_layer = Denselayer([feature[2], feature[2], feature[2], feature[2]])
-        elif dataoption == "eeg":
-            self.block_out_layer = Denselayer([feature[2], feature[2], feature[2], feature[2]])
-        else:
-            raise KeyError("not have this dataset")
+
         if use_pool == 'none':
             self.classifiar = nn.Sequential(nn.Flatten(), nn.Linear((feature[2] * size[2] * size[2]) // 4, classes))
         else:
@@ -145,7 +140,7 @@ class block_out(nn.Module):
 
     def forward(self, x):
         x = self.transition_layer(x)
-        x = self.block_out_layer(x, not self.training)
+        # x = self.block_out_layer(x, not self.training)
         if self.use_pool == 'none':
             return self.classifiar(x)
         elif self.use_pool == 'max':

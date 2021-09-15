@@ -23,7 +23,7 @@ class Denselayer(nn.Module):
         super(Denselayer,self).__init__()
         self.modellist=[]
         for i,feature_in in enumerate(feature_list):
-            if feature_in!=feature_list[-1]:
+            if i!=len(feature_list)-1:
                 in_feature=feature_list[i]
                 out_feature=feature_list[i+1]
                 self.modellist.append(Denseblock(in_feature,out_feature,training))

@@ -45,7 +45,7 @@ parameters:
 shape: [[2,2,2]]
 optimizer:
   optimizer_choice:
-    'SAM'
+    'SGD'
   Adam:
     lr: 0.005
     weight_decay: 0
