@@ -12,6 +12,7 @@ import torch
 import torchvision
 import torch.utils.data
 from data.car.cardataprocess import CarDateset
+from data.stl.stl10_matlab.stlprocess import STLdataprocess
 from torch.utils.data import DataLoader
 import random
 import openpyxl
@@ -139,7 +140,18 @@ def load_data(train_batch_size, test_batch_size, data_url=None ,use_standard=Tru
                                               shuffle=False, num_workers=4, drop_last=False)
 
     return train_loader, test_loader
+def load_data_stl(train_batch_size,test_batch_size,data_url=None):
+    if data_url == None:
+        data_url = './data'
+    p=STLdataprocess()
+    train_set=p(use_training=True)
+    test_set=p(use_training=True)
+    train_loader=torch.utils.data.DataLoader(train_set, batch_size=train_batch_size,
+                                shuffle=True, num_workers=4, drop_last=False)
+    test_loader=torch.utils.data.DataLoader(test_set, batch_size=test_batch_size,
+                                shuffle=False, num_workers=4, drop_last=False)
 
+    return train_loader, test_loader
 def load_data_c100(train_batch_size, test_batch_size, data_url=None ,use_standard=True):
     if data_url == None:
         data_url = './data'
@@ -254,3 +266,4 @@ class EEGDateset(Dataset):
             X = X.squeeze(0)
         y = torch.Tensor([y])
         return X, y.long().squeeze(-1)
+load_data_stl(64,64)

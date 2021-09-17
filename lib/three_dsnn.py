@@ -39,7 +39,7 @@ def batch_norm(input):
     return torch.div(torch.sub(input, mean), std)
 
 
-filename = "./train.yaml"
+filename = "./train_stl.yaml"
 yaml = yaml_config_get(filename)
 # yaml = yaml_config_get("./train.yaml")
 dataoption = yaml['data']
@@ -91,7 +91,7 @@ class Shortcut(nn.Module):
 class block_in(nn.Module):
     def __init__(self, in_feature, out_feature=64, p=0.2):
         super(block_in, self).__init__()
-        if dataoption in ["mnist", "fashionmnist", "cifar100", "cifar10", "car", "svhn"]:
+        if dataoption in ["mnist", "fashionmnist", "cifar100", "cifar10", "car", "svhn","stl-10"]:
             self.block_in_layer = Denselayer([in_feature, out_feature // 2, out_feature // 2, out_feature, out_feature])
         elif dataoption == "eeg":
             self.block_in_layer = Denselayer([in_feature, out_feature // 2, out_feature])
@@ -357,17 +357,9 @@ def DiffInitial(data, shape, in_feature, out_feature, group=1):
         torch.Tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]]).unsqueeze(0).unsqueeze(0).repeat(in_feature,
                                                                                             out_feature // group, 1, 1),
         requires_grad=False).cuda()
-    if dataoption == 'mnist':
+    if dataoption in ['mnist','fashionmnist']:
         kernel_gauss = guassNet(1, 1, kernel_size=5, requires_grad=False, group=group).cuda()
-    elif dataoption == 'cifar10':
-        kernel_gauss = guassNet(3, 3, kernel_size=5, requires_grad=False, group=group).cuda()
-    elif dataoption == 'cifar100':
-        kernel_gauss = guassNet(3, 3, kernel_size=5, requires_grad=False, group=group).cuda()
-    elif dataoption == 'svhn':
-        kernel_gauss = guassNet(3, 3, kernel_size=5, requires_grad=False, group=group).cuda()
-    elif dataoption == 'fashionmnist':
-        kernel_gauss = guassNet(1, 1, kernel_size=5, requires_grad=False, group=group).cuda()
-    elif dataoption == 'car':
+    elif dataoption in ['cifar10','cifar100','svhn','car','stl-10']:
         kernel_gauss = guassNet(3, 3, kernel_size=5, requires_grad=False, group=group).cuda()
     else:
         raise KeyError("error shape")
@@ -381,7 +373,7 @@ def DiffInitial(data, shape, in_feature, out_feature, group=1):
                        groups=group,
                        padding=(3 - 1) // 2)
     grad = -torch.sqrt(tmp_col ** 2 + tmp_row ** 2).float()
-    if dataoption in ['cifar10', 'car', "mnist", "fashionmnist", "svhn", "cifar100"]:
+    if dataoption in ['cifar10', 'car', "mnist", "fashionmnist", "svhn", "cifar100" ,"stl-10"]:
         grad = grad.view(-1, 3, 32 * 32)
         mean = grad.mean(dim=-1, keepdim=True)
         std = grad.std(dim=-1, keepdim=True)
@@ -400,7 +392,7 @@ class axonLimit(torch.autograd.Function):
         ctx.save_for_backward(v1)
         # v1 = 1.3 * torch.sigmoid(v1) - 0.2
         # return v1
-        if dataoption in ['cifar10', 'car', "svhn", "mnist", "fashionmnist", "cifar100"]:
+        if dataoption in ['cifar10', 'car', "svhn", "mnist", "fashionmnist", "cifar100","stl-10"]:
             return torch.min(torch.max(v1, torch.Tensor([-1.5]).cuda()), torch.Tensor([1.5]).cuda())
         elif dataoption == 'eeg':
             return torch.min(torch.max(v1, torch.Tensor([-1.5]).cuda()), torch.Tensor([1.5]).cuda())
@@ -410,7 +402,7 @@ class axonLimit(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
         input, = ctx.saved_tensors
-        if dataoption in ['cifar10', 'car', "fashionmnist", "mnist", "svhn", "cifar100"]:
+        if dataoption in ['cifar10', 'car', "fashionmnist", "mnist", "svhn", "cifar100","stl-10"]:
             exponent = torch.where((input > -1.6) & (input < 1.6), torch.ones_like(input).cuda(),
                                    torch.zeros_like(input).cuda())
             exponent = torch.where((input > 1.6) | (input < -1.6),
@@ -593,6 +585,20 @@ class point_cul_Layer(nn.Module):
                     self.gaussbur = multi_block_neq(in_feature, out_feature, self.in_size, multi_k=mult_k,
                                                     Use_Spactral=True,
                                                     Use_fractal=True)
+        elif dataoption == 'stl-10':
+            if use_gauss == True:
+                if in_feature == out_feature:
+                    self.gaussbur = guassNet(in_feature, in_feature, kernel_size=3, requires_grad=True)
+                else:
+                    self.gaussbur = guassNet(in_feature, out_feature, kernel_size=3, requires_grad=True)
+            else:
+                if in_feature == out_feature:
+                    self.gaussbur = multi_block_eq(in_feature, self.in_size, multi_k=mult_k, Use_Spactral=True,
+                                                   Use_fractal=True)
+                else:
+                    self.gaussbur = multi_block_neq(in_feature, out_feature, self.in_size, multi_k=mult_k,
+                                                    Use_Spactral=True,
+                                                    Use_fractal=True)
             self.bn1 = nn.BatchNorm2d(out_feature)
         elif dataoption == 'fashionmnist':
             if use_gauss == True:
@@ -643,25 +649,9 @@ class point_cul_Layer(nn.Module):
         x, self.tensor_tau_m1, self.tensor_tau_s1, self.tensor_tau_sm1 = self.DoorMach(x1, x2, x3, self.tensor_tau_m1,
                                                                                        self.tensor_tau_s1,
                                                                                        self.tensor_tau_sm1)
-        if self.weight_rand:
-            if dataoption == 'mnist':
-                m = self.gaussbur(x)
-            elif dataoption == 'cifar10':
-                m = self.gaussbur(x)
-            elif dataoption == 'cifar100':
-                m = self.gaussbur(x)
-            elif dataoption == 'fashionmnist':
-                m = self.gaussbur(x)
-            elif dataoption == 'eeg':
-                m = self.gaussbur(x)
-            elif dataoption == 'car':
-                m = self.gaussbur(x)
-            elif dataoption == 'svhn':
-                m = self.gaussbur(x)
-            else:
-                raise KeyError('not have this dataset')
-            m = self.bn1(m)
-            x = F.leaky_relu(m)
+        m = self.gaussbur(x)
+        m = self.bn1(m)
+        x = F.leaky_relu(m)
         return x
 
     def _initialize(self):
@@ -947,7 +937,7 @@ class InputGenerateNet(nn.Module):
                        old_in_feature=1, old_out_feature=1, mult_k=2, p=0.2, use_share_layer=True):
         if dataoption == 'mnist' or dataoption == 'fashionmnist':
             input = input.view(input.shape[0],-1)
-        elif dataoption in ['cifar10', 'car', "svhn", "cifar100"]:
+        elif dataoption in ['cifar10', 'car', "svhn", "cifar100","stl-10"]:
             input = input.view(input.shape[0],-1)
         elif dataoption in ['eeg']:
             input = input.view(input.shape[0],-1)
@@ -1003,6 +993,9 @@ class merge_layer(nn.Module):
                 # 64,16,16
             elif dataoption == 'svhn':
                 x = x.view(x.shape[0], 3, 32, 32)
+
+            elif dataoption == "stl-10":
+                x=x.view(x.shape[0],3,96,96)
             else:
                 raise KeyError()
         a, b, c = self.block_in_x_y_z(x)
@@ -1046,11 +1039,7 @@ class merge_layer(nn.Module):
         feature_len = [feature_len, feature_len * 4, feature_len * 16]
         print(size_len,feature_len)
         self.feature_forward = Feature_forward(feature_len, size_len, multi_num=multi_num, push_num=push_num, s=s, p=p)
-        if dataoption in ['fashionmnist', 'mnist', 'cifar10', 'cifar100', 'svhn']:
-            out_pointnum = size_len
-        elif dataoption == 'eeg':
-            out_pointnum = size_len
-        elif dataoption == 'car':
+        if dataoption in ['fashionmnist', 'mnist', 'cifar10', 'cifar100', 'svhn','stl-10','egg','car']:
             out_pointnum = size_len
         else:
             raise KeyError("not import")
