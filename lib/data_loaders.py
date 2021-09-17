@@ -224,7 +224,6 @@ class EEGDateset(Dataset):
         else:
             self.data = self.test_X
             self.label = self.test_y
-        print(self.label.shape[0])
 
     def __len__(self):
         return self.label.shape[0]

@@ -54,8 +54,8 @@ def Loss_get(name="cross"):
         def __call__(self, pred,gold,smoothing=0.1,*args, **kwargs):
             n_class = pred.size(1)
             gold=gold.to(pred.device)
-            one_hot = torch.full_like(pred, fill_value=smoothing / (n_class - 1)).to(pred.device)
-            one_hot.scatter_(dim=1, index=gold.unsqueeze(1), value=1. - smoothing)
+            one_hot = torch.full_like(pred, fill_value=smoothing / (n_class - 1)).to(pred.device) #0.0111111
+            one_hot.scatter_(dim=1, index=gold.unsqueeze(1), value=1. - smoothing) #0.9
             log_prob = torch.nn.functional.log_softmax(pred, dim=1)
             return torch.nn.functional.kl_div(input=log_prob, target=one_hot, reduction='none').sum(dim=-1).mean()
         def cuda(self,):
@@ -194,7 +194,6 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
     sigma=yaml['parameters']['sigma']
     model.settest(False)
     for i, (input, target) in enumerate(data):
-
         if yaml['data'] == 'mnist':
             input = input.float().to(device)
         elif yaml['data'] == 'cifar10':
@@ -304,7 +303,7 @@ if __name__ == "__main__":
         test_dataloader = DataLoader(test_data, batch_size=yaml['parameters']['batch_size'], shuffle=True,
                                      num_workers=4,
                                      drop_last=True)
-        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 14,32,32),14,14, int(2),tmp_feature=yaml['parameters']['tmp_feature']*2,tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'],p=yaml['parameters']['dropout'] ,  push_num=yaml['parameters']['push_num'], s=yaml['parameters']['s'])
+        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 14,64,64),14,14, int(2),tmp_feature=yaml['parameters']['tmp_feature'],tau_m=yaml['parameters']['filter_tau_m'],tau_s=yaml['parameters']['filter_tau_s'],use_gauss=False,mult_k=yaml['mult_k'],p=yaml['parameters']['dropout'] ,  use_share_layer=yaml['set_share_layer'], push_num=yaml['parameters']['push_num'], s=yaml['parameters']['s'])
 
     else:
         raise KeyError('There is no corresponding dataset')
@@ -319,6 +318,7 @@ if __name__ == "__main__":
     scheduler = get_scheduler(optimizer, yaml)
     criterion_loss = Loss_get(yaml["parameters"]["loss_option"])
     model.to(set_device())
+
     get_params_numeric(model) # 5.261376
     if torch.cuda.is_available():
         criterion_loss = criterion_loss.cuda()

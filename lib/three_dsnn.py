@@ -946,11 +946,11 @@ class InputGenerateNet(nn.Module):
     def initiate_layer(self, input, in_feature, out_feature, tau_m=4., tau_s=1., use_gauss=True, batchsize=64,
                        old_in_feature=1, old_out_feature=1, mult_k=2, p=0.2, use_share_layer=True):
         if dataoption == 'mnist' or dataoption == 'fashionmnist':
-            input = torch.randn(input.shape[0], 1 * 32 * 32).to(input.device)
+            input = input.view(input.shape[0],-1)
         elif dataoption in ['cifar10', 'car', "svhn", "cifar100"]:
-            input = torch.randn(input.shape[0], 3 * 32 * 32).to(input.device)
+            input = input.view(input.shape[0],-1)
         elif dataoption in ['eeg']:
-            input = torch.randn(input.shape[0], 14 * 64 * 64).to(input.device)
+            input = input.view(input.shape[0],-1)
         self.three_dim_layer.initiate_layer(
             torch.rand(batchsize, in_feature * (input.shape[1] // (old_out_feature * 4))),
             in_feature, out_feature, tau_m=tau_m, tau_s=tau_s,
@@ -1044,6 +1044,7 @@ class merge_layer(nn.Module):
         multi_num = int((size_len ** 2) // (size_len // s) ** 2)
         size_len = [size_len, size_len // 2, size_len // 4]
         feature_len = [feature_len, feature_len * 4, feature_len * 16]
+        print(size_len,feature_len)
         self.feature_forward = Feature_forward(feature_len, size_len, multi_num=multi_num, push_num=push_num, s=s, p=p)
         if dataoption in ['fashionmnist', 'mnist', 'cifar10', 'cifar100', 'svhn']:
             out_pointnum = size_len
@@ -1145,3 +1146,4 @@ def conv2d(x, weight, bias, stride, pad):
     out = out + bias.view(1, -1, 1, 1)          # 添加偏置值
     return out
 """
+

@@ -8,8 +8,16 @@ pytorch_seed:
   2021
 data:
   eeg
+set_share_layer:
+  True
 parameters:
   # default parameters
+  loss_option:
+    smooth_cross
+  push_num:
+    3
+  s:
+    1
   length:
     25
   tmp_feature:
@@ -32,7 +40,7 @@ parameters:
     True
   membrane_filer:
     False
-shape: [[1,1,1],[1,1,1],[1,1,1],[1,1,1],[1,1,1]]
+shape: [[2,2,2]]
 optimizer:
   optimizer_choice:
     'SGD'
