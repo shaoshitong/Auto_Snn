@@ -12,6 +12,8 @@ use_standard:
   True
 set_share_layer:
   False
+use_feature_change:
+  True
 parameters:
   # default parameters
   loss_option:

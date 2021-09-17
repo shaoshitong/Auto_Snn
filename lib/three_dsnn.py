@@ -39,7 +39,7 @@ def batch_norm(input):
     return torch.div(torch.sub(input, mean), std)
 
 
-filename = "./train_stl.yaml"
+filename = "./train.yaml"
 yaml = yaml_config_get(filename)
 # yaml = yaml_config_get("./train.yaml")
 dataoption = yaml['data']
@@ -125,12 +125,12 @@ class block_out(nn.Module):
         super(block_out, self).__init__()
 
         if use_pool == 'none':
-            self.classifiar = nn.Sequential(nn.Flatten(), nn.Linear((feature[2] * size[2] * size[2]) // 4, classes))
+            self.classifiar = nn.Sequential(nn.Flatten(), nn.Linear((feature[1] * size[1] * size[1]) // 4, classes))
         else:
-            self.classifiar = nn.Sequential(nn.Flatten(), nn.Linear(feature[2], classes))
-        self.transition_layer = nn.Sequential(*[nn.Conv2d(feature[1], feature[2], (1, 1), (1, 1),bias=False),
-                                                nn.AvgPool2d((int(size[1] // size[2]), int(size[1] // size[2])),
-                                                             (int(size[1] // size[2]), int(size[1] // size[2])))])
+            self.classifiar = nn.Sequential(nn.Flatten(), nn.Linear(feature[1], classes))
+        self.transition_layer = nn.Sequential(*[nn.Conv2d(feature[0], feature[1], (1, 1), (1, 1),bias=False),
+                                                nn.AvgPool2d((int(size[0] // size[1]), int(size[0] // size[1])),
+                                                             (int(size[0] // size[1]), int(size[0] // size[1])))])
         self.training = False
         self.use_pool = use_pool
         self.size = size
@@ -847,15 +847,19 @@ class three_dim_Layer(nn.Module):
         # return tensor_prev[-1][-1]
 
     def initiate_layer(self, data, in_feature, out_feature, tau_m=4., tau_s=1., use_gauss=True, mult_k=2,
-                       set_share_layer=True):
+                       set_share_layer=True,use_feature_change=True):
         """
         three-dim层初始化节点
         """
         self.use_gauss = use_gauss
         self.point_layer = {}
         self.in_shape = data.shape
-        self.feature_len = [int(in_feature * (2 ** _)) for _ in range(max(self.x, self.y, self.z) + 1)]
-        self.div_len = [2 ** _ for _ in range(max(self.x, self.y, self.z) + 1)]
+        if use_feature_change==True:
+            self.feature_len = [int(in_feature * (2 ** _)) for _ in range(max(self.x, self.y, self.z) + 1)]
+            self.div_len = [2 ** _ for _ in range(max(self.x, self.y, self.z) + 1)]
+        else:
+            self.feature_len = [int(in_feature) ]* (max(self.x, self.y, self.z) + 1)
+            self.div_len = [1]*(max(self.x, self.y, self.z) + 1)
         old_size = int(math.sqrt(data.shape[1] / in_feature))
         for i in range(max(self.x, self.y, self.z) + 1):
             if old_size % (2 ** i) == 0:
@@ -934,7 +938,7 @@ class InputGenerateNet(nn.Module):
         return self.three_dim_layer(x, y, z)
 
     def initiate_layer(self, input, in_feature, out_feature, tau_m=4., tau_s=1., use_gauss=True, batchsize=64,
-                       old_in_feature=1, old_out_feature=1, mult_k=2, p=0.2, use_share_layer=True):
+                       old_in_feature=1, old_out_feature=1, mult_k=2, p=0.2, use_share_layer=True,use_feature_change=True):
         if dataoption == 'mnist' or dataoption == 'fashionmnist':
             input = input.view(input.shape[0],-1)
         elif dataoption in ['cifar10', 'car', "svhn", "cifar100","stl-10"]:
@@ -944,7 +948,7 @@ class InputGenerateNet(nn.Module):
         self.three_dim_layer.initiate_layer(
             torch.rand(batchsize, in_feature * (input.shape[1] // (old_out_feature * 4))),
             in_feature, out_feature, tau_m=tau_m, tau_s=tau_s,
-            use_gauss=use_gauss, mult_k=mult_k, set_share_layer=use_share_layer)
+            use_gauss=use_gauss, mult_k=mult_k, set_share_layer=use_share_layer,use_feature_change=use_feature_change)
         return self.three_dim_layer.feature_len
 
     def settest(self, test):
@@ -1007,7 +1011,7 @@ class merge_layer(nn.Module):
         return h
 
     def initiate_layer(self, input, in_feature, out_feature, classes, tmp_feature=64, tau_m=4., tau_s=1.,
-                       use_gauss=True, batchsize=64, mult_k=2, p=0.2, use_share_layer=True, push_num=5, s=2):
+                       use_gauss=True, batchsize=64, mult_k=2, p=0.2, use_share_layer=True, push_num=5, s=2,use_feature_change=True):
         """
         配置相应的层
         """
@@ -1024,7 +1028,7 @@ class merge_layer(nn.Module):
         feature_len = self.InputGenerateNet.initiate_layer(input, tmp_feature, tmp_feature, tau_m, tau_s, use_gauss,
                                                            batchsize,
                                                            old_in_feature=in_feature, old_out_feature=out_feature,
-                                                           mult_k=mult_k, use_share_layer=use_share_layer)
+                                                           mult_k=mult_k, use_share_layer=use_share_layer,use_feature_change=use_feature_change)
         # self.block_out = block_out(tmp_feature, out_feature_lowbit, classes, use_pool='none')
         import copy
         feature_len.append(copy.deepcopy(feature_len[-1]))

@@ -282,19 +282,18 @@ class Feature_forward(nn.Module):
         self.size = size
         self.p = p
         self.resnet_forward = nn.ModuleList([
-            Resnet_forward_block(feature[0], feature[0] * 2, feature[1], depth=push_num, p=p, use_change=True),
-            Resnet_forward_block(feature[1], feature[1] * 2, feature[1], depth=push_num, p=p, use_change=False),
-            Resnet_forward_block(feature[1], feature[1] * 2, feature[1], depth=push_num, p=p, use_change=False),
+            Resnet_forward_block(feature[0], feature[0] * 2, feature[0], depth=push_num, p=p, use_change=False),
+            Resnet_forward_block(feature[0], feature[0] * 2, feature[0], depth=push_num, p=p, use_change=False),
+            Resnet_forward_block(feature[0], feature[0] * 2, feature[0], depth=push_num, p=p, use_change=False),
         ])
         self.transition_layer = nn.ModuleList([
-            nn.Conv2d(feature[1] + feature[0] * 3, feature[1], (1, 1), (1, 1),bias=False),
-            nn.Conv2d(feature[1] + feature[0] * 3, feature[1], (1, 1), (1, 1),bias=False,),
-            nn.Conv2d(feature[1] + feature[0] * 3, feature[1], (1, 1), (1, 1),bias=False),
+            nn.Conv2d(feature[0] + feature[0] * 3, feature[0], (1, 1), (1, 1),bias=False),
+            nn.Conv2d(feature[0] + feature[0] * 3, feature[0], (1, 1), (1, 1),bias=False,),
+            nn.Conv2d(feature[0] + feature[0] * 3, feature[0], (1, 1), (1, 1),bias=False),
         ])
 
     def forward(self, x):
         x, pre_feature = x
-        pre_feature=F.avg_pool2d(pre_feature,2)
         count = 0
         for transition,forward in zip(self.transition_layer,self.resnet_forward):
             b, c, h, w = x.shape
