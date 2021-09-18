@@ -239,7 +239,6 @@ class Resnet_forward(nn.Module):
         self.lnet.add_module("relu", nn.ReLU(inplace=True))
         self.lnet.add_module("dropout", nn.Dropout(p=0.1))
         self.lnet.add_module("conv2", nn.Conv2d(tmp_feature, in_feature, (3, 3), (1, 1), (1, 1)))
-        self.lnet.add_module("batchnorm_2", nn.BatchNorm2d(in_feature, momentum=0.9))
         self.attention = block_ad(in_feature, in_feature)
 
     def forward(self, x):
@@ -258,7 +257,10 @@ class Resnet_forward_block(nn.Module):
         self.p = p
         self.use_change = use_change
         if use_change == True:
-            self.conv = nn.Conv2d(in_feature, out_feature, (2, 2), (2, 2),bias=False)
+            self.conv = nn.Conv2d(in_feature, out_feature, (2, 2), (2, 2), bias=False)
+        else:
+            self.conv = nn.Conv2d(in_feature, out_feature, (1, 1), (1, 1), bias=False)
+        nn.init.xavier_uniform_(self.conv.weight.data)
 
     def forward(self, x):
         x = self.block_layer(x)
@@ -281,26 +283,30 @@ class Feature_forward(nn.Module):
         self.feature = feature
         self.size = size
         self.p = p
+        self.pre_resnet_forward = nn.Sequential(*[
+            Resnet_forward_block(3, 16, 16, depth=push_num, p=p, use_change=True),
+            Resnet_forward_block(16, 32, feature[0], depth=push_num, p=p, use_change=True),
+        ])
         self.resnet_forward = nn.ModuleList([
             Resnet_forward_block(feature[0], feature[0] * 2, feature[0], depth=push_num, p=p, use_change=False),
             Resnet_forward_block(feature[0], feature[0] * 2, feature[0], depth=push_num, p=p, use_change=False),
             Resnet_forward_block(feature[0], feature[0] * 2, feature[0], depth=push_num, p=p, use_change=False),
         ])
         self.transition_layer = nn.ModuleList([
-            nn.Conv2d(feature[0] + feature[0] * 3, feature[0], (1, 1), (1, 1),bias=False),
-            nn.Conv2d(feature[0] + feature[0] * 3, feature[0], (1, 1), (1, 1),bias=False,),
-            nn.Conv2d(feature[0] + feature[0] * 3, feature[0], (1, 1), (1, 1),bias=False),
+            nn.Conv2d(feature[0] + feature[0], feature[0], (1, 1), (1, 1), bias=False),
+            nn.Conv2d(feature[0] + feature[0], feature[0], (1, 1), (1, 1), bias=False, ),
+            nn.Conv2d(feature[0] + feature[0], feature[0], (1, 1), (1, 1), bias=False),
         ])
 
-    def forward(self, x):
-        x, pre_feature = x
-        count = 0
-        for transition,forward in zip(self.transition_layer,self.resnet_forward):
-            b, c, h, w = x.shape
+    def forward(self, x, A, B, C):
+        self.kl_loss=0.
+        x = self.pre_resnet_forward(x)
+        feature_list = [A, B, C]
+        for transition, forward, feature in zip(self.transition_layer, self.resnet_forward, feature_list):
             """pre_feature[count%len_n]"""
             x = forward(x)
-            x=transition(torch.cat((x,pre_feature),dim=1))
-        #  x = x_1  + x.view(b,c,h,w)
-        # result = self.batchnorm[0](result)
-        # result = self.multi_mix_layer[0](result).view(b, c, h, w)
+            x = transition(torch.cat((x, feature), dim=1))
+            log_soft_x=F.log_softmax(F.avg_pool2d(x,x.shape[-1]).squeeze(),dim=-1)
+            soft_y=F.softmax(F.avg_pool2d(x,x.shape[-1]).squeeze(),dim=-1)+1e-6
+            self.kl_loss=self.kl_loss+F.kl_div(log_soft_x,soft_y,reduction='mean')
         return x

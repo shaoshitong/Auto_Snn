@@ -285,13 +285,14 @@ if __name__ == "__main__":
     else:
         raise KeyError('There is no corresponding dataset')
     params1 = list(filter(lambda i: i.requires_grad, model.out_classifier.parameters()))
-    params_sub=list(map(id,model.out_classifier.parameters()))
-    params2 = list(filter(lambda i: i.requires_grad and id(i) not in params_sub, model.parameters()))
+    params2 = list(filter(lambda i: i.requires_grad, model.InputGenerateNet.parameters()))
+    params3 = list(filter(lambda i: i.requires_grad, model.feature_forward.parameters()))
+    params4 = list(filter(lambda i: i.requires_grad, model.block_in_x_y_z.parameters()))
     dict_list1=dict(params=params1,weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay'])
-    dict_list2=dict(params=params2,
-                    # weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay']/2
-                    )
-    optimizer = get_optimizer([dict_list1,dict_list2], yaml, model)
+    dict_list2=dict(params=params2,weight_decay=1e-4)
+    dict_list3=dict(params=params3,weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay'])
+    dict_list4=dict(params=params4)
+    optimizer = get_optimizer([dict_list1,dict_list2,dict_list3,dict_list4], yaml, model)
     scheduler = get_scheduler(optimizer, yaml)
     criterion_loss = Loss_get(yaml["parameters"]["loss_option"])
     model.to(set_device())

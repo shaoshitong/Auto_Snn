@@ -126,11 +126,15 @@ class block_out(nn.Module):
 
         if use_pool == 'none':
             self.classifiar = nn.Sequential(nn.Flatten(), nn.Linear((feature[1] * size[1] * size[1]) // 4, classes))
+            self.classifiar_1 = nn.Sequential(nn.Flatten(), nn.Linear((feature[0] * size[0] * size[0]), classes))
+            self.classifiar_2 = nn.Sequential(nn.Flatten(), nn.Linear((feature[0] * size[0] * size[0]), classes))
+            self.classifiar_3 = nn.Sequential(nn.Flatten(), nn.Linear((feature[0] * size[0] * size[0]), classes))
         else:
             self.classifiar = nn.Sequential(nn.Flatten(), nn.Linear(feature[1], classes))
-        self.transition_layer = nn.Sequential(*[nn.Conv2d(feature[0], feature[1], (1, 1), (1, 1),bias=False),
-                                                nn.AvgPool2d((int(size[0] // size[1]), int(size[0] // size[1])),
-                                                             (int(size[0] // size[1]), int(size[0] // size[1])))])
+            self.classifiar_1 = nn.Sequential(nn.Flatten(), nn.Linear(feature[0], classes))
+            self.classifiar_2 = nn.Sequential(nn.Flatten(), nn.Linear(feature[0], classes))
+            self.classifiar_3 = nn.Sequential(nn.Flatten(), nn.Linear(feature[0], classes))
+        self.transition_layer = nn.Sequential(*[nn.Conv2d(feature[0], feature[1], (2, 2), (2, 2),bias=False)])
         self.training = False
         self.use_pool = use_pool
         self.size = size
@@ -138,15 +142,17 @@ class block_out(nn.Module):
     def settest(self, training_status):
         self.training = training_status
 
-    def forward(self, x):
+    def forward(self, x,a,b,c):
         x = self.transition_layer(x)
         # x = self.block_out_layer(x, not self.training)
         if self.use_pool == 'none':
-            return self.classifiar(x)
+            return self.classifiar(x)+self.classifiar_1(a)+self.classifiar_2(b)+self.classifiar_3(c)
         elif self.use_pool == 'max':
-            return self.classifiar(F.max_pool2d(x, x.shape[-1]))
+            return self.classifiar(F.max_pool2d(x, x.shape[-1]))+0.1*self.classifiar_1(F.max_pool2d(a, a.shape[-1]))+\
+                   0.1*self.classifiar_2(F.max_pool2d(b, b.shape[-1]))+0.1*self.classifiar_3(F.max_pool2d(c, c.shape[-1]))
         elif self.use_pool == 'avg':
-            return self.classifiar(F.avg_pool2d(x, x.shape[-1]))
+            return self.classifiar(F.max_pool2d(x, x.shape[-1]))+0.1*self.classifiar_1(F.max_pool2d(a, a.shape[-1]))+\
+                   0.1*self.classifiar_2(F.max_pool2d(b, b.shape[-1]))+0.1*self.classifiar_3(F.max_pool2d(c, c.shape[-1]))
 
 
 class block_eq(nn.Module):
@@ -816,14 +822,8 @@ class three_dim_Layer(nn.Module):
         m = len(old)
         for i in range(m - 1):
             del old[0]
-        v, self.tensor_tau_m1, self.tensor_tau_s1, self.tensor_tau_sm1 = self.out_door(old[-1][0], old[-1][1],
-                                                                                       old[-1][2], self.tensor_tau_m1,
-                                                                                       self.tensor_tau_s1,
-                                                                                       self.tensor_tau_sm1)
-
-        p=torch.cat(old[-1],dim=1)
-        del old
-        return v, p
+        x,y,z=old[-1]
+        return x,y,z
         # for i in range(self.z):
         #     for j in range(self.y):
         #         for k in range(self.x):
@@ -1003,11 +1003,9 @@ class merge_layer(nn.Module):
             else:
                 raise KeyError()
         a, b, c = self.block_in_x_y_z(x)
-        x_lists = self.InputGenerateNet(a, b, c)
-        # print(torch.norm(x_lists[0],p=1)/x_lists[0].numel())
-        x = self.feature_forward(x_lists)
-        # 1 print(torch.norm(x,p=1)/x.numel())
-        h = self.out_classifier(x)
+        a_1,b_1,c_1 = self.InputGenerateNet(a, b, c)
+        x = self.feature_forward(x,a_1,b_1,c_1)
+        h = self.out_classifier(x,a_1,b_1,c_1)
         return h
 
     def initiate_layer(self, input, in_feature, out_feature, classes, tmp_feature=64, tau_m=4., tau_s=1.,
@@ -1041,7 +1039,6 @@ class merge_layer(nn.Module):
         multi_num = int((size_len ** 2) // (size_len // s) ** 2)
         size_len = [size_len, size_len // 2, size_len // 4]
         feature_len = [feature_len, feature_len * 4, feature_len * 16]
-        print(size_len,feature_len)
         self.feature_forward = Feature_forward(feature_len, size_len, multi_num=multi_num, push_num=push_num, s=s, p=p)
         if dataoption in ['fashionmnist', 'mnist', 'cifar10', 'cifar100', 'svhn','stl-10','egg','car']:
             out_pointnum = size_len
@@ -1079,8 +1076,8 @@ class merge_layer(nn.Module):
         loss = [torch.tensor(0.).float().cuda()]
         normlist = []
         loss_feature = torch.tensor([0.]).float().cuda()
+        loss_kl=torch.tensor([0.]).float().cuda()
         len = torch.tensor(0.).float().cuda()
-        len2 = torch.tensor(0.).float().cuda()
         loss_tau = torch.tensor(0.).float().cuda()
         for layer in self.modules():
             if isinstance(layer, nn.Conv2d) and layer.bias is not None:
@@ -1096,20 +1093,23 @@ class merge_layer(nn.Module):
                 layer: InputGenerateNet
                 loss_feature += layer.three_dim_layer.losses
                 len += 1
+            elif isinstance(layer,Feature_forward):
+                layer:Feature_forward
+                loss_kl+=layer.kl_loss.squeeze()
             elif isinstance(layer, DoorMechanism):
                 layer: DoorMechanism
-                loss_tau += (layer.norm_mem_1 + layer.norm_mem_2 + layer.norm_mem_3)
-                len2 += 1
+                if hasattr(layer,"norm_mem_1"):
+                    loss_tau += (layer.norm_mem_1 + layer.norm_mem_2 + layer.norm_mem_3)
         loss_feature /= len
         loss_feature.squeeze_(-1)
-        loss_tau /= len2
+        loss_tau *=0.01
         # loss_norm=torch.stack(normlist,dim=-1).std(dim=0)
         # loss_norm = ( torch.stack(loss_norm, dim=-1).min()-torch.stack(loss_norm, dim=-1))
         # loss_norm = (torch.exp(-loss_norm)/torch.exp(-loss_norm).sum(dim=-1)).std(dim=-1)
         loss_bias = torch.stack(loss, dim=-1).mean()
-        return (
-                       0.5*loss_tau
-                       + 0.5*loss_bias
+        return (         loss_kl
+                       + loss_tau
+                       + loss_bias
                        + loss_feature) * sigma
 
 
