@@ -18,6 +18,11 @@ parameters:
   # default parameters
   loss_option:
     smooth_cross
+  sigma_list:
+    - 2.0
+    - 0.75
+    - 0.01
+    - 0.1
   s:
     4
   push_num:

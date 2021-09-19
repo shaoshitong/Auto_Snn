@@ -139,9 +139,13 @@ def test2(model, data, yaml, criterion_loss):
             target = target.to(device)
             input.requires_grad_()
             torch.cuda.synchronize()
-            output = the_model(input)[0]
+            output, potg_a, potg_b, potg_c = model(input)
+            loss_list = [criterion(criterion_loss, output, target),
+                         args.neg_mul * neg_smooth_cross(potg_a, target, output),
+                         args.neg_mul * neg_smooth_cross(potg_b, target, output),
+                         args.neg_mul * neg_smooth_cross(potg_c, target, output)]
+            loss = model.L2_biasoption(loss_list, yaml["parameters"]['sigma_list'])
             torch.cuda.synchronize()
-            loss = criterion(criterion_loss, output, target)
             if yaml['data'] == 'eeg':
                 prec1, prec5 = accuracy(output.data, target, topk=(1, 2))
             elif yaml['data'] in ['mnist', 'fashionmnist', 'cifar10', 'car', 'svhn', 'cifar100', 'stl-10']:
@@ -228,9 +232,13 @@ def test(path, data, yaml, criterion_loss):
             target = target.to(device)
             input.requires_grad_()
             torch.cuda.synchronize()
-            output = the_model(input)
+            output, potg_a, potg_b, potg_c = the_model(input)
+            loss_list = [criterion(criterion_loss, output, target),
+                         args.neg_mul * neg_smooth_cross(potg_a, target, output),
+                         args.neg_mul * neg_smooth_cross(potg_b, target, output),
+                         args.neg_mul * neg_smooth_cross(potg_c, target, output)]
+            loss = model.L2_biasoption(loss_list, yaml["parameters"]['sigma_list'])
             torch.cuda.synchronize()
-            loss = criterion(criterion_loss, output, target)
             if yaml['data'] == 'eeg':
                 prec1, prec5 = accuracy(output.data, target, topk=(1, 2))
             elif yaml['data'] in ['mnist', 'fashionmnist', 'cifar10', 'car', 'svhn', 'cifar100', 'stl-10']:
@@ -255,19 +263,22 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
         target = target.to(device)
         input.requires_grad_()
         output, potg_a, potg_b, potg_c = model(input)
-        L2 = model.L2_biasoption()
-        loss = criterion(criterion_loss, output, target) + args.neg_mul * (
-                    neg_smooth_cross(potg_a, target,output) + neg_smooth_cross(potg_b, target,output) + neg_smooth_cross(potg_c,
-                                                                                                           target,output)) + L2
-
-        #print("\r",f"{((output.argmax(dim=-1)==target)/target.size()[0]).sum().item()},{((potg_a.argmax(dim=-1)==target)/target.size()[0]).sum().item()},{((potg_b.argmax(dim=-1)==target)/target.size()[0]).sum().item()},{((potg_c.argmax(dim=-1)==target)/target.size()[0]).sum().item()}",end="",flush=True)
+        loss_list= [criterion(criterion_loss, output, target),
+                   args.neg_mul* neg_smooth_cross(potg_a, target,output),
+                   args.neg_mul* neg_smooth_cross(potg_b, target,output),
+                   args.neg_mul* neg_smooth_cross(potg_c,target,output)]
+        loss = model.L2_biasoption(loss_list,yaml["parameters"]['sigma_list'])
         if yaml['optimizer']['optimizer_choice'] == 'SAM':
             model.zero_grad()
             loss.backward(retain_graph=False)
-            # model.subWeightGrad(epoch, yaml['parameters']['epoch'], .5)
             optimizer.first_step(zero_grad=True)
-            (criterion(criterion_loss, model(input), target) + model.L2_biasoption()).backward()
-            # model.subWeightGrad(epoch, yaml['parameters']['epoch'], .5)
+            output2, potg_a, potg_b, potg_c = model(input)
+            loss_list = [criterion(criterion_loss, output2, target),
+                         args.neg_mul * neg_smooth_cross(potg_a, target, output2),
+                         args.neg_mul * neg_smooth_cross(potg_b, target, output2),
+                         args.neg_mul * neg_smooth_cross(potg_c, target, output2)]
+            loss = model.L2_biasoption(loss_list, yaml["parameters"]['sigma_list'])
+            loss.backward()
             optimizer.second_step(zero_grad=False)
         else:
             model.zero_grad()

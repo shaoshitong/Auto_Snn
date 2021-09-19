@@ -25,7 +25,7 @@ def MatmulTopkLoss(X,Y):
     YX=F.softmax(YX,dim=-1)
     value,key=torch.topk(YX,YX.size()[-1]//2,dim=-1)# batchsize size size//2
     index=torch.arange(0,value.size()[1]).unsqueeze(0).unsqueeze(-1).to(key.device)# 1,size,1
-    C_xy=(key-index)/YX.size()[-1]
+    C_xy=value*(key-index)/YX.size()[-1]
     C_xy=C_xy.mean(-1) #batchsize,size
     return C_xy
 

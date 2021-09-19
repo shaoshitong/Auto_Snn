@@ -91,19 +91,19 @@ class Shortcut(nn.Module):
 class block_in(nn.Module):
     def __init__(self, in_feature, out_feature=64, p=0.2):
         super(block_in, self).__init__()
-        if dataoption in ["mnist", "fashionmnist", "cifar100", "cifar10", "car", "svhn","stl-10"]:
+        if dataoption in ["mnist", "fashionmnist", "cifar100", "cifar10", "car", "svhn", "stl-10"]:
             self.block_in_layer = Denselayer([in_feature, out_feature // 2, out_feature // 2, out_feature, out_feature])
         elif dataoption == "eeg":
             self.block_in_layer = Denselayer([in_feature, out_feature // 2, out_feature])
         else:
             raise KeyError("not have this dataset")
         self.conv_cat = nn.Sequential(nn.ReflectionPad2d(1),
-                                      nn.Conv2d(out_feature, 3 * out_feature, (4, 4), stride=2, padding=0,bias=False),
+                                      nn.Conv2d(out_feature, 3 * out_feature, (4, 4), stride=2, padding=0, bias=False),
                                       nn.BatchNorm2d(3 * out_feature), )
         self.out_feature = out_feature
         self.relu = nn.LeakyReLU(1e-2)
         self.f_conv = nn.ModuleList(
-            [SNConv2d(3 * out_feature, out_feature, (1, 1), stride=1, padding=0,bias=False) for _ in range(3)])
+            [SNConv2d(3 * out_feature, out_feature, (1, 1), stride=1, padding=0, bias=False) for _ in range(3)])
         self.training = False
         self.dropout = nn.Dropout(p=p)
 
@@ -134,7 +134,7 @@ class block_out(nn.Module):
             self.classifiar_1 = nn.Sequential(nn.Flatten(), nn.Linear(feature[0], classes))
             self.classifiar_2 = nn.Sequential(nn.Flatten(), nn.Linear(feature[0], classes))
             self.classifiar_3 = nn.Sequential(nn.Flatten(), nn.Linear(feature[0], classes))
-        self.transition_layer = nn.Sequential(*[nn.Conv2d(feature[0], feature[1], (2, 2), (2, 2),bias=False)])
+        self.transition_layer = nn.Sequential(*[nn.Conv2d(feature[0], feature[1], (2, 2), (2, 2), bias=False)])
         self.training = False
         self.use_pool = use_pool
         self.size = size
@@ -142,14 +142,14 @@ class block_out(nn.Module):
     def settest(self, training_status):
         self.training = training_status
 
-    def forward(self, x,a,b,c):
+    def forward(self, x, a, b, c):
         x = self.transition_layer(x)
         # x = self.block_out_layer(x, not self.training)
         if self.use_pool == 'none':
-            return self.classifiar(x)+self.classifiar_1(a)+self.classifiar_2(b)+self.classifiar_3(c)
+            return self.classifiar(x) + self.classifiar_1(a) + self.classifiar_2(b) + self.classifiar_3(c)
         elif self.use_pool == 'max':
-            return self.classifiar(F.max_pool2d(x, x.shape[-1])),self.classifiar_1(F.max_pool2d(a, a.shape[-1]))\
-                ,self.classifiar_2(F.max_pool2d(b, b.shape[-1])),self.classifiar_3(F.max_pool2d(c, c.shape[-1]))
+            return self.classifiar(F.max_pool2d(x, x.shape[-1])), self.classifiar_1(F.max_pool2d(a, a.shape[-1])) \
+                , self.classifiar_2(F.max_pool2d(b, b.shape[-1])), self.classifiar_3(F.max_pool2d(c, c.shape[-1]))
         elif self.use_pool == 'avg':
             return self.classifiar(F.max_pool2d(x, x.shape[-1])), self.classifiar_1(F.max_pool2d(a, a.shape[-1])) \
                 , self.classifiar_2(F.max_pool2d(b, b.shape[-1])), self.classifiar_3(F.max_pool2d(c, c.shape[-1]))
@@ -363,9 +363,9 @@ def DiffInitial(data, shape, in_feature, out_feature, group=1):
         torch.Tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]]).unsqueeze(0).unsqueeze(0).repeat(in_feature,
                                                                                             out_feature // group, 1, 1),
         requires_grad=False).cuda()
-    if dataoption in ['mnist','fashionmnist']:
+    if dataoption in ['mnist', 'fashionmnist']:
         kernel_gauss = guassNet(1, 1, kernel_size=5, requires_grad=False, group=group).cuda()
-    elif dataoption in ['cifar10','cifar100','svhn','car','stl-10']:
+    elif dataoption in ['cifar10', 'cifar100', 'svhn', 'car', 'stl-10']:
         kernel_gauss = guassNet(3, 3, kernel_size=5, requires_grad=False, group=group).cuda()
     else:
         raise KeyError("error shape")
@@ -379,7 +379,7 @@ def DiffInitial(data, shape, in_feature, out_feature, group=1):
                        groups=group,
                        padding=(3 - 1) // 2)
     grad = -torch.sqrt(tmp_col ** 2 + tmp_row ** 2).float()
-    if dataoption in ['cifar10', 'car', "mnist", "fashionmnist", "svhn", "cifar100" ,"stl-10"]:
+    if dataoption in ['cifar10', 'car', "mnist", "fashionmnist", "svhn", "cifar100", "stl-10"]:
         grad = grad.view(-1, 3, 32 * 32)
         mean = grad.mean(dim=-1, keepdim=True)
         std = grad.std(dim=-1, keepdim=True)
@@ -398,7 +398,7 @@ class axonLimit(torch.autograd.Function):
         ctx.save_for_backward(v1)
         # v1 = 1.3 * torch.sigmoid(v1) - 0.2
         # return v1
-        if dataoption in ['cifar10', 'car', "svhn", "mnist", "fashionmnist", "cifar100","stl-10"]:
+        if dataoption in ['cifar10', 'car', "svhn", "mnist", "fashionmnist", "cifar100", "stl-10"]:
             return torch.min(torch.max(v1, torch.Tensor([-1.5]).cuda()), torch.Tensor([1.5]).cuda())
         elif dataoption == 'eeg':
             return torch.min(torch.max(v1, torch.Tensor([-1.5]).cuda()), torch.Tensor([1.5]).cuda())
@@ -408,7 +408,7 @@ class axonLimit(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
         input, = ctx.saved_tensors
-        if dataoption in ['cifar10', 'car', "fashionmnist", "mnist", "svhn", "cifar100","stl-10"]:
+        if dataoption in ['cifar10', 'car', "fashionmnist", "mnist", "svhn", "cifar100", "stl-10"]:
             exponent = torch.where((input > -1.6) & (input < 1.6), torch.ones_like(input).cuda(),
                                    torch.zeros_like(input).cuda())
             exponent = torch.where((input > 1.6) | (input < -1.6),
@@ -822,8 +822,8 @@ class three_dim_Layer(nn.Module):
         m = len(old)
         for i in range(m - 1):
             del old[0]
-        x,y,z=old[-1]
-        return x,y,z
+        x, y, z = old[-1]
+        return x, y, z
         # for i in range(self.z):
         #     for j in range(self.y):
         #         for k in range(self.x):
@@ -847,19 +847,19 @@ class three_dim_Layer(nn.Module):
         # return tensor_prev[-1][-1]
 
     def initiate_layer(self, data, in_feature, out_feature, tau_m=4., tau_s=1., use_gauss=True, mult_k=2,
-                       set_share_layer=True,use_feature_change=True):
+                       set_share_layer=True, use_feature_change=True):
         """
         three-dim层初始化节点
         """
         self.use_gauss = use_gauss
         self.point_layer = {}
         self.in_shape = data.shape
-        if use_feature_change==True:
+        if use_feature_change == True:
             self.feature_len = [int(in_feature * (2 ** _)) for _ in range(max(self.x, self.y, self.z) + 1)]
             self.div_len = [2 ** _ for _ in range(max(self.x, self.y, self.z) + 1)]
         else:
-            self.feature_len = [int(in_feature) ]* (max(self.x, self.y, self.z) + 1)
-            self.div_len = [1]*(max(self.x, self.y, self.z) + 1)
+            self.feature_len = [int(in_feature)] * (max(self.x, self.y, self.z) + 1)
+            self.div_len = [1] * (max(self.x, self.y, self.z) + 1)
         old_size = int(math.sqrt(data.shape[1] / in_feature))
         for i in range(max(self.x, self.y, self.z) + 1):
             if old_size % (2 ** i) == 0:
@@ -891,7 +891,7 @@ class three_dim_Layer(nn.Module):
                 size_m = int(self.feature_len[max(self.z, self.y, self.x)] // in_feature)
                 self.change_conv.append(
                     nn.Conv2d(in_feature, self.feature_len[max(self.z, self.y, self.x)], (size_m, size_m),
-                              (size_m, size_m),bias=False))
+                              (size_m, size_m), bias=False))
 
             if set_share_layer == True:
                 self.set_share_twodimlayer(self.point_layer[str(num) + "_0"], self.point_layer[str(num) + "_1"],
@@ -938,17 +938,18 @@ class InputGenerateNet(nn.Module):
         return self.three_dim_layer(x, y, z)
 
     def initiate_layer(self, input, in_feature, out_feature, tau_m=4., tau_s=1., use_gauss=True, batchsize=64,
-                       old_in_feature=1, old_out_feature=1, mult_k=2, p=0.2, use_share_layer=True,use_feature_change=True):
+                       old_in_feature=1, old_out_feature=1, mult_k=2, p=0.2, use_share_layer=True,
+                       use_feature_change=True):
         if dataoption == 'mnist' or dataoption == 'fashionmnist':
-            input = input.view(input.shape[0],-1)
-        elif dataoption in ['cifar10', 'car', "svhn", "cifar100","stl-10"]:
-            input = input.view(input.shape[0],-1)
+            input = input.view(input.shape[0], -1)
+        elif dataoption in ['cifar10', 'car', "svhn", "cifar100", "stl-10"]:
+            input = input.view(input.shape[0], -1)
         elif dataoption in ['eeg']:
-            input = input.view(input.shape[0],-1)
+            input = input.view(input.shape[0], -1)
         self.three_dim_layer.initiate_layer(
             torch.rand(batchsize, in_feature * (input.shape[1] // (old_out_feature * 4))),
             in_feature, out_feature, tau_m=tau_m, tau_s=tau_s,
-            use_gauss=use_gauss, mult_k=mult_k, set_share_layer=use_share_layer,use_feature_change=use_feature_change)
+            use_gauss=use_gauss, mult_k=mult_k, set_share_layer=use_share_layer, use_feature_change=use_feature_change)
         return self.three_dim_layer.feature_len
 
     def settest(self, test):
@@ -999,17 +1000,18 @@ class merge_layer(nn.Module):
                 x = x.view(x.shape[0], 3, 32, 32)
 
             elif dataoption == "stl-10":
-                x=x.view(x.shape[0],3,96,96)
+                x = x.view(x.shape[0], 3, 96, 96)
             else:
                 raise KeyError()
         a, b, c = self.block_in_x_y_z(x)
-        a_1,b_1,c_1 = self.InputGenerateNet(a, b, c)
-        x = self.feature_forward(x,a_1,b_1,c_1)
-        h = self.out_classifier(x,a_1,b_1,c_1)
+        a_1, b_1, c_1 = self.InputGenerateNet(a, b, c)
+        x = self.feature_forward(x, a_1, b_1, c_1)
+        h = self.out_classifier(x, a_1, b_1, c_1)
         return h
 
     def initiate_layer(self, input, in_feature, out_feature, classes, tmp_feature=64, tau_m=4., tau_s=1.,
-                       use_gauss=True, batchsize=64, mult_k=2, p=0.2, use_share_layer=True, push_num=5, s=2,use_feature_change=True):
+                       use_gauss=True, batchsize=64, mult_k=2, p=0.2, use_share_layer=True, push_num=5, s=2,
+                       use_feature_change=True):
         """
         配置相应的层
         """
@@ -1026,7 +1028,8 @@ class merge_layer(nn.Module):
         feature_len = self.InputGenerateNet.initiate_layer(input, tmp_feature, tmp_feature, tau_m, tau_s, use_gauss,
                                                            batchsize,
                                                            old_in_feature=in_feature, old_out_feature=out_feature,
-                                                           mult_k=mult_k, use_share_layer=use_share_layer,use_feature_change=use_feature_change)
+                                                           mult_k=mult_k, use_share_layer=use_share_layer,
+                                                           use_feature_change=use_feature_change)
         # self.block_out = block_out(tmp_feature, out_feature_lowbit, classes, use_pool='none')
         import copy
         feature_len.append(copy.deepcopy(feature_len[-1]))
@@ -1040,7 +1043,7 @@ class merge_layer(nn.Module):
         size_len = [size_len, size_len // 2, size_len // 4]
         feature_len = [feature_len, feature_len * 4, feature_len * 16]
         self.feature_forward = Feature_forward(feature_len, size_len, multi_num=multi_num, push_num=push_num, s=s, p=p)
-        if dataoption in ['fashionmnist', 'mnist', 'cifar10', 'cifar100', 'svhn','stl-10','egg','car']:
+        if dataoption in ['fashionmnist', 'mnist', 'cifar10', 'cifar100', 'svhn', 'stl-10', 'egg', 'car']:
             out_pointnum = size_len
         else:
             raise KeyError("not import")
@@ -1071,12 +1074,16 @@ class merge_layer(nn.Module):
                 layer.gauss_bias.data.fill_(1.)
                 layer.gauss_bias.data -= torch.randn_like(
                     layer.gauss_bias.data).abs()  # /math.sqrt(layer.gauss_bias.data.numel())
-
-    def L2_biasoption(self, sigma=1):
+    @staticmethod
+    def _list_build():
+        return [2.,0.75,0.01,0.1]
+    def L2_biasoption(self, loss_list, sigma=None):
+        if sigma==None:
+            sigma=self._list_build()
         loss = [torch.tensor(0.).float().cuda()]
         normlist = []
         loss_feature = torch.tensor([0.]).float().cuda()
-        loss_kl=torch.tensor([0.]).float().cuda()
+        loss_kl = torch.tensor([0.]).float().cuda()
         len = torch.tensor(0.).float().cuda()
         loss_tau = torch.tensor(0.).float().cuda()
         for layer in self.modules():
@@ -1093,24 +1100,20 @@ class merge_layer(nn.Module):
                 layer: InputGenerateNet
                 loss_feature += layer.three_dim_layer.losses
                 len += 1
-            elif isinstance(layer,Feature_forward):
-                layer:Feature_forward
-                loss_kl+=layer.kl_loss.squeeze()
+            elif isinstance(layer, Feature_forward):
+                layer: Feature_forward
+                loss_kl += layer.kl_loss.squeeze()
             elif isinstance(layer, DoorMechanism):
                 layer: DoorMechanism
-                if hasattr(layer,"norm_mem_1"):
+                if hasattr(layer, "norm_mem_1"):
                     loss_tau += (layer.norm_mem_1 + layer.norm_mem_2 + layer.norm_mem_3)
-        loss_feature =(loss_feature.squeeze(-1)/len)*2
-        loss_kl=loss_kl*0.75
-        loss_tau *=0.01
-        # loss_norm=torch.stack(normlist,dim=-1).std(dim=0)
-        # loss_norm = ( torch.stack(loss_norm, dim=-1).min()-torch.stack(loss_norm, dim=-1))
-        # loss_norm = (torch.exp(-loss_norm)/torch.exp(-loss_norm).sum(dim=-1)).std(dim=-1)
-        loss_bias = torch.stack(loss, dim=-1).mean()*0.1
-        return (         loss_kl
-                       + loss_tau
-                       + loss_bias
-                       + loss_feature) * sigma
+        loss_feature = (loss_feature.squeeze(-1) / len) * sigma[0]
+        loss_kl = (loss_kl * sigma[1]).squeeze(-1)
+        loss_tau = loss_tau * sigma[2]
+        loss_bias = torch.stack(loss, dim=-1).mean() * sigma[3]
+        loss = torch.stack(loss_list + [loss_bias, loss_kl, loss_feature, loss_tau], dim=-1).sum()
+
+        return loss
 
 
 """
@@ -1139,4 +1142,3 @@ def conv2d(x, weight, bias, stride, pad):
     out = out + bias.view(1, -1, 1, 1)          # 添加偏置值
     return out
 """
-
