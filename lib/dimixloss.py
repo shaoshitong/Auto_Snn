@@ -21,11 +21,11 @@ def MatmulTopkLoss(X,Y):
     Y:torch.Tensor
     Y_permute=Y.permute(0,2,1)
     Y_p_mat_X=torch.matmul(X,Y_permute)
-    YX=Y_p_mat_X.permute(0,2,1)+Y_p_mat_X
+    YX=Y_p_mat_X
     YX=F.softmax(YX,dim=-1)
     value,key=torch.topk(YX,YX.size()[-1]//2,dim=-1)# batchsize size size//2
     index=torch.arange(0,value.size()[1]).unsqueeze(0).unsqueeze(-1).to(key.device)# 1,size,1
-    C_xy=value*(key-index)/YX.size()[-1]
+    C_xy=(key-index)/YX.size()[-1]
     C_xy=C_xy.mean(-1) #batchsize,size
     return C_xy
 

@@ -148,11 +148,11 @@ class block_out(nn.Module):
         if self.use_pool == 'none':
             return self.classifiar(x)+self.classifiar_1(a)+self.classifiar_2(b)+self.classifiar_3(c)
         elif self.use_pool == 'max':
-            return self.classifiar(F.max_pool2d(x, x.shape[-1]))+0.1*self.classifiar_1(F.max_pool2d(a, a.shape[-1]))+\
-                   0.1*self.classifiar_2(F.max_pool2d(b, b.shape[-1]))+0.1*self.classifiar_3(F.max_pool2d(c, c.shape[-1]))
+            return self.classifiar(F.max_pool2d(x, x.shape[-1])),self.classifiar_1(F.max_pool2d(a, a.shape[-1]))\
+                ,self.classifiar_2(F.max_pool2d(b, b.shape[-1])),self.classifiar_3(F.max_pool2d(c, c.shape[-1]))
         elif self.use_pool == 'avg':
-            return self.classifiar(F.max_pool2d(x, x.shape[-1]))+0.1*self.classifiar_1(F.max_pool2d(a, a.shape[-1]))+\
-                   0.1*self.classifiar_2(F.max_pool2d(b, b.shape[-1]))+0.1*self.classifiar_3(F.max_pool2d(c, c.shape[-1]))
+            return self.classifiar(F.max_pool2d(x, x.shape[-1])), self.classifiar_1(F.max_pool2d(a, a.shape[-1])) \
+                , self.classifiar_2(F.max_pool2d(b, b.shape[-1])), self.classifiar_3(F.max_pool2d(c, c.shape[-1]))
 
 
 class block_eq(nn.Module):
@@ -1100,13 +1100,13 @@ class merge_layer(nn.Module):
                 layer: DoorMechanism
                 if hasattr(layer,"norm_mem_1"):
                     loss_tau += (layer.norm_mem_1 + layer.norm_mem_2 + layer.norm_mem_3)
-        loss_feature /= len
-        loss_feature.squeeze_(-1)
+        loss_feature =(loss_feature.squeeze(-1)/len)*2
+        loss_kl=loss_kl*0.75
         loss_tau *=0.01
         # loss_norm=torch.stack(normlist,dim=-1).std(dim=0)
         # loss_norm = ( torch.stack(loss_norm, dim=-1).min()-torch.stack(loss_norm, dim=-1))
         # loss_norm = (torch.exp(-loss_norm)/torch.exp(-loss_norm).sum(dim=-1)).std(dim=-1)
-        loss_bias = torch.stack(loss, dim=-1).mean()
+        loss_bias = torch.stack(loss, dim=-1).mean()*0.1
         return (         loss_kl
                        + loss_tau
                        + loss_bias

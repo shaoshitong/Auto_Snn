@@ -307,6 +307,6 @@ class Feature_forward(nn.Module):
             x = forward(x)
             x = transition(torch.cat((x, feature), dim=1))
             log_soft_x=F.log_softmax(F.avg_pool2d(x,x.shape[-1]).squeeze(),dim=-1)
-            soft_y=F.softmax(F.avg_pool2d(x,x.shape[-1]).squeeze(),dim=-1)+1e-6
-            self.kl_loss=self.kl_loss+F.kl_div(log_soft_x,soft_y,reduction='mean')
+            soft_y=F.softmax(F.avg_pool2d(x,x.shape[-1]).squeeze(),dim=-1)+1e-8
+            self.kl_loss=self.kl_loss+F.kl_div(log_soft_x,soft_y, reduction='none').sum(dim=-1).mean()
         return x
