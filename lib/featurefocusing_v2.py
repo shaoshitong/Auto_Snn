@@ -11,6 +11,7 @@ from Snn_Auto_master.lib.parameters_check import pd_save, parametersgradCheck
 from Snn_Auto_master.lib.SNnorm import SNConv2d, SNLinear
 from Snn_Auto_master.lib.fractallayer import LastJoiner
 from Snn_Auto_master.lib.cocoscontextloss import ContextualLoss_forward
+from lib.Wideresnet import WideResNetBlock
 import math
 import pandas as pd
 from torch.nn.parameter import Parameter
@@ -21,32 +22,21 @@ import torch
 import torch.nn.init as init
 import math
 from einops import rearrange
+def size_change(f, s):
+    def change(xx):
+        xx: torch.Tensor
+        xx = F.interpolate(xx, (s, s), mode='bilinear', align_corners=True)
+        return xx
 
-
-class linear(nn.Module):
-    def __init__(self, in_feature, out_feature):
-        super(linear, self).__init__()
-        self.weight = Parameter(torch.Tensor(in_feature, out_feature))
-        self.bias = Parameter(torch.Tensor(1, 1, out_feature))
-        self.feature = 6. / math.sqrt(in_feature * out_feature)
-        self._initialize()
-
-    def forward(self, x):
-        x = x @ self.weight + self.bias
-        return x
-
-    def _initialize(self):
-        self.weight.data.uniform_(-self.feature, self.feature)
-        self.bias.data.fill_(0.)
-
+    return change
 
 class MLP(nn.Sequential):
     def __init__(self, in_feature, out_feature, p=0.2000000000001):
         tmp_feature = int(math.sqrt(in_feature * out_feature) // 4)
         super(MLP, self).__init__()
-        self.add_module("linear_1", linear(in_feature, tmp_feature))
+        self.add_module("linear_1", nn.Linear(in_feature, tmp_feature))
         self.add_module("gelu", nn.GELU())
-        self.add_module("linear_2", linear(tmp_feature, out_feature))
+        self.add_module("linear_2", nn.Linear(tmp_feature, out_feature))
 
     def forward(self, x):
         x = super(MLP, self).forward(x)
@@ -272,41 +262,55 @@ class Resnet_forward_block(nn.Module):
 
 
 class Feature_forward(nn.Module):
-    def __init__(self, feature, size, multi_num=4, push_num=5, s=4, p=0.2):
+    def __init__(self, feature, size, push_num=5, s=4, p=0.2):
         """
         include in_feature,tmp_feature_1,.....,tmp_feature_n,out_feature
         """
         super(Feature_forward, self).__init__()
         assert push_num >= 1
-        assert (
-                multi_num == 1 or multi_num == 2 or multi_num == 4 or multi_num == 8 or multi_num == 16 or multi_num == 64)
-        self.feature = feature
+        self.feature = feature[0]
+        self.tag = feature[1]+1
         self.size = size
         self.p = p
-        self.pre_resnet_forward = nn.Sequential(*[
-            Resnet_forward_block(3, 16, 16, depth=push_num, p=p, use_change=True),
-            Resnet_forward_block(16, 32, feature[0], depth=push_num, p=p, use_change=True),
+        self.three_dim_layer_out_feature = self.feature[self.tag]
+        self.f = nn.Sequential(*[
+            nn.Conv2d(self.feature[0], self.feature[1], (3, 3), stride=(1, 1), padding=1, bias=False),
         ])
         self.resnet_forward = nn.ModuleList([
-            Resnet_forward_block(feature[0], feature[0] * 2, feature[0], depth=push_num, p=p, use_change=False),
-            Resnet_forward_block(feature[0], feature[0] * 2, feature[0], depth=push_num, p=p, use_change=False),
-            Resnet_forward_block(feature[0], feature[0] * 2, feature[0], depth=push_num, p=p, use_change=False),
+            WideResNetBlock(self.feature[1], self.feature[2], 1, push_num, dropout=p, use_pool=False),
+            WideResNetBlock(self.feature[2], self.feature[3], 2, push_num, dropout=p, use_pool=False),
+            WideResNetBlock(self.feature[3], self.feature[4], 2, push_num, dropout=p, use_pool=False),
         ])
         self.transition_layer = nn.ModuleList([
-            nn.Conv2d(feature[0] + feature[0], feature[0], (1, 1), (1, 1), bias=False),
-            nn.Conv2d(feature[0] + feature[0], feature[0], (1, 1), (1, 1), bias=False, ),
-            nn.Conv2d(feature[0] + feature[0], feature[0], (1, 1), (1, 1), bias=False),
+            nn.Conv2d( self.feature[2]*2, self.feature[2], (1, 1), (1, 1), bias=False),
+            nn.Conv2d( self.feature[3]*2, self.feature[3], (1, 1), (1, 1), bias=False),
+            nn.Conv2d( self.feature[4]*2, self.feature[4], (1, 1), (1, 1), bias=False),
+        ])
+        self.balance_layer= nn.ModuleList([
+            nn.Sequential(*[nn.Conv2d(self.three_dim_layer_out_feature, self.feature[2], (1, 1), (1, 1), bias=False),
+                            nn.ReLU(inplace=True),
+                            nn.BatchNorm2d(self.feature[2]),
+                            ]),
+            nn.Sequential(*[nn.Conv2d(self.three_dim_layer_out_feature, self.feature[3], (1, 1), (1, 1), bias=False),
+                            nn.ReLU(inplace=True),
+                            nn.BatchNorm2d(self.feature[3]),
+                            ]),
+            nn.Sequential(*[nn.Conv2d(self.three_dim_layer_out_feature, self.feature[4], (1, 1), (1, 1), bias=False),
+                            nn.ReLU(inplace=True),
+                            nn.BatchNorm2d(self.feature[4]),
+                            ]),
         ])
 
     def forward(self, x, A, B, C):
-        self.kl_loss=0.
-        x = self.pre_resnet_forward(x)
+        self.kl_loss = 0.
+        x = self.f(x)
         feature_list = [A, B, C]
-        for transition, forward, feature in zip(self.transition_layer, self.resnet_forward, feature_list):
+        for transition, forward, feature,balance in zip(self.transition_layer, self.resnet_forward, feature_list,self.balance_layer):
             """pre_feature[count%len_n]"""
             x = forward(x)
+            feature=balance(size_change(x.size()[1],x.size()[2])(feature))
             x = transition(torch.cat((x, feature), dim=1))
-            log_soft_x=F.log_softmax(F.avg_pool2d(x,x.shape[-1]).squeeze(),dim=-1)
-            soft_y=F.softmax(F.avg_pool2d(x,x.shape[-1]).squeeze(),dim=-1)+1e-8
-            self.kl_loss=self.kl_loss+F.kl_div(log_soft_x,soft_y, reduction='none').sum(dim=-1).mean()
+            log_soft_x = F.log_softmax(F.avg_pool2d(x, x.shape[-1]).squeeze(), dim=-1)
+            soft_y = F.softmax(F.avg_pool2d(feature, feature.shape[-1]).squeeze(), dim=-1) + 1e-8
+            self.kl_loss = self.kl_loss + F.kl_div(log_soft_x, soft_y, reduction='none').sum(dim=-1).mean()
         return x

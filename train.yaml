@@ -30,7 +30,7 @@ parameters:
   length:
     25
   tmp_feature:
-    64
+    8
   sigma:
     0.1
   batch_size:
@@ -64,7 +64,7 @@ optimizer:
     weight_decay: 4e-5
   SGD:
     momentum: 0.9
-    lr: 0.05
+    lr: 0.02
     weight_decay: 4e-5
   ASGD:
     lr: 0.0001

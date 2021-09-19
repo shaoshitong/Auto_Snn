@@ -121,30 +121,28 @@ class block_in(nn.Module):
 
 
 class block_out(nn.Module):
-    def __init__(self, feature, classes, size, use_pool='none'):
+    def __init__(self, feature, fl_feature,classes, size, use_pool='none'):
         super(block_out, self).__init__()
 
         if use_pool == 'none':
-            self.classifiar = nn.Sequential(nn.Flatten(), nn.Linear((feature[1] * size[1] * size[1]) // 4, classes))
-            self.classifiar_1 = nn.Sequential(nn.Flatten(), nn.Linear((feature[0] * size[0] * size[0]), classes))
-            self.classifiar_2 = nn.Sequential(nn.Flatten(), nn.Linear((feature[0] * size[0] * size[0]), classes))
-            self.classifiar_3 = nn.Sequential(nn.Flatten(), nn.Linear((feature[0] * size[0] * size[0]), classes))
+            self.classifiar = nn.Sequential(nn.Flatten(), nn.Linear((feature * 4 * 4 * 2), classes))
+            self.classifiar_1 = nn.Sequential(nn.Flatten(), nn.Linear((fl_feature * 8 * 8), classes))
+            self.classifiar_2 = nn.Sequential(nn.Flatten(), nn.Linear((fl_feature * 8 * 8), classes))
+            self.classifiar_3 = nn.Sequential(nn.Flatten(), nn.Linear((fl_feature * 8 * 8), classes))
         else:
-            self.classifiar = nn.Sequential(nn.Flatten(), nn.Linear(feature[1], classes))
-            self.classifiar_1 = nn.Sequential(nn.Flatten(), nn.Linear(feature[0], classes))
-            self.classifiar_2 = nn.Sequential(nn.Flatten(), nn.Linear(feature[0], classes))
-            self.classifiar_3 = nn.Sequential(nn.Flatten(), nn.Linear(feature[0], classes))
-        self.transition_layer = nn.Sequential(*[nn.Conv2d(feature[0], feature[1], (2, 2), (2, 2), bias=False)])
+            self.classifiar = nn.Sequential(nn.Flatten(), nn.Linear(feature * 2, classes))
+            self.classifiar_1 = nn.Sequential(nn.Flatten(), nn.Linear(fl_feature, classes))
+            self.classifiar_2 = nn.Sequential(nn.Flatten(), nn.Linear(fl_feature, classes))
+            self.classifiar_3 = nn.Sequential(nn.Flatten(), nn.Linear(fl_feature, classes))
+        self.transition_layer = nn.Sequential(*[nn.Conv2d(feature, feature * 2, (2, 2), (2, 2), bias=False)])
         self.training = False
         self.use_pool = use_pool
         self.size = size
-
     def settest(self, training_status):
         self.training = training_status
 
     def forward(self, x, a, b, c):
         x = self.transition_layer(x)
-        # x = self.block_out_layer(x, not self.training)
         if self.use_pool == 'none':
             return self.classifiar(x) + self.classifiar_1(a) + self.classifiar_2(b) + self.classifiar_3(c)
         elif self.use_pool == 'max':
@@ -824,27 +822,6 @@ class three_dim_Layer(nn.Module):
             del old[0]
         x, y, z = old[-1]
         return x, y, z
-        # for i in range(self.z):
-        #     for j in range(self.y):
-        #         for k in range(self.x):
-        #             """
-        #             push xx,yy,zz
-        #             """
-        #             zz = tensor_prev[j][k]
-        #             if j == 0:
-        #                 xx = x
-        #             else:
-        #                 xx = tensor_prev[j - 1][k]
-        #             if k == 0:
-        #                 yy = y
-        #             else:
-        #                 yy = tensor_prev[j][k - 1]
-        #             tensor_prev[j][k] = self.point_layer_module[str(i) + '_' + str(j) + '_' + str(k)](
-        #                 torch.stack([xx, yy, zz], dim=-1))
-        #             tensor_prev[j][k] = axonLimit.apply(tensor_prev[j][k])
-        #             if k != self.x - 1 and j != self.y - 1 and i != self.z - 1 and self.test == False:
-        #                 tensor_prev[j][k]= self.dropout[0][j][k](tensor_prev[j][k])
-        # return tensor_prev[-1][-1]
 
     def initiate_layer(self, data, in_feature, out_feature, tau_m=4., tau_s=1., use_gauss=True, mult_k=2,
                        set_share_layer=True, use_feature_change=True):
@@ -855,12 +832,12 @@ class three_dim_Layer(nn.Module):
         self.point_layer = {}
         self.in_shape = data.shape
         if use_feature_change == True:
-            self.feature_len = [int(in_feature * (2 ** _)) for _ in range(max(self.x, self.y, self.z) + 1)]
-            self.div_len = [2 ** _ for _ in range(max(self.x, self.y, self.z) + 1)]
+            self.feature_len = [in_feature[i] for i in range(max(self.x, self.y, self.z) + 1)]
+            self.div_len = [2 ** i for i in range(max(self.x, self.y, self.z) + 1)]
         else:
-            self.feature_len = [int(in_feature)] * (max(self.x, self.y, self.z) + 1)
+            self.feature_len = [int(in_feature[0])] * (max(self.x, self.y, self.z) + 1)
             self.div_len = [1] * (max(self.x, self.y, self.z) + 1)
-        old_size = int(math.sqrt(data.shape[1] / in_feature))
+        old_size = int(math.sqrt(data.shape[1] / in_feature[0]))
         for i in range(max(self.x, self.y, self.z) + 1):
             if old_size % (2 ** i) == 0:
                 pass
@@ -888,7 +865,7 @@ class three_dim_Layer(nn.Module):
                                                                           weight_require_grad=self.weight_require_grad,
                                                                           p=self.p, device=self.device,
                                                                           grad_lr=self.grad_lr)
-                size_m = int(self.feature_len[max(self.z, self.y, self.x)] // in_feature)
+                size_m = 2**(num+1)
                 self.change_conv.append(
                     nn.Conv2d(in_feature, self.feature_len[max(self.z, self.y, self.x)], (size_m, size_m),
                               (size_m, size_m), bias=False))
@@ -897,17 +874,8 @@ class three_dim_Layer(nn.Module):
                 self.set_share_twodimlayer(self.point_layer[str(num) + "_0"], self.point_layer[str(num) + "_1"],
                                            self.point_layer[str(num) + "_2"], tmp_list)
         self.point_layer_module = nn.ModuleDict(self.point_layer)
-        self.out_door = DoorMechanism(int(data.shape[1] // self.div_len[-1]), int(data.shape[1] // self.div_len[-1]),
-                                      self.feature_len[-1], self.feature_len[-1])
-        self.tensor_tau_m1 = torch.rand((1, self.feature_len[-1]), dtype=torch.float32, requires_grad=False).to(
-            self.device)
-        self.tensor_tau_s1 = torch.rand((1, self.feature_len[-1]), dtype=torch.float32, requires_grad=False).to(
-            self.device)
-        self.tensor_tau_sm1 = torch.rand((1, self.feature_len[-1]), dtype=torch.float32, requires_grad=False).to(
-            self.device)
         del self.point_layer
-
-        return self.feature_len[-1], data.shape[1] // self.div_len[-1]
+        return self.feature_len[-1], max(self.z, self.y, self.x)
 
     def set_share_twodimlayer(self, layer1, layer2, layer3, tmp_list):
         layer1: two_dim_layer
@@ -937,20 +905,34 @@ class InputGenerateNet(nn.Module):
     def forward(self, x, y, z):
         return self.three_dim_layer(x, y, z)
 
+    def _initialize(self):
+        for layer in self.modules():
+            if isinstance(layer, nn.Conv2d) and layer.bias is not None:
+                layer: nn.Conv2d
+                layer.bias.data.fill_(1.)
+                layer.bias.data -= torch.randn_like(layer.bias.data).abs()  # /math.sqrt(layer.bias.data.numel())
+            elif isinstance(layer, guassNet):
+                layer: guassNet
+                layer.gauss_bias.data.fill_(1.)
+                layer.gauss_bias.data -= torch.randn_like(
+                    layer.gauss_bias.data).abs()  # /math.sqrt(layer.gauss_bias.data.numel())
+
     def initiate_layer(self, input, in_feature, out_feature, tau_m=4., tau_s=1., use_gauss=True, batchsize=64,
                        old_in_feature=1, old_out_feature=1, mult_k=2, p=0.2, use_share_layer=True,
                        use_feature_change=True):
-        if dataoption == 'mnist' or dataoption == 'fashionmnist':
-            input = input.view(input.shape[0], -1)
-        elif dataoption in ['cifar10', 'car', "svhn", "cifar100", "stl-10"]:
-            input = input.view(input.shape[0], -1)
-        elif dataoption in ['eeg']:
-            input = input.view(input.shape[0], -1)
-        self.three_dim_layer.initiate_layer(
-            torch.rand(batchsize, in_feature * (input.shape[1] // (old_out_feature * 4))),
-            in_feature, out_feature, tau_m=tau_m, tau_s=tau_s,
-            use_gauss=use_gauss, mult_k=mult_k, set_share_layer=use_share_layer, use_feature_change=use_feature_change)
-        return self.three_dim_layer.feature_len
+        b, c, h, w = input.shape
+        r = self.three_dim_layer.initiate_layer(
+            torch.rand(batchsize, in_feature[0] * h * w),
+            in_feature,
+            out_feature,
+            tau_m=tau_m,
+            tau_s=tau_s,
+            use_gauss=use_gauss,
+            mult_k=mult_k,
+            set_share_layer=use_share_layer,
+            use_feature_change=use_feature_change)
+        self._initialize()
+        return r
 
     def settest(self, test):
         self.three_dim_layer.settest(test)
@@ -1016,44 +998,36 @@ class merge_layer(nn.Module):
         配置相应的层
         """
         b, c, h, w = input.shape
-        if len(input.shape) != 2:
-            input = input.view(input.shape[0], -1)
-            self.first = input.shape[0]
-            self.second = input.numel() / self.first
-        else:
-            self.first = input.shape[0]
-            self.second = input.numel() / self.first
-
-        self.block_in_x_y_z = block_in(in_feature, tmp_feature, p=p)
-        feature_len = self.InputGenerateNet.initiate_layer(input, tmp_feature, tmp_feature, tau_m, tau_s, use_gauss,
-                                                           batchsize,
-                                                           old_in_feature=in_feature, old_out_feature=out_feature,
-                                                           mult_k=mult_k, use_share_layer=use_share_layer,
-                                                           use_feature_change=use_feature_change)
-        # self.block_out = block_out(tmp_feature, out_feature_lowbit, classes, use_pool='none')
+        self.filter_list = [16, 16 * tmp_feature, 2 * 16 * tmp_feature, 4 * 16 * tmp_feature]
+        self.block_in_x_y_z = block_in(in_feature, self.filter_list[0], p=p)
         import copy
-        feature_len.append(copy.deepcopy(feature_len[-1]))
-        size_len = []
-        h = h // 2
-        for i in range(len(feature_len) - 1):
-            size_len.append(int(max(h // (2 ** i), 1)))
-        size_len = size_len[-1]
-        feature_len = feature_len[-1]
-        multi_num = int((size_len ** 2) // (size_len // s) ** 2)
-        size_len = [size_len, size_len // 2, size_len // 4]
-        feature_len = [feature_len, feature_len * 4, feature_len * 16]
-        self.feature_forward = Feature_forward(feature_len, size_len, multi_num=multi_num, push_num=push_num, s=s, p=p)
-        if dataoption in ['fashionmnist', 'mnist', 'cifar10', 'cifar100', 'svhn', 'stl-10', 'egg', 'car']:
-            out_pointnum = size_len
+        feature_len, size_div = self.InputGenerateNet.initiate_layer(input,
+                                                                     copy.deepcopy(self.filter_list),
+                                                                     copy.deepcopy(self.filter_list),
+                                                                     tau_m,
+                                                                     tau_s,
+                                                                     use_gauss,
+                                                                     batchsize,
+                                                                     old_in_feature=in_feature,
+                                                                     old_out_feature=out_feature,
+                                                                     mult_k=mult_k,
+                                                                     use_share_layer=use_share_layer,
+                                                                     use_feature_change=use_feature_change)
+        for i, nums in enumerate(self.filter_list):
+            if nums == feature_len:
+                self.mk = i
+        if not hasattr(self, "mk"):
+            raise KeyError
+        if use_feature_change == True:
+            h = int(h // (2 ** (size_div + 1)))
         else:
-            raise KeyError("not import")
-        # self.out_classifier_2 = nn.Sequential(nn.Flatten(), nn.Linear(multi_num * feature_len[0], feature_len[0]),
-        #                                       nn.ReLU(), nn.Linear(feature_len[0], classes)
-        #                                       )
-        self.out_classifier = block_out(feature_len, classes=classes, size=size_len,
-                                        use_pool='avg')
+            h = int(h // 2)
+        size_len = [h, h, h // 2]
+        feature_len = (copy.deepcopy([in_feature] + self.filter_list), self.mk)
+        self.feature_forward = Feature_forward(feature_len, size_len, push_num=push_num, s=s, p=p)
+        self.out_classifier = block_out(feature_len[0][-1],feature_len[0][self.mk+1],classes=classes, size=size_len, use_pool='avg')
 
-        self._initialize()
+        # self._initialize()
 
     def settest(self, test=True):
         """
@@ -1063,23 +1037,17 @@ class merge_layer(nn.Module):
             if isinstance(layer, InputGenerateNet) or isinstance(layer, block_in) or isinstance(layer, block_out):
                 layer.settest(test)
 
-    def _initialize(self):
-        for layer in self.modules():
-            if isinstance(layer, nn.Conv2d) and layer.bias is not None:
-                layer: nn.Conv2d
-                layer.bias.data.fill_(1.)
-                layer.bias.data -= torch.randn_like(layer.bias.data).abs()  # /math.sqrt(layer.bias.data.numel())
-            elif isinstance(layer, guassNet):
-                layer: guassNet
-                layer.gauss_bias.data.fill_(1.)
-                layer.gauss_bias.data -= torch.randn_like(
-                    layer.gauss_bias.data).abs()  # /math.sqrt(layer.gauss_bias.data.numel())
     @staticmethod
     def _list_build():
-        return [2.,0.75,0.01,0.1]
+        return [2., 0.75, 0.01, 0.1]
+    @staticmethod
+    def _list_print(list):
+        for i in list:
+            print(i.squeeze().item(),end=",")
+        print("")
     def L2_biasoption(self, loss_list, sigma=None):
-        if sigma==None:
-            sigma=self._list_build()
+        if sigma == None:
+            sigma = self._list_build()
         loss = [torch.tensor(0.).float().cuda()]
         normlist = []
         loss_feature = torch.tensor([0.]).float().cuda()
@@ -1111,7 +1079,9 @@ class merge_layer(nn.Module):
         loss_kl = (loss_kl * sigma[1]).squeeze(-1)
         loss_tau = loss_tau * sigma[2]
         loss_bias = torch.stack(loss, dim=-1).mean() * sigma[3]
-        loss = torch.stack(loss_list + [loss_bias, loss_kl, loss_feature, loss_tau], dim=-1).sum()
+        loss_list=loss_list + [loss_bias, loss_kl, loss_feature, loss_tau]
+        #self._list_print(loss_list)
+        loss = torch.stack(loss_list, dim=-1).sum()
 
         return loss
 
