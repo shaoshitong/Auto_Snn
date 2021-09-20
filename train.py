@@ -284,8 +284,11 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
             model.zero_grad()
             loss.backward(retain_graph=False)
             optimizer.step()
-        # if i==10:
-        #      parametersgradCheck(model)
+        # if i==600:
+        #     print(f"{(torch.eq(torch.argmax(potg_a,dim=-1),target).sum()/potg_a.size()[0]).item()},"
+        #           f"{(torch.eq(torch.argmax(potg_b,dim=-1),target).sum()/potg_b.size()[0]).item()},"
+        #           f"{(torch.eq(torch.argmax(potg_c,dim=-1),target).sum()/potg_c.size()[0]).item()},"
+        #           f"{(torch.eq(torch.argmax(output, dim=-1), target).sum() / output.size()[0]).item()},")
         if yaml['data'] == 'eeg':
             prec1, prec5 = accuracy(output.data, target, topk=(1, 2))
         elif yaml['data'] in ['mnist', 'fashionmnist', 'cifar10', 'car', 'svhn', 'cifar100', 'stl-10']:

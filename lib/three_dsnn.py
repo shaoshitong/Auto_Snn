@@ -10,11 +10,11 @@ from Snn_Auto_master.lib.plt_analyze import vis_img
 from Snn_Auto_master.lib.parameters_check import pd_save, parametersgradCheck
 from Snn_Auto_master.lib.SNnorm import SNConv2d, SNLinear
 from Snn_Auto_master.lib.fractallayer import LastJoiner
-from Snn_Auto_master.lib.DenseNet import Denselayer
+from Snn_Auto_master.lib.DenseNet import DenseNet
 from Snn_Auto_master.lib.cocoscontextloss import ContextualLoss_forward
 from Snn_Auto_master.lib.featurefocusing_v2 import Feature_forward
 from Snn_Auto_master.lib.dimixloss import DimIxLoss
-from lib.PointConv import PointConv
+from Snn_Auto_master.lib.PointConv import PointConv
 import math
 import pandas as pd
 from torch.nn.utils import spectral_norm
@@ -30,6 +30,15 @@ def yaml_config_get(yamlname):
 
     conf = OmegaConf.load(yamlname)
     return conf
+
+
+class Lambda(nn.Module):
+    def __init__(self, function):
+        super(Lambda, self).__init__()
+        self.function = function
+
+    def forward(self, x, *args):
+        return self.function(x,x.size()[-1], *args)
 
 
 def batch_norm(input):
@@ -91,10 +100,17 @@ class Shortcut(nn.Module):
 class block_in(nn.Module):
     def __init__(self, in_feature, out_feature=64, p=0.2):
         super(block_in, self).__init__()
+        num_input_feature_list_list = yaml['densenetparameter']['feature_list']
+        bn_size = yaml['densenetparameter']['bn_size']
+        drop_rate = yaml['densenetparameter']['drop_rate']
+        use_size_change = yaml['densenetparameter']['use_size_change']
+        num_layer = None
+        num_input_feature_list_list[0][0] = in_feature
+        num_input_feature_list_list[-1][-1] = out_feature
         if dataoption in ["mnist", "fashionmnist", "cifar100", "cifar10", "car", "svhn", "stl-10"]:
-            self.block_in_layer = Denselayer([in_feature, out_feature // 2, out_feature // 2, out_feature, out_feature])
+            self.block_in_layer = DenseNet(num_input_feature_list_list,bn_size,drop_rate,use_size_change,num_layer)
         elif dataoption == "eeg":
-            self.block_in_layer = Denselayer([in_feature, out_feature // 2, out_feature])
+            self.block_in_layer = DenseNet(num_input_feature_list_list,bn_size,drop_rate,use_size_change,num_layer)
         else:
             raise KeyError("not have this dataset")
         self.conv_cat = nn.Sequential(nn.ReflectionPad2d(1),
@@ -111,7 +127,7 @@ class block_in(nn.Module):
         self.training = training_status
 
     def forward(self, x):
-        x = self.block_in_layer(x, not self.training)
+        x = self.block_in_layer(x)
         m = size_change(3 * self.out_feature, x.size()[-1] // 2)
         x = self.relu(self.conv_cat(x) + m(x))
         a, b, c = torch.split(x, dim=1, split_size_or_sections=[x.size()[1] // 3, x.size()[1] // 3, x.size()[1] // 3])
@@ -121,36 +137,47 @@ class block_in(nn.Module):
 
 
 class block_out(nn.Module):
-    def __init__(self, feature, fl_feature,classes, size, use_pool='none'):
+    def __init__(self, feature, fl_feature, classes, size, use_pool='none'):
         super(block_out, self).__init__()
 
         if use_pool == 'none':
-            self.classifiar = nn.Sequential(nn.Flatten(), nn.Linear((feature * 4 * 4 * 2), classes))
+            self.classifiar = nn.Sequential(nn.Flatten(), nn.Linear((feature * 4 * 4), classes))
             self.classifiar_1 = nn.Sequential(nn.Flatten(), nn.Linear((fl_feature * 8 * 8), classes))
             self.classifiar_2 = nn.Sequential(nn.Flatten(), nn.Linear((fl_feature * 8 * 8), classes))
             self.classifiar_3 = nn.Sequential(nn.Flatten(), nn.Linear((fl_feature * 8 * 8), classes))
         else:
-            self.classifiar = nn.Sequential(nn.Flatten(), nn.Linear(feature * 2, classes))
+            self.classifiar = nn.Sequential(nn.Flatten(), nn.Linear(feature, classes))
             self.classifiar_1 = nn.Sequential(nn.Flatten(), nn.Linear(fl_feature, classes))
             self.classifiar_2 = nn.Sequential(nn.Flatten(), nn.Linear(fl_feature, classes))
             self.classifiar_3 = nn.Sequential(nn.Flatten(), nn.Linear(fl_feature, classes))
-        self.transition_layer = nn.Sequential(*[nn.Conv2d(feature, feature * 2, (2, 2), (2, 2), bias=False)])
+        self.transition_layer = nn.Sequential(*[
+            nn.BatchNorm2d(feature),
+            nn.ReLU(inplace=True),
+            Lambda(F.avg_pool2d)])
+        self.fl_transition_layer = nn.Sequential(*[
+            nn.BatchNorm2d(fl_feature),
+            nn.ReLU(inplace=True),
+            Lambda(F.avg_pool2d)])
         self.training = False
         self.use_pool = use_pool
         self.size = size
+
     def settest(self, training_status):
         self.training = training_status
 
     def forward(self, x, a, b, c):
         x = self.transition_layer(x)
+        a = self.fl_transition_layer(a)
+        b = self.fl_transition_layer(b)
+        c = self.fl_transition_layer(c)
         if self.use_pool == 'none':
-            return self.classifiar(x) + self.classifiar_1(a) + self.classifiar_2(b) + self.classifiar_3(c)
+            return self.classifiar(x), self.classifiar_1(a), self.classifiar_2(b), self.classifiar_3(c)
         elif self.use_pool == 'max':
             return self.classifiar(F.max_pool2d(x, x.shape[-1])), self.classifiar_1(F.max_pool2d(a, a.shape[-1])) \
                 , self.classifiar_2(F.max_pool2d(b, b.shape[-1])), self.classifiar_3(F.max_pool2d(c, c.shape[-1]))
         elif self.use_pool == 'avg':
-            return self.classifiar(F.max_pool2d(x, x.shape[-1])), self.classifiar_1(F.max_pool2d(a, a.shape[-1])) \
-                , self.classifiar_2(F.max_pool2d(b, b.shape[-1])), self.classifiar_3(F.max_pool2d(c, c.shape[-1]))
+            return self.classifiar(F.avg_pool2d(x, x.shape[-1])), self.classifiar_1(F.avg_pool2d(a, a.shape[-1])) \
+                , self.classifiar_2(F.avg_pool2d(b, b.shape[-1])), self.classifiar_3(F.avg_pool2d(c, c.shape[-1]))
 
 
 class block_eq(nn.Module):
@@ -865,7 +892,7 @@ class three_dim_Layer(nn.Module):
                                                                           weight_require_grad=self.weight_require_grad,
                                                                           p=self.p, device=self.device,
                                                                           grad_lr=self.grad_lr)
-                size_m = 2**(num+1)
+                size_m = 2 ** (num + 1)
                 self.change_conv.append(
                     nn.Conv2d(in_feature, self.feature_len[max(self.z, self.y, self.x)], (size_m, size_m),
                               (size_m, size_m), bias=False))
@@ -1025,7 +1052,8 @@ class merge_layer(nn.Module):
         size_len = [h, h, h // 2]
         feature_len = (copy.deepcopy([in_feature] + self.filter_list), self.mk)
         self.feature_forward = Feature_forward(feature_len, size_len, push_num=push_num, s=s, p=p)
-        self.out_classifier = block_out(feature_len[0][-1],feature_len[0][self.mk+1],classes=classes, size=size_len, use_pool='avg')
+        self.out_classifier = block_out(feature_len[0][-1], feature_len[0][self.mk + 1], classes=classes, size=size_len,
+                                        use_pool='avg')
 
         # self._initialize()
 
@@ -1040,11 +1068,13 @@ class merge_layer(nn.Module):
     @staticmethod
     def _list_build():
         return [2., 0.75, 0.01, 0.1]
+
     @staticmethod
     def _list_print(list):
         for i in list:
-            print(i.squeeze().item(),end=",")
+            print(i.squeeze().item(), end=",")
         print("")
+
     def L2_biasoption(self, loss_list, sigma=None):
         if sigma == None:
             sigma = self._list_build()
@@ -1079,8 +1109,8 @@ class merge_layer(nn.Module):
         loss_kl = (loss_kl * sigma[1]).squeeze(-1)
         loss_tau = loss_tau * sigma[2]
         loss_bias = torch.stack(loss, dim=-1).mean() * sigma[3]
-        loss_list=loss_list + [loss_bias, loss_kl, loss_feature, loss_tau]
-        #self._list_print(loss_list)
+        loss_list = loss_list + [loss_bias, loss_kl, loss_feature, loss_tau]
+        # self._list_print(loss_list)
         loss = torch.stack(loss_list, dim=-1).sum()
 
         return loss
