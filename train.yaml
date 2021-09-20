@@ -95,8 +95,9 @@ scheduler:
     'SchedulerLR'
   SchedulerLR:
     milestones:
-      - 0.4
-      - 0.7
+      - 0.3
+      - 0.6
+      - 0.8
     gamma:
       0.2
   MultiStepLR:

@@ -117,7 +117,7 @@ class block_in(nn.Module):
                                       nn.Conv2d(out_feature, 3 * out_feature, (4, 4), stride=2, padding=0, bias=False),
                                       nn.BatchNorm2d(3 * out_feature), )
         self.out_feature = out_feature
-        self.relu = nn.LeakyReLU(1e-2)
+        self.relu = nn.ReLU()
         self.f_conv = nn.ModuleList(
             [SNConv2d(3 * out_feature, out_feature, (1, 1), stride=1, padding=0, bias=False) for _ in range(3)])
         self.training = False
@@ -681,8 +681,8 @@ class point_cul_Layer(nn.Module):
                                                                                        self.tensor_tau_s1,
                                                                                        self.tensor_tau_sm1)
         m = self.gaussbur(x)
-        m = self.bn1(m)
-        x = F.leaky_relu(m)
+        m = F.relu(m)
+        x = self.bn1(m)
         return x
 
     def _initialize(self):
@@ -934,15 +934,14 @@ class InputGenerateNet(nn.Module):
 
     def _initialize(self):
         for layer in self.modules():
-            if isinstance(layer, nn.Conv2d) and layer.bias is not None:
-                layer: nn.Conv2d
-                layer.bias.data.fill_(1.)
-                layer.bias.data -= torch.randn_like(layer.bias.data).abs()  # /math.sqrt(layer.bias.data.numel())
-            elif isinstance(layer, guassNet):
-                layer: guassNet
-                layer.gauss_bias.data.fill_(1.)
-                layer.gauss_bias.data -= torch.randn_like(
-                    layer.gauss_bias.data).abs()  # /math.sqrt(layer.gauss_bias.data.numel())
+            if isinstance(layer,nn.Conv2d):
+                nn.init.kaiming_normal_(layer.weight.data,mode="fan_in",nonlinearity="relu")
+                if layer.bias is not None:
+                    nn.init.normal_(layer.bias.data,0,0.01)
+                    layer.bias.data=layer.bias.data.abs()
+            elif isinstance(layer,nn.BatchNorm2d):
+                layer.weight.data.fill_(1.)
+                layer.bias.data.zero_()
 
     def initiate_layer(self, input, in_feature, out_feature, tau_m=4., tau_s=1., use_gauss=True, batchsize=64,
                        old_in_feature=1, old_out_feature=1, mult_k=2, p=0.2, use_share_layer=True,
@@ -1054,8 +1053,6 @@ class merge_layer(nn.Module):
         self.feature_forward = Feature_forward(feature_len, size_len, push_num=push_num, s=s, p=p)
         self.out_classifier = block_out(feature_len[0][-1], feature_len[0][self.mk + 1], classes=classes, size=size_len,
                                         use_pool='avg')
-
-        # self._initialize()
 
     def settest(self, test=True):
         """
