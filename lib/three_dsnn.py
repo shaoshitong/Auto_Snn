@@ -130,8 +130,7 @@ class block_in(nn.Module):
         x = self.block_in_layer(x)
         m = size_change(3 * self.out_feature, x.size()[-1] // 2)
         x = self.relu(self.conv_cat(x) + m(x))
-        a, b, c = torch.split(x, dim=1, split_size_or_sections=[x.size()[1] // 3, x.size()[1] // 3, x.size()[1] // 3])
-        a, b, c = a + self.f_conv[0](x), b + self.f_conv[1](x), c + self.f_conv[2](x)
+        a, b, c = self.f_conv[0](x), self.f_conv[1](x), self.f_conv[2](x)
         del x
         return a, b, c
 
@@ -937,7 +936,7 @@ class InputGenerateNet(nn.Module):
             if isinstance(layer,nn.Conv2d):
                 nn.init.kaiming_normal_(layer.weight.data,mode="fan_in",nonlinearity="relu")
                 if layer.bias is not None:
-                    nn.init.normal_(layer.bias.data,0,0.01)
+                    nn.init.normal_(layer.bias.data,0.,0.01)
                     layer.bias.data=layer.bias.data.abs()
             elif isinstance(layer,nn.BatchNorm2d):
                 layer.weight.data.fill_(1.)
@@ -1025,11 +1024,12 @@ class merge_layer(nn.Module):
         """
         b, c, h, w = input.shape
         self.filter_list = [16, 16 * tmp_feature, 2 * 16 * tmp_feature, 4 * 16 * tmp_feature]
-        self.block_in_x_y_z = block_in(in_feature, self.filter_list[0], p=p)
+        self.k_f_list= [16*2, 16 * tmp_feature, 2 * 16 * tmp_feature, 4 * 16 * tmp_feature]
+        self.block_in_x_y_z = block_in(in_feature, self.k_f_list[0], p=p)
         import copy
         feature_len, size_div = self.InputGenerateNet.initiate_layer(input,
-                                                                     copy.deepcopy(self.filter_list),
-                                                                     copy.deepcopy(self.filter_list),
+                                                                     copy.deepcopy(self.k_f_list),
+                                                                     copy.deepcopy(self.k_f_list),
                                                                      tau_m,
                                                                      tau_s,
                                                                      use_gauss,

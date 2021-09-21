@@ -84,9 +84,9 @@ def neg_smooth_cross(pred, gold, output,smoothing=0.1, *args, **kwargs):
     one_hot = torch.full_like(pred, fill_value=smoothing / (n_class - 1)).to(pred.device)  # 0.0111111
     one_hot.scatter_(dim=1, index=gold.unsqueeze(1), value=1. - smoothing)  # 0.9
     arg=torch.eq(torch.argmax(output,dim=-1),gold)
-    output=torch.where(torch.eq(output,torch.max(output,dim=1,keepdim=True)[0]),torch.Tensor([0.]).to(pred.device),output)
+    output=torch.where(torch.eq(output,torch.max(output,dim=1,keepdim=True)[0]),torch.Tensor([-1e6]).to(pred.device),one_hot)
     with torch.no_grad():
-        one_hot=torch.where(arg.unsqueeze(-1),one_hot,torch.softmax(output,dim=-1))
+        one_hot=torch.where(arg.unsqueeze(-1),one_hot,torch.softmax(output,dim=-1)).clone()
     log_prob = torch.nn.functional.log_softmax(pred, dim=1)
     return torch.nn.functional.kl_div(input=log_prob, target=one_hot, reduction='none').sum(dim=-1).mean()
 
@@ -144,6 +144,12 @@ def test2(model, data, yaml, criterion_loss):
                          args.neg_mul * neg_smooth_cross(potg_a, target, output),
                          args.neg_mul * neg_smooth_cross(potg_b, target, output),
                          args.neg_mul * neg_smooth_cross(potg_c, target, output)]
+            # if i == 0:
+            #     print("\r", f"{(torch.eq(torch.argmax(potg_a, dim=-1), target).sum() / potg_a.size()[0]).item()},"
+            #                 f"{(torch.eq(torch.argmax(potg_b, dim=-1), target).sum() / potg_b.size()[0]).item()},"
+            #                 f"{(torch.eq(torch.argmax(potg_c, dim=-1), target).sum() / potg_c.size()[0]).item()},"
+            #                 f"{(torch.eq(torch.argmax(output, dim=-1), target).sum() / output.size()[0]).item()},",
+            #           end="", flush=True)
             loss = model.L2_biasoption(loss_list, yaml["parameters"]['sigma_list'])
             torch.cuda.synchronize()
             if yaml['data'] == 'eeg':
@@ -284,11 +290,11 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
             model.zero_grad()
             loss.backward(retain_graph=False)
             optimizer.step()
-        # if i==600:
-        #     print(f"{(torch.eq(torch.argmax(potg_a,dim=-1),target).sum()/potg_a.size()[0]).item()},"
+        # if i==0:
+        #     print("\r",f"{(torch.eq(torch.argmax(potg_a,dim=-1),target).sum()/potg_a.size()[0]).item()},"
         #           f"{(torch.eq(torch.argmax(potg_b,dim=-1),target).sum()/potg_b.size()[0]).item()},"
         #           f"{(torch.eq(torch.argmax(potg_c,dim=-1),target).sum()/potg_c.size()[0]).item()},"
-        #           f"{(torch.eq(torch.argmax(output, dim=-1), target).sum() / output.size()[0]).item()},")
+        #           f"{(torch.eq(torch.argmax(output, dim=-1), target).sum() / output.size()[0]).item()},",end="",flush=True)
         if yaml['data'] == 'eeg':
             prec1, prec5 = accuracy(output.data, target, topk=(1, 2))
         elif yaml['data'] in ['mnist', 'fashionmnist', 'cifar10', 'car', 'svhn', 'cifar100', 'stl-10']:
@@ -420,7 +426,7 @@ if __name__ == "__main__":
     dict_list1 = dict(params=params1, weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay'])
     dict_list2 = dict(params=params2, weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay'])
     dict_list3 = dict(params=params3,weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay'])
-    dict_list4 = dict(params=params4)
+    dict_list4 = dict(params=params4,weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay'])
     optimizer = get_optimizer([dict_list1, dict_list2, dict_list3, dict_list4], yaml, model)
     scheduler = get_scheduler(optimizer, yaml)
     criterion_loss = Loss_get(yaml["parameters"]["loss_option"])

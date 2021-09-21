@@ -16,18 +16,16 @@ use_feature_change:
   True
 densenetparameter:
   feature_list:
-    - - 16
-      - 16
-      - 16
-      - 16
     - - 32
+      - 32
+      - 32
       - 32
       - 32
       - 32
   bn_size:
     2
   drop_rate:
-    0.1
+    0.2
   use_size_change:
     False
 parameters:
@@ -50,11 +48,11 @@ parameters:
   sigma:
     0.1
   batch_size:
-    64
+    128
   epoch:
     200
   dropout:
-    0.1
+    0.0
   filter_tau_m:
     4
   filter_tau_s:

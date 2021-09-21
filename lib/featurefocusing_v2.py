@@ -305,10 +305,11 @@ class Feature_forward(nn.Module):
         self.kl_loss = 0.
         x = self.f(x)
         feature_list = [A, B, C]
-        for transition, forward, feature,balance in zip(self.transition_layer, self.resnet_forward, feature_list,self.balance_layer):
+        for transition, forward, feature, balance in zip(self.transition_layer, self.resnet_forward, feature_list,
+                                                         self.balance_layer):
             """pre_feature[count%len_n]"""
             x = forward(x)
-            feature=balance(size_change(x.size()[1],x.size()[2])(feature))
+            feature = balance(size_change(x.size()[1], x.size()[2])(feature))
             x = transition(torch.cat((x, feature), dim=1))
             log_soft_x = F.log_softmax(F.avg_pool2d(x, x.shape[-1]).squeeze(), dim=-1)
             soft_y = F.softmax(F.avg_pool2d(feature, feature.shape[-1]).squeeze(), dim=-1) + 1e-8
