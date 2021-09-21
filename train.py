@@ -83,10 +83,14 @@ def neg_smooth_cross(pred, gold, output,smoothing=0.1, *args, **kwargs):
     gold = gold.to(pred.device)
     one_hot = torch.full_like(pred, fill_value=smoothing / (n_class - 1)).to(pred.device)  # 0.0111111
     one_hot.scatter_(dim=1, index=gold.unsqueeze(1), value=1. - smoothing)  # 0.9
-    arg=torch.eq(torch.argmax(output,dim=-1),gold)
-    output=torch.where(torch.eq(output,torch.max(output,dim=1,keepdim=True)[0]),torch.Tensor([-1e6]).to(pred.device),one_hot)
+    output=torch.softmax(output,dim=1)
+    m_o=torch.max(output,dim=1,keepdim=True)[0]
+    output=torch.where(torch.eq(output,torch.max(output,dim=1,keepdim=True)[0]),torch.Tensor([0.]).to(pred.device),output)
+    h=m_o+output
+    h=torch.gather(h,dim=1,index=gold.unsqueeze(1))
+    output=output.scatter(dim=1, index=gold.unsqueeze(1), src=h)
     with torch.no_grad():
-        one_hot=torch.where(arg.unsqueeze(-1),one_hot,torch.softmax(output,dim=-1)).clone()
+        one_hot=output.clone()
     log_prob = torch.nn.functional.log_softmax(pred, dim=1)
     return torch.nn.functional.kl_div(input=log_prob, target=one_hot, reduction='none').sum(dim=-1).mean()
 
@@ -424,9 +428,9 @@ if __name__ == "__main__":
     params3 = list(filter(lambda i: i.requires_grad, model.feature_forward.parameters()))
     params4 = list(filter(lambda i: i.requires_grad, model.block_in_x_y_z.parameters()))
     dict_list1 = dict(params=params1, weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay'])
-    dict_list2 = dict(params=params2, weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay'])
+    dict_list2 = dict(params=params2, weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay'],lr=0.01)
     dict_list3 = dict(params=params3,weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay'])
-    dict_list4 = dict(params=params4,weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay'])
+    dict_list4 = dict(params=params4,weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay'],lr=0.01)
     optimizer = get_optimizer([dict_list1, dict_list2, dict_list3, dict_list4], yaml, model)
     scheduler = get_scheduler(optimizer, yaml)
     criterion_loss = Loss_get(yaml["parameters"]["loss_option"])
