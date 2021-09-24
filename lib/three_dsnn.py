@@ -38,7 +38,7 @@ class Lambda(nn.Module):
         self.function = function
 
     def forward(self, x, *args):
-        return self.function(x,x.size()[-1], *args)
+        return self.function(x, x.size()[-1], *args)
 
 
 def batch_norm(input):
@@ -105,12 +105,10 @@ class block_in(nn.Module):
         drop_rate = yaml['densenetparameter']['drop_rate']
         use_size_change = yaml['densenetparameter']['use_size_change']
         num_layer = None
-        num_input_feature_list_list[0][0] = in_feature
-        num_input_feature_list_list[-1][-1] = out_feature
         if dataoption in ["mnist", "fashionmnist", "cifar100", "cifar10", "car", "svhn", "stl-10"]:
-            self.block_in_layer = DenseNet(num_input_feature_list_list,bn_size,drop_rate,use_size_change,num_layer)
+            self.block_in_layer = DenseNet(num_input_feature_list_list, bn_size, drop_rate, use_size_change, num_layer)
         elif dataoption == "eeg":
-            self.block_in_layer = DenseNet(num_input_feature_list_list,bn_size,drop_rate,use_size_change,num_layer)
+            self.block_in_layer = DenseNet(num_input_feature_list_list, bn_size, drop_rate, use_size_change, num_layer)
         else:
             raise KeyError("not have this dataset")
         self.conv_cat = nn.Sequential(nn.ReflectionPad2d(1),
@@ -122,12 +120,20 @@ class block_in(nn.Module):
             [SNConv2d(3 * out_feature, out_feature, (1, 1), stride=1, padding=0, bias=False) for _ in range(3)])
         self.training = False
         self.dropout = nn.Dropout(p=p)
+        self.in_sample = nn.Sequential(*[
+            nn.Conv2d(in_feature, num_input_feature_list_list[0][0], (3, 3), stride=(1, 1), padding=1, bias=False),
+        ])
+        self.out_sample = nn.Sequential(*[
+            nn.Conv2d(num_input_feature_list_list[-1][-1], out_feature, (3, 3), stride=(1, 1), padding=1, bias=False),
+        ])
 
     def settest(self, training_status):
         self.training = training_status
 
     def forward(self, x):
+        x = self.in_sample(x)
         x = self.block_in_layer(x)
+        x = self.out_sample(x)
         m = size_change(3 * self.out_feature, x.size()[-1] // 2)
         x = self.relu(self.conv_cat(x) + m(x))
         a, b, c = self.f_conv[0](x), self.f_conv[1](x), self.f_conv[2](x)
@@ -501,9 +507,9 @@ class DoorMechanism(nn.Module):
         self.norm_mem_1 = men_1.norm(p=2, dim=0).mean() / (men_1.numel() / men_1.size()[0])
         self.norm_mem_2 = men_2.norm(p=2, dim=0).mean() / (men_2.numel() / men_2.size()[0])
         self.norm_mem_3 = men_3.norm(p=2, dim=0).mean() / (men_3.numel() / men_3.size()[0])
-        result = torch.tanh(
-            men_1.unsqueeze(-1).unsqueeze(-1) * x1 + men_2.unsqueeze(-1).unsqueeze(-1) * x2 + men_3.unsqueeze(
-                -1).unsqueeze(-1) * x3)
+        result =    men_1.unsqueeze(-1).unsqueeze(-1) * x1 + men_2.unsqueeze(-1).unsqueeze(-1) * x2 + men_3.unsqueeze(
+                    -1).unsqueeze(-1) * x3 + torch.tanh(x1) * (1 - men_1.unsqueeze(-1).unsqueeze(-1)) + torch.tanh(x2) * (
+                    1 - men_2.unsqueeze(-1).unsqueeze(-1)) + torch.tanh(x3) * (1 - men_3.unsqueeze(-1).unsqueeze(-1))
         with torch.no_grad():
             men_1 = (men_1 * self.lr + (1. - self.lr) * tau_m)
             men_2 = (men_2 * self.lr + (1. - self.lr) * tau_s)
@@ -933,12 +939,12 @@ class InputGenerateNet(nn.Module):
 
     def _initialize(self):
         for layer in self.modules():
-            if isinstance(layer,nn.Conv2d):
-                nn.init.kaiming_normal_(layer.weight.data,mode="fan_in",nonlinearity="relu")
+            if isinstance(layer, nn.Conv2d):
+                nn.init.kaiming_normal_(layer.weight.data, mode="fan_in", nonlinearity="relu")
                 if layer.bias is not None:
-                    nn.init.normal_(layer.bias.data,0.,0.01)
-                    layer.bias.data=layer.bias.data.abs()
-            elif isinstance(layer,nn.BatchNorm2d):
+                    nn.init.normal_(layer.bias.data, 0., 0.01)
+                    layer.bias.data = layer.bias.data.abs()
+            elif isinstance(layer, nn.BatchNorm2d):
                 layer.weight.data.fill_(1.)
                 layer.bias.data.zero_()
 
@@ -1024,7 +1030,7 @@ class merge_layer(nn.Module):
         """
         b, c, h, w = input.shape
         self.filter_list = [16, 16 * tmp_feature, 2 * 16 * tmp_feature, 4 * 16 * tmp_feature]
-        self.k_f_list= [16*2, 16 * tmp_feature, 2 * 16 * tmp_feature, 4 * 16 * tmp_feature]
+        self.k_f_list = [16 * 2, 16 * tmp_feature, 2 * 16 * tmp_feature, 4 * 16 * tmp_feature]
         self.block_in_x_y_z = block_in(in_feature, self.k_f_list[0], p=p)
         import copy
         feature_len, size_div = self.InputGenerateNet.initiate_layer(input,

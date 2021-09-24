@@ -1,7 +1,7 @@
 
 experiment_name:
   Auto_config
-mult_k: 2
+mult_k: 1
 set_seed:
   False
 pytorch_seed:

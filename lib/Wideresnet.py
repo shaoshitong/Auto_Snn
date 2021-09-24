@@ -42,7 +42,7 @@ class WideResNetBlock(nn.Module):
     def __init__(self,in_channels:int,out_channels:int,stride:int,depth:int,dropout:float,use_pool:bool):
         super(WideResNetBlock, self).__init__()
         self.block_1=nn.Sequential(*[
-            Downsampleunit(in_channels,out_channels,stride,dropout,use_pool)
+            Downsampleunit(in_channels,out_channels,stride,dropout,use_pool) 
         ])
         self.block_2=nn.Sequential(*[
             BasicUnit(out_channels,dropout) for _ in range(depth)
