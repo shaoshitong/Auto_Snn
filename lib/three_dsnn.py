@@ -13,7 +13,7 @@ from Snn_Auto_master.lib.fractallayer import LastJoiner
 from Snn_Auto_master.lib.DenseNet import DenseNet
 from Snn_Auto_master.lib.cocoscontextloss import ContextualLoss_forward
 from Snn_Auto_master.lib.featurefocusing_v2 import Feature_forward
-from Snn_Auto_master.lib.dimixloss import DimIxLoss
+from Snn_Auto_master.lib.dimixloss import DimixLoss
 from Snn_Auto_master.lib.PointConv import PointConv
 import math
 import pandas as pd
@@ -796,7 +796,7 @@ class three_dim_Layer(nn.Module):
         self.p = p
         self.diag_T = Trinomial_operation(max(self.x, self.y, self.z))
         self.grad_lr = grad_lr
-        self.feature_loss = DimIxLoss(max(self.x, self.y, self.z))
+        self.feature_loss = DimixLoss(max(self.x, self.y, self.z))
         self.test = test
         self.x_join, self.y_join, self.z_join = LastJoiner(2), LastJoiner(2), LastJoiner(2)
         self.losses = 0.
@@ -844,7 +844,7 @@ class three_dim_Layer(nn.Module):
             y = out_2 + m(y)
             z = out_3 + m(z)
             old.append([x, y, z])
-        self.losses = self.feature_loss(old)
+        self.losses = self.feature_loss(old[0],old[1])+ self.feature_loss(old[1],old[2])+ self.feature_loss(old[2],old[0])
         for i in range(len(old[:-1])):
             for j in range(3):
                 old[i][j] = self.change_conv[i * 3 + j](old[i][j])
