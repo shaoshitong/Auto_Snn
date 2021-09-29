@@ -189,42 +189,24 @@ class block_eq(nn.Module):
     def __init__(self, eq_feature, size, Use_Spectral=False, Use_fractal=False):
         super(block_eq, self).__init__()
         self.eq_feature = eq_feature
-        self.longConv = nn.Sequential(*[
-            nn.ReflectionPad2d(1),
-            nn.Conv2d(eq_feature, eq_feature * 2, (3, 3), stride=_pair(1), padding=0,
-                      bias=True) if Use_Spectral == False else SNConv2d(eq_feature, eq_feature * 2, (3, 3), stride=1,
-                                                                        padding=0, bias=False),
-            nn.BatchNorm2d(eq_feature * 2),
-            nn.ReLU(inplace=True),
-            nn.ReflectionPad2d(1),
-            nn.Conv2d(eq_feature * 2, eq_feature, (3, 3), stride=_pair(1), padding=0,
-                      bias=True) if Use_Spectral == False else SNConv2d(eq_feature * 2, eq_feature, (3, 3), stride=1,
-                                                                        padding=0, bias=False),
-            nn.BatchNorm2d(eq_feature),
-        ])
-        self.shortConv = nn.Sequential(*[
-            Shortcut(eq_feature, eq_feature, use_same=True),
-        ])
-        self.shortConv_1 = nn.Sequential(*[
-            nn.ReflectionPad2d(1),
-            nn.Conv2d(eq_feature, eq_feature, (3, 3), stride=_pair(1), padding=0,
-                      bias=True) if Use_Spectral == False else SNConv2d(eq_feature, eq_feature, (3, 3), stride=1,
-                                                                        padding=0, bias=True),
-            nn.BatchNorm2d(eq_feature),
-            Shortcut(eq_feature, eq_feature, use_same=True),
-        ])
-        self.Use_fractal = Use_fractal
-        if self.Use_fractal is True:
-            self.merged = LastJoiner(2)
+        tmp_feature = int(eq_feature // 2)
+        self.convz1=nn.Conv2d(eq_feature,eq_feature,(1,5),padding=(0,2))
+        self.convr1=nn.Conv2d(eq_feature,eq_feature,(1,5),padding=(0,2))
+        self.convq1=nn.Conv2d(eq_feature,eq_feature,(1,5),padding=(0,2))
+        self.convz2=nn.Conv2d(eq_feature,eq_feature,(5,1),padding=(2,0))
+        self.convr2=nn.Conv2d(eq_feature,eq_feature,(5,1),padding=(2,0))
+        self.convq2=nn.Conv2d(eq_feature,eq_feature,(5,1),padding=(2,0))
 
     def forward(self, x):
-        if self.Use_fractal == False:
-            x1 = self.longConv(x) + self.shortConv(x)
-        else:
-            x1 = self.merged([self.longConv(x), self.shortConv_1(x)])
-        x2 = F.relu(x1, inplace=True)
-        del x
-        return x2
+        z=torch.sigmoid(self.convz1(x))
+        r=torch.sigmoid(self.convr1(x))
+        q=torch.tanh(self.convq1(r*x))
+        h=(1-z)*x+z*q
+        z=torch.sigmoid(self.convz2(x))
+        r=torch.sigmoid(self.convr2(x))
+        q=torch.tanh(self.convq2(r*x))
+        h=(1-z)*x+z*q
+        return h
 
 
 class multi_block_eq(nn.Module):
@@ -507,9 +489,10 @@ class DoorMechanism(nn.Module):
         self.norm_mem_1 = men_1.norm(p=2, dim=0).mean() / (men_1.numel() / men_1.size()[0])
         self.norm_mem_2 = men_2.norm(p=2, dim=0).mean() / (men_2.numel() / men_2.size()[0])
         self.norm_mem_3 = men_3.norm(p=2, dim=0).mean() / (men_3.numel() / men_3.size()[0])
-        result =    men_1.unsqueeze(-1).unsqueeze(-1) * x1 + men_2.unsqueeze(-1).unsqueeze(-1) * x2 + men_3.unsqueeze(
-                    -1).unsqueeze(-1) * x3 + torch.tanh(x1) * (1 - men_1.unsqueeze(-1).unsqueeze(-1)) + torch.tanh(x2) * (
-                    1 - men_2.unsqueeze(-1).unsqueeze(-1)) + torch.tanh(x3) * (1 - men_3.unsqueeze(-1).unsqueeze(-1))
+        result = men_1.unsqueeze(-1).unsqueeze(-1) * x1 + men_2.unsqueeze(-1).unsqueeze(-1) * x2 + men_3.unsqueeze(
+            -1).unsqueeze(-1) * x3 + torch.tanh(x1) * (1 - men_1.unsqueeze(-1).unsqueeze(-1)) + torch.tanh(x2) * (
+                         1 - men_2.unsqueeze(-1).unsqueeze(-1)) + torch.tanh(x3) * (
+                             1 - men_3.unsqueeze(-1).unsqueeze(-1))
         with torch.no_grad():
             men_1 = (men_1 * self.lr + (1. - self.lr) * tau_m)
             men_2 = (men_2 * self.lr + (1. - self.lr) * tau_s)
@@ -839,16 +822,14 @@ class three_dim_Layer(nn.Module):
                 out_3 = self.point_layer_module[str(num) + '_' + str(2)](xx, yy, zz)
             else:
                 out_3 = zz.clone()
-            m = size_change(out_1.shape[1], out_1.shape[2])
-            x = out_1 + m(x)
-            y = out_2 + m(y)
-            z = out_3 + m(z)
+
+            x = out_1+self.change_conv[num+0](x)
+            y = out_2+self.change_conv[num+1](y)
+            z = out_3+self.change_conv[num+2](z)
             old.append([x, y, z])
-        self.losses = self.feature_loss(old[0],old[1])+ self.feature_loss(old[1],old[2])+ self.feature_loss(old[2],old[0])
-        for i in range(len(old[:-1])):
-            for j in range(3):
-                old[i][j] = self.change_conv[i * 3 + j](old[i][j])
-                old[-1][j] = old[-1][j] + old[i][j]
+        self.losses = self.feature_loss(old[-1][0], old[-1][1]) + self.feature_loss(old[-1][1],
+                                                                                    old[-1][2]) + self.feature_loss(
+            old[-1][2], old[-1][0])
         m = len(old)
         for i in range(m - 1):
             del old[0]
@@ -898,9 +879,12 @@ class three_dim_Layer(nn.Module):
                                                                           p=self.p, device=self.device,
                                                                           grad_lr=self.grad_lr)
                 size_m = 2 ** (num + 1)
-                self.change_conv.append(
-                    nn.Conv2d(in_feature, self.feature_len[max(self.z, self.y, self.x)], (size_m, size_m),
-                              (size_m, size_m), bias=False))
+                print(self.feature_len[num])
+                if num!=max(self.z, self.y, self.x)-1:
+                    self.change_conv.append(nn.Conv2d(self.feature_len[num], self.feature_len[num+1], (size_m, size_m),(size_m, size_m), bias=False))
+                else:
+                    self.change_conv.append(nn.Conv2d(self.feature_len[num], self.feature_len[num+1], (size_m, size_m),(size_m, size_m), bias=False))
+
 
             if set_share_layer == True:
                 self.set_share_twodimlayer(self.point_layer[str(num) + "_0"], self.point_layer[str(num) + "_1"],
