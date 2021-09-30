@@ -266,4 +266,3 @@ class EEGDateset(Dataset):
             X = X.squeeze(0)
         y = torch.Tensor([y])
         return X, y.long().squeeze(-1)
-load_data_stl(64,64)

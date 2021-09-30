@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import datasets
 
-sys.path.append("F:\Snn_Auto")
+sys.path.append("D:\Product")
 sys.path.append("/home/sst/product")
 from Snn_Auto_master.lib.accuracy import accuracy
 from Snn_Auto_master.lib.criterion import criterion
@@ -35,7 +35,7 @@ parser.add_argument('--test', dest='test', default=True, type=bool,
                     help='test model')
 parser.add_argument('--data_url', dest='data_url', default='./data', type=str,
                     help='test model')
-parser.add_argument('--neg_mul', dest='neg_mul', default=0.25, type=float,
+parser.add_argument('--neg_mul', dest='neg_mul', default=1, type=float,
                     help='neg_learning')
 parser.add_argument('--log_each', dest='log_each', default=100, type=int,
                     help='how many step log once')
@@ -84,13 +84,9 @@ def neg_smooth_cross(pred, gold, output,smoothing=0.1, *args, **kwargs):
     one_hot = torch.full_like(pred, fill_value=smoothing / (n_class - 1)).to(pred.device)  # 0.0111111
     one_hot.scatter_(dim=1, index=gold.unsqueeze(1), value=1. - smoothing)  # 0.9
     output=torch.softmax(output,dim=1)
-    m_o=torch.max(output,dim=1,keepdim=True)[0]
-    output=torch.where(torch.eq(output,torch.max(output,dim=1,keepdim=True)[0]),torch.Tensor([0.]).to(pred.device),output)
-    h=m_o+output
-    h=torch.gather(h,dim=1,index=gold.unsqueeze(1))
-    output=output.scatter(dim=1, index=gold.unsqueeze(1), src=h)
+    out_one_hot=output.argmax(dim=1)
     with torch.no_grad():
-        one_hot=output.clone()
+        one_hot=torch.where(torch.eq(out_one_hot.unsqueeze(-1),gold.unsqueeze(-1)),torch.softmax(pred,dim=1),one_hot)
     log_prob = torch.nn.functional.log_softmax(pred, dim=1)
     return torch.nn.functional.kl_div(input=log_prob, target=one_hot, reduction='none').sum(dim=-1).mean()
 
@@ -143,11 +139,9 @@ def test2(model, data, yaml, criterion_loss):
             target = target.to(device)
             input.requires_grad_()
             torch.cuda.synchronize()
-            output, potg_a, potg_b, potg_c = model(input)
+            output, potg_a = model(input)
             loss_list = [criterion(criterion_loss, output, target),
-                         args.neg_mul * neg_smooth_cross(potg_a, target, output),
-                         args.neg_mul * neg_smooth_cross(potg_b, target, output),
-                         args.neg_mul * neg_smooth_cross(potg_c, target, output)]
+                         args.neg_mul * neg_smooth_cross(potg_a, target, output)]
             # if i == 0:
             #     print("\r", f"{(torch.eq(torch.argmax(potg_a, dim=-1), target).sum() / potg_a.size()[0]).item()},"
             #                 f"{(torch.eq(torch.argmax(potg_b, dim=-1), target).sum() / potg_b.size()[0]).item()},"
@@ -242,11 +236,9 @@ def test(path, data, yaml, criterion_loss):
             target = target.to(device)
             input.requires_grad_()
             torch.cuda.synchronize()
-            output, potg_a, potg_b, potg_c = the_model(input)
+            output, potg_a = model(input)
             loss_list = [criterion(criterion_loss, output, target),
-                         args.neg_mul * neg_smooth_cross(potg_a, target, output),
-                         args.neg_mul * neg_smooth_cross(potg_b, target, output),
-                         args.neg_mul * neg_smooth_cross(potg_c, target, output)]
+                         args.neg_mul * neg_smooth_cross(potg_a, target, output)]
             loss = model.L2_biasoption(loss_list, yaml["parameters"]['sigma_list'])
             torch.cuda.synchronize()
             if yaml['data'] == 'eeg':
@@ -272,21 +264,17 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
             raise KeyError('not have this dataset')
         target = target.to(device)
         input.requires_grad_()
-        output, potg_a, potg_b, potg_c = model(input)
-        loss_list= [criterion(criterion_loss, output, target),
-                   args.neg_mul* neg_smooth_cross(potg_a, target,output),
-                   args.neg_mul* neg_smooth_cross(potg_b, target,output),
-                   args.neg_mul* neg_smooth_cross(potg_c,target,output)]
+        output, potg_a = model(input)
+        loss_list = [criterion(criterion_loss, output, target),
+                     args.neg_mul * neg_smooth_cross(potg_a, target, output)]
         loss = model.L2_biasoption(loss_list,yaml["parameters"]['sigma_list'])
         if yaml['optimizer']['optimizer_choice'] == 'SAM':
             model.zero_grad()
             loss.backward(retain_graph=False)
             optimizer.first_step(zero_grad=True)
-            output2, potg_a, potg_b, potg_c = model(input)
-            loss_list = [criterion(criterion_loss, output2, target),
-                         args.neg_mul * neg_smooth_cross(potg_a, target, output2),
-                         args.neg_mul * neg_smooth_cross(potg_b, target, output2),
-                         args.neg_mul * neg_smooth_cross(potg_c, target, output2)]
+            output, potg_a = model(input)
+            loss_list = [criterion(criterion_loss, output, target),
+                         args.neg_mul * neg_smooth_cross(potg_a, target, output)]
             loss = model.L2_biasoption(loss_list, yaml["parameters"]['sigma_list'])
             loss.backward()
             optimizer.second_step(zero_grad=False)

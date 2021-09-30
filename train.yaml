@@ -13,7 +13,7 @@ use_standard:
 set_share_layer:
   False
 use_feature_change:
-  True
+  False
 densenetparameter:
   feature_list:
     - - 32
@@ -33,8 +33,8 @@ parameters:
   loss_option:
     smooth_cross
   sigma_list:
-    - 1.0
     - 0.75
+    - 0.25
     - 0.01
     - 0.01
   s:
@@ -78,7 +78,7 @@ optimizer:
     weight_decay: 4e-5
   SGD:
     momentum: 0.9
-    lr: 0.1
+    lr: 0.05
     weight_decay: 1e-4
   ASGD:
     lr: 0.0001

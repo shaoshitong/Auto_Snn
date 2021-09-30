@@ -284,19 +284,16 @@ class Feature_forward(nn.Module):
         self.transition_layer = nn.ModuleList([
             nn.Conv2d( self.feature[2]*2, self.feature[2], (1, 1), (1, 1), bias=False),
             nn.Conv2d( self.feature[3]*2, self.feature[3], (1, 1), (1, 1), bias=False),
-            nn.Conv2d( self.feature[4]*2, self.feature[4], (1, 1), (1, 1), bias=False),
+            nn.Conv2d( self.feature[4]*2, self.feature[4], ( 1, 1), (1, 1), bias=False),
         ])
         self.balance_layer= nn.ModuleList([
-            nn.Sequential(*[nn.Conv2d(self.three_dim_layer_out_feature, self.feature[2], (1, 1), (1, 1), bias=False),
-                            nn.ReLU(inplace=True),
+            nn.Sequential(*[nn.Conv2d(self.three_dim_layer_out_feature*3, self.feature[2], (1, 1), (1, 1), bias=False),
                             nn.BatchNorm2d(self.feature[2]),
                             ]),
-            nn.Sequential(*[nn.Conv2d(self.three_dim_layer_out_feature, self.feature[3], (1, 1), (1, 1), bias=False),
-                            nn.ReLU(inplace=True),
+            nn.Sequential(*[nn.Conv2d(self.three_dim_layer_out_feature*3, self.feature[3], (1, 1), (1, 1), bias=False),
                             nn.BatchNorm2d(self.feature[3]),
                             ]),
-            nn.Sequential(*[nn.Conv2d(self.three_dim_layer_out_feature, self.feature[4], (1, 1), (1, 1), bias=False),
-                            nn.ReLU(inplace=True),
+            nn.Sequential(*[nn.Conv2d(self.three_dim_layer_out_feature*3, self.feature[4], (1, 1), (1, 1), bias=False),
                             nn.BatchNorm2d(self.feature[4]),
                             ]),
         ])
@@ -304,12 +301,11 @@ class Feature_forward(nn.Module):
     def forward(self, x, A, B, C):
         self.kl_loss = 0.
         x = self.f(x)
-        feature_list = [A, B, C]
-        for transition, forward, feature, balance in zip(self.transition_layer, self.resnet_forward, feature_list,
-                                                         self.balance_layer):
+        feature_list = torch.cat([A, B, C],dim=1)
+        for transition, forward, balance in zip(self.transition_layer, self.resnet_forward,self.balance_layer):
             """pre_feature[count%len_n]"""
             x = forward(x)
-            feature = balance(size_change(x.size()[1], x.size()[2])(feature))
+            feature = size_change(x.size()[1], x.size()[2])(balance(feature_list))
             x = transition(torch.cat((x, feature), dim=1))
             log_soft_x = F.log_softmax(F.avg_pool2d(x, x.shape[-1]).squeeze(), dim=-1)
             soft_y = F.softmax(F.avg_pool2d(feature, feature.shape[-1]).squeeze(), dim=-1) + 1e-8
