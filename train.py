@@ -13,7 +13,7 @@ from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import datasets
-
+import torch.nn.functional as F
 sys.path.append("D:\Product")
 sys.path.append("/home/sst/product")
 from Snn_Auto_master.lib.accuracy import accuracy
@@ -35,7 +35,7 @@ parser.add_argument('--test', dest='test', default=True, type=bool,
                     help='test model')
 parser.add_argument('--data_url', dest='data_url', default='./data', type=str,
                     help='test model')
-parser.add_argument('--neg_mul', dest='neg_mul', default=1, type=float,
+parser.add_argument('--neg_mul', dest='neg_mul', default=0.05, type=float,
                     help='neg_learning')
 parser.add_argument('--log_each', dest='log_each', default=100, type=int,
                     help='how many step log once')
@@ -139,9 +139,9 @@ def test2(model, data, yaml, criterion_loss):
             target = target.to(device)
             input.requires_grad_()
             torch.cuda.synchronize()
-            output, potg_a = model(input)
-            loss_list = [criterion(criterion_loss, output, target),
-                         args.neg_mul * neg_smooth_cross(potg_a, target, output)]
+            output, potg = model(input)
+            z=args.neg_mul * F.mse_loss(potg.squeeze(1), target.float(), reduction="mean")
+            loss_list = [criterion(criterion_loss, output, target), z]
             # if i == 0:
             #     print("\r", f"{(torch.eq(torch.argmax(potg_a, dim=-1), target).sum() / potg_a.size()[0]).item()},"
             #                 f"{(torch.eq(torch.argmax(potg_b, dim=-1), target).sum() / potg_b.size()[0]).item()},"
@@ -236,9 +236,9 @@ def test(path, data, yaml, criterion_loss):
             target = target.to(device)
             input.requires_grad_()
             torch.cuda.synchronize()
-            output, potg_a = model(input)
-            loss_list = [criterion(criterion_loss, output, target),
-                         args.neg_mul * neg_smooth_cross(potg_a, target, output)]
+            output, potg = model(input)
+            z=args.neg_mul * F.mse_loss(potg.squeeze(1), target.float(), reduction="mean")
+            loss_list = [criterion(criterion_loss, output, target), z]
             loss = model.L2_biasoption(loss_list, yaml["parameters"]['sigma_list'])
             torch.cuda.synchronize()
             if yaml['data'] == 'eeg':
@@ -264,17 +264,17 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
             raise KeyError('not have this dataset')
         target = target.to(device)
         input.requires_grad_()
-        output, potg_a = model(input)
-        loss_list = [criterion(criterion_loss, output, target),
-                     args.neg_mul * neg_smooth_cross(potg_a, target, output)]
+        output, potg = model(input)
+        z = args.neg_mul * F.mse_loss(potg.squeeze(1), target.float(), reduction="mean")
+        loss_list = [criterion(criterion_loss, output, target), z]
         loss = model.L2_biasoption(loss_list,yaml["parameters"]['sigma_list'])
         if yaml['optimizer']['optimizer_choice'] == 'SAM':
             model.zero_grad()
             loss.backward(retain_graph=False)
             optimizer.first_step(zero_grad=True)
-            output, potg_a = model(input)
-            loss_list = [criterion(criterion_loss, output, target),
-                         args.neg_mul * neg_smooth_cross(potg_a, target, output)]
+            output, potg = model(input)
+            z=args.neg_mul * F.mse_loss(potg.squeeze(1), target.float(), reduction="mean")
+            loss_list = [criterion(criterion_loss, output, target), z]
             loss = model.L2_biasoption(loss_list, yaml["parameters"]['sigma_list'])
             loss.backward()
             optimizer.second_step(zero_grad=False)
@@ -414,12 +414,12 @@ if __name__ == "__main__":
     params1 = list(filter(lambda i: i.requires_grad, model.out_classifier.parameters()))
     params2 = list(filter(lambda i: i.requires_grad, model.InputGenerateNet.parameters()))
     params3 = list(filter(lambda i: i.requires_grad, model.feature_forward.parameters()))
-    params4 = list(filter(lambda i: i.requires_grad, model.block_in_x_y_z.parameters()))
+    # params4 = list(filter(lambda i: i.requires_grad, model.block_in_x_y_z.parameters()))
     dict_list1 = dict(params=params1, weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay'])
     dict_list2 = dict(params=params2, weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay'])
     dict_list3 = dict(params=params3,weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay'])
-    dict_list4 = dict(params=params4,weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay'])
-    optimizer = get_optimizer([dict_list1, dict_list2, dict_list3, dict_list4], yaml, model)
+    # dict_list4 = dict(params=params4,weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay'])
+    optimizer = get_optimizer([dict_list1, dict_list2, dict_list3], yaml, model)
     scheduler = get_scheduler(optimizer, yaml)
     criterion_loss = Loss_get(yaml["parameters"]["loss_option"])
     model.to(set_device())

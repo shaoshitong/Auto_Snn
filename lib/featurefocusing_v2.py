@@ -268,11 +268,9 @@ class Feature_forward(nn.Module):
         """
         super(Feature_forward, self).__init__()
         assert push_num >= 1
-        self.feature = feature[0]
-        self.tag = feature[1]+1
+        self.feature = feature
         self.size = size
         self.p = p
-        self.three_dim_layer_out_feature = self.feature[self.tag]
         self.f = nn.Sequential(*[
             nn.Conv2d(self.feature[0], self.feature[1], (3, 3), stride=(1, 1), padding=1, bias=False),
         ])
@@ -281,33 +279,11 @@ class Feature_forward(nn.Module):
             WideResNetBlock(self.feature[2], self.feature[3], 2, push_num, dropout=p, use_pool=False),
             WideResNetBlock(self.feature[3], self.feature[4], 2, push_num, dropout=p, use_pool=False),
         ])
-        self.transition_layer = nn.ModuleList([
-            nn.Conv2d( self.feature[2]*2, self.feature[2], (1, 1), (1, 1), bias=False),
-            nn.Conv2d( self.feature[3]*2, self.feature[3], (1, 1), (1, 1), bias=False),
-            nn.Conv2d( self.feature[4]*2, self.feature[4], ( 1, 1), (1, 1), bias=False),
-        ])
-        self.balance_layer= nn.ModuleList([
-            nn.Sequential(*[nn.Conv2d(self.three_dim_layer_out_feature*3, self.feature[2], (1, 1), (1, 1), bias=False),
-                            nn.BatchNorm2d(self.feature[2]),
-                            ]),
-            nn.Sequential(*[nn.Conv2d(self.three_dim_layer_out_feature*3, self.feature[3], (1, 1), (1, 1), bias=False),
-                            nn.BatchNorm2d(self.feature[3]),
-                            ]),
-            nn.Sequential(*[nn.Conv2d(self.three_dim_layer_out_feature*3, self.feature[4], (1, 1), (1, 1), bias=False),
-                            nn.BatchNorm2d(self.feature[4]),
-                            ]),
-        ])
-
-    def forward(self, x, A, B, C):
+    def forward(self, x):
         self.kl_loss = 0.
         x = self.f(x)
-        feature_list = torch.cat([A, B, C],dim=1)
-        for transition, forward, balance in zip(self.transition_layer, self.resnet_forward,self.balance_layer):
+        m=x
+        for forward in self.resnet_forward:
             """pre_feature[count%len_n]"""
             x = forward(x)
-            feature = size_change(x.size()[1], x.size()[2])(balance(feature_list))
-            x = transition(torch.cat((x, feature), dim=1))
-            log_soft_x = F.log_softmax(F.avg_pool2d(x, x.shape[-1]).squeeze(), dim=-1)
-            soft_y = F.softmax(F.avg_pool2d(feature, feature.shape[-1]).squeeze(), dim=-1) + 1e-8
-            self.kl_loss = self.kl_loss + F.kl_div(log_soft_x, soft_y, reduction='none').sum(dim=-1).mean()
-        return x
+        return x,m

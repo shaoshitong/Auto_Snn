@@ -115,7 +115,8 @@ def load_data(train_batch_size, test_batch_size, data_url=None ,use_standard=Tru
         train_set=torchvision.datasets.CIFAR10(root=data_url,train=True,download=True,transform=transforms.ToTensor())
         data=torch.cat([d[0] for d in DataLoader(train_set)])
         return data.mean(dim=[0,2,3]),data.std(dim=[0,2,3])
-    mean,std=get_statistics()
+    if use_standard==False:
+        mean,std=get_statistics()
     train_transform = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
@@ -159,7 +160,8 @@ def load_data_c100(train_batch_size, test_batch_size, data_url=None ,use_standar
         train_set=torchvision.datasets.CIFAR10(root=data_url,train=True,download=True,transform=transforms.ToTensor())
         data=torch.cat([d[0] for d in DataLoader(train_set)])
         return data.mean(dim=[0,2,3]),data.std(dim=[0,2,3])
-    mean,std=get_statistics()
+    if use_standard==False:
+        mean,std=get_statistics()
     train_transform = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),

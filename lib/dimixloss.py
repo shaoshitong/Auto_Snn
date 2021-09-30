@@ -36,23 +36,17 @@ class DimixLoss_neg(nn.Module):
     def __init__(self,list_len=1):
         super(DimixLoss_neg,self).__init__()
         self.list_len=list_len
-    def forward(self,mult_list,feature_centering=True):
-        all_loss=torch.Tensor([0]).to(mult_list[0].device)
-        x,y,z=mult_list[0],mult_list[1],mult_list[2]
-        batchsize,feature,size=x.shape[0],x.shape[1],x.shape[2]
-        x,y,z=x.view(batchsize,feature,-1),y.view(batchsize,feature,-1),z.view(batchsize,feature,-1)
+    def forward(self,X,M,feature_centering=True):
+        all_loss=torch.Tensor([0]).to(X.device)
+        batchsize,feature,size=X.shape[0],X.shape[1],X.shape[2]
+        X,M=X.view(batchsize,feature,-1),M.view(batchsize,feature,-1)
         if feature_centering==True:
-            x=x-x.mean(dim=-2,keepdim=True)
-            y=y-y.mean(dim=-2,keepdim=True)
-            z=z-z.mean(dim=-2,keepdim=True)
-            x,y,z=feature_normalize(x),feature_normalize(y),feature_normalize(z)
-            xy=MatmulTopkLoss(x,y)
-            yz=MatmulTopkLoss(y,z)
-            zx=MatmulTopkLoss(z,x)
+            X=X-X.mean(dim=-2,keepdim=True)
+            M=M-M.mean(dim=-2,keepdim=True)
+            X,M=feature_normalize(X),feature_normalize(M)
+            xy=MatmulTopkLoss(X,M)
             xy=torch.exp(-xy+xy.min()-1e-6)
-            yz=torch.exp(-yz+yz.min()-1e-6)
-            zx=torch.exp(-zx+zx.min()-1e-6)
-            all_loss=all_loss+(xy+yz+zx).mean()
+            all_loss=all_loss+(xy).mean()
         return all_loss
 class DimixLoss(nn.Module):
     def __init__(self,list_len=1):

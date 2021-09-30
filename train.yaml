@@ -78,8 +78,8 @@ optimizer:
     weight_decay: 4e-5
   SGD:
     momentum: 0.9
-    lr: 0.05
-    weight_decay: 1e-4
+    lr: 0.1
+    weight_decay: 4e-5
   ASGD:
     lr: 0.0001
     weight_decay: 1e-4
