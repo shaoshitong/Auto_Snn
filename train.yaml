@@ -48,7 +48,7 @@ parameters:
   sigma:
     0.1
   batch_size:
-    96
+    128
   epoch:
     200
   dropout:

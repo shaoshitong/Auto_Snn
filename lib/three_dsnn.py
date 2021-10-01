@@ -192,7 +192,7 @@ class block_out(nn.Module):
 
 
 class block_eq(nn.Module):
-    def __init__(self, eq_feature):
+    def __init__(self, eq_feature,dropout):
         super(block_eq, self).__init__()
         self.eq_feature = eq_feature
         tmp_feature = int(eq_feature)
@@ -204,7 +204,8 @@ class block_eq(nn.Module):
         self.convq2 = nn.Conv2d(eq_feature + tmp_feature, eq_feature, (5, 1), padding=(2, 0))
         self.convo = nn.Sequential(*[
             nn.Conv2d(eq_feature, eq_feature, (3, 3), (1, 1), (1, 1), bias=False),
-            nn.LeakyReLU(inplace=True),
+            nn.ReLU(inplace=True),
+            nn.Dropout(p=dropout),
             nn.BatchNorm2d(eq_feature),
         ])
         self.xgru=nn.Sequential(nn.Conv2d(eq_feature,eq_feature,(1,1),(1,1),padding=0,bias=False))
@@ -222,7 +223,7 @@ class block_eq(nn.Module):
                 nn.init.zeros_(layer.bias.data)
         for layer in self.convo.modules():
             if isinstance(layer, nn.Conv2d):
-                nn.init.kaiming_normal_(layer.weight.data, mode="fan_in", nonlinearity="leaky_relu")
+                nn.init.kaiming_normal_(layer.weight.data, mode="fan_in", nonlinearity="relu")
                 if layer.bias is not None:
                     nn.init.zeros_(layer.bias.data)
 
@@ -250,7 +251,7 @@ class block_eq(nn.Module):
 
 
 class multi_block_eq(nn.Module):
-    def __init__(self, in_feature, out_feature, multi_k=1, stride=1):
+    def __init__(self, in_feature, out_feature, multi_k=1, stride=1,dropout=0.1):
         super(multi_block_eq, self).__init__()
         if in_feature != out_feature or stride != 1:
             self.sample = nn.Sequential(
@@ -275,7 +276,7 @@ class multi_block_eq(nn.Module):
                     nn.init.zeros_(layer.bias.data)
         self.xgru=nn.Sequential(nn.Conv2d(in_feature,in_feature,(1,1),(1,1),padding=0,bias=False))
         self.model = nn.Sequential(*[
-            block_eq(out_feature) for _ in range(multi_k)
+            block_eq(out_feature,dropout) for _ in range(multi_k)
         ])
         self.gru1 = torch.randn(1, in_feature, 1, 1, requires_grad=False).cuda()
 
