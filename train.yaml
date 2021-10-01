@@ -48,7 +48,7 @@ parameters:
   sigma:
     0.1
   batch_size:
-    128
+    96
   epoch:
     200
   dropout:
@@ -63,7 +63,7 @@ parameters:
     True
   membrane_filer:
     False
-shape: [[2,2,2]]
+shape: [2,2,2]
 optimizer:
   optimizer_choice:
     'SGD'
@@ -79,7 +79,7 @@ optimizer:
   SGD:
     momentum: 0.9
     lr: 0.1
-    weight_decay: 4e-5
+    weight_decay: 1e-4
   ASGD:
     lr: 0.0001
     weight_decay: 1e-4
