@@ -23,7 +23,7 @@ hidden_size_list:
   - 128
   - 128
   - 128
-push_nums_list:
+path_nums_list:
   - 2
   - 2
   - 2
@@ -75,7 +75,7 @@ parameters:
     True
   membrane_filer:
     False
-shape: [[2,2,2]]
+shape: [2,2,2]
 optimizer:
   optimizer_choice:
     'SGD'

@@ -27,7 +27,7 @@ from lib.three_dsnn import merge_layer, filename
 from lib.parameters_check import parametersgradCheck, parametersNameCheck
 
 parser = argparse.ArgumentParser(description='SNN AUTO MASTER')
-parser.add_argument('--config_file', type=str, default='train.yaml',
+parser.add_argument('--config_file', type=str, default='train_c10.yaml',
                     help='path to configuration file')
 parser.add_argument('--train', dest='train', default=True, type=bool,
                     help='train model')
@@ -125,7 +125,6 @@ def set_random_seed(conf):
 def test2(model, data, yaml, criterion_loss):
     log.eval(len_dataset=len(data))
     the_model = model
-    the_model.settest(True)
     the_model.eval()
     with torch.no_grad():
         for i, (input, target) in enumerate(data):
@@ -160,65 +159,65 @@ def test(path, data, yaml, criterion_loss):
         the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 1, 32, 32),
                                  num_classes=yaml["num_classes"],
                                  feature_list=yaml["feature_list"],
-                                 size_list=["size_list"],
-                                 hidden_size_list=["hidden_size_list"],
-                                 path_nums_list=["path_nums_list"],
+                                 size_list=yaml["size_list"],
+                                 hidden_size_list=yaml["hidden_size_list"],
+                                 path_nums_list=yaml["path_nums_list"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'cifar10':
         the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 3, 32, 32),
                                  num_classes=yaml["num_classes"],
                                  feature_list=yaml["feature_list"],
-                                 size_list=["size_list"],
-                                 hidden_size_list=["hidden_size_list"],
-                                 path_nums_list=["path_nums_list"],
+                                 size_list=yaml["size_list"],
+                                 hidden_size_list=yaml["hidden_size_list"],
+                                 path_nums_list=yaml["path_nums_list"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'cifar100':
         the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 3, 32, 32),
                                  num_classes=yaml["num_classes"],
                                  feature_list=yaml["feature_list"],
-                                 size_list=["size_list"],
-                                 hidden_size_list=["hidden_size_list"],
-                                 path_nums_list=["path_nums_list"],
+                                 size_list=yaml["size_list"],
+                                 hidden_size_list=yaml["hidden_size_list"],
+                                 path_nums_list=yaml["path_nums_list"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'fashionmnist':
         the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 1, 32, 32),
                                  num_classes=yaml["num_classes"],
                                  feature_list=yaml["feature_list"],
-                                 size_list=["size_list"],
-                                 hidden_size_list=["hidden_size_list"],
-                                 path_nums_list=["path_nums_list"],
+                                 size_list=yaml["size_list"],
+                                 hidden_size_list=yaml["hidden_size_list"],
+                                 path_nums_list=yaml["path_nums_list"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'eeg':
         the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 14, 64, 64),
                                  num_classes=yaml["num_classes"],
                                  feature_list=yaml["feature_list"],
-                                 size_list=["size_list"],
-                                 hidden_size_list=["hidden_size_list"],
-                                 path_nums_list=["path_nums_list"],
+                                 size_list=yaml["size_list"],
+                                 hidden_size_list=yaml["hidden_size_list"],
+                                 path_nums_list=yaml["path_nums_list"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'car':
         the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 3, 64, 64),
                                  num_classes=yaml["num_classes"],
                                  feature_list=yaml["feature_list"],
-                                 size_list=["size_list"],
-                                 hidden_size_list=["hidden_size_list"],
-                                 path_nums_list=["path_nums_list"],
+                                 size_list=yaml["size_list"],
+                                 hidden_size_list=yaml["hidden_size_list"],
+                                 path_nums_list=yaml["path_nums_list"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'svhn':
         the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 3, 32, 32),
                                  num_classes=yaml["num_classes"],
                                  feature_list=yaml["feature_list"],
-                                 size_list=["size_list"],
-                                 hidden_size_list=["hidden_size_list"],
-                                 path_nums_list=["path_nums_list"],
+                                 size_list=yaml["size_list"],
+                                 hidden_size_list=yaml["hidden_size_list"],
+                                 path_nums_list=yaml["path_nums_list"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'stl-10':
         the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 3, 96, 96),
                                  num_classes=yaml["num_classes"],
                                  feature_list=yaml["feature_list"],
-                                 size_list=["size_list"],
-                                 hidden_size_list=["hidden_size_list"],
-                                 path_nums_list=["path_nums_list"],
+                                 size_list=yaml["size_list"],
+                                 hidden_size_list=yaml["hidden_size_list"],
+                                 path_nums_list=yaml["path_nums_list"],
                                  mult_k=yaml["mult_k"])
     else:
         raise KeyError('not have this dataset')
@@ -253,7 +252,6 @@ def test(path, data, yaml, criterion_loss):
 def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="./output"):
     log.train(len_dataset=len(data))
     sigma = yaml['parameters']['sigma']
-    model.settest(False)
     if yaml['data'] == "stl-10":
         res = 0.
     for i, (input, target) in enumerate(data):
@@ -324,9 +322,9 @@ if __name__ == "__main__":
         model.initiate_layer(    data=torch.randn(yaml['parameters']['batch_size'], 1, 32, 32),
                                  num_classes=yaml["num_classes"],
                                  feature_list=yaml["feature_list"],
-                                 size_list=["size_list"],
-                                 hidden_size_list=["hidden_size_list"],
-                                 path_nums_list=["path_nums_list"],
+                                 size_list=yaml["size_list"],
+                                 hidden_size_list=yaml["hidden_size_list"],
+                                 path_nums_list=yaml["path_nums_list"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'svhn':
         train_dataloader, test_dataloader = load_data_svhn(yaml['parameters']['batch_size'],
@@ -334,9 +332,9 @@ if __name__ == "__main__":
         model.initiate_layer(    data=torch.randn(yaml['parameters']['batch_size'], 3, 32, 32),
                                  num_classes=yaml["num_classes"],
                                  feature_list=yaml["feature_list"],
-                                 size_list=["size_list"],
-                                 hidden_size_list=["hidden_size_list"],
-                                 path_nums_list=["path_nums_list"],
+                                 size_list=yaml["size_list"],
+                                 hidden_size_list=yaml["hidden_size_list"],
+                                 path_nums_list=yaml["path_nums_list"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'cifar10':
         train_dataloader, test_dataloader = load_data(yaml['parameters']['batch_size'],
@@ -345,9 +343,9 @@ if __name__ == "__main__":
         model.initiate_layer(    data=torch.randn(yaml['parameters']['batch_size'], 3, 32, 32),
                                  num_classes=yaml["num_classes"],
                                  feature_list=yaml["feature_list"],
-                                 size_list=["size_list"],
-                                 hidden_size_list=["hidden_size_list"],
-                                 path_nums_list=["path_nums_list"],
+                                 size_list=yaml["size_list"],
+                                 hidden_size_list=yaml["hidden_size_list"],
+                                 path_nums_list=yaml["path_nums_list"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'cifar100':
         train_dataloader, test_dataloader = load_data_c100(yaml['parameters']['batch_size'],
@@ -356,9 +354,9 @@ if __name__ == "__main__":
         model.initiate_layer(    data=torch.randn(yaml['parameters']['batch_size'], 3, 32, 32),
                                  num_classes=yaml["num_classes"],
                                  feature_list=yaml["feature_list"],
-                                 size_list=["size_list"],
-                                 hidden_size_list=["hidden_size_list"],
-                                 path_nums_list=["path_nums_list"],
+                                 size_list=yaml["size_list"],
+                                 hidden_size_list=yaml["hidden_size_list"],
+                                 path_nums_list=yaml["path_nums_list"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'stl-10':
         train_dataloader, test_dataloader = load_data_stl(yaml['parameters']['batch_size'],
@@ -366,9 +364,9 @@ if __name__ == "__main__":
         model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 3, 96, 96),
                              num_classes=yaml["num_classes"],
                              feature_list=yaml["feature_list"],
-                             size_list=["size_list"],
-                             hidden_size_list=["hidden_size_list"],
-                             path_nums_list=["path_nums_list"],
+                             size_list=yaml["size_list"],
+                             hidden_size_list=yaml["hidden_size_list"],
+                             path_nums_list=yaml["path_nums_list"],
                              mult_k=yaml["mult_k"])
     elif yaml['data'] == 'car':
         train_dataloader, test_dataloader = load_data_car(yaml['parameters']['batch_size'],
@@ -376,9 +374,9 @@ if __name__ == "__main__":
         model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 3, 32, 32),
                              num_classes=yaml["num_classes"],
                              feature_list=yaml["feature_list"],
-                             size_list=["size_list"],
-                             hidden_size_list=["hidden_size_list"],
-                             path_nums_list=["path_nums_list"],
+                             size_list=yaml["size_list"],
+                             hidden_size_list=yaml["hidden_size_list"],
+                             path_nums_list=yaml["path_nums_list"],
                              mult_k=yaml["mult_k"])
     elif yaml['data'] == 'fashionmnist':
         fashionmnist_trainset = datasets.FashionMNIST(root=args.data_url, train=True, download=True,
@@ -395,9 +393,9 @@ if __name__ == "__main__":
         model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 1, 32, 32),
                              num_classes=yaml["num_classes"],
                              feature_list=yaml["feature_list"],
-                             size_list=["size_list"],
-                             hidden_size_list=["hidden_size_list"],
-                             path_nums_list=["path_nums_list"],
+                             size_list=yaml["size_list"],
+                             hidden_size_list=yaml["hidden_size_list"],
+                             path_nums_list=yaml["path_nums_list"],
                              mult_k=yaml["mult_k"])
     elif yaml['data'] == 'eeg':
         p = random.randint(0, 4)
@@ -413,9 +411,9 @@ if __name__ == "__main__":
         model.initiate_layer(    data=torch.randn(yaml['parameters']['batch_size'], 14, 64, 64),
                                  num_classes=yaml["num_classes"],
                                  feature_list=yaml["feature_list"],
-                                 size_list=["size_list"],
-                                 hidden_size_list=["hidden_size_list"],
-                                 path_nums_list=["path_nums_list"],
+                                 size_list=yaml["size_list"],
+                                 hidden_size_list=yaml["hidden_size_list"],
+                                 path_nums_list=yaml["path_nums_list"],
                                  mult_k=yaml["mult_k"])
     else:
         raise KeyError('There is no corresponding dataset')

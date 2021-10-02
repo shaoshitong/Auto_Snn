@@ -50,7 +50,7 @@ def batch_norm(input):
     return torch.div(torch.sub(input, mean), std)
 
 
-filename = "./train.yaml"
+filename = "./train_c10.yaml"
 yaml = yaml_config_get(filename)
 # yaml = yaml_config_get("./train.yaml")
 dataoption = yaml['data']
@@ -341,7 +341,7 @@ class turn_layer(nn.Module):
         super(turn_layer, self).__init__()
         self.downsample=Downsampleunit(in_feature,out_feature,stride,dropout)
         self.turn=nn.ModuleList([nn.Conv2d(out_feature,out_feature,(3,5),(1,1),(1,2),bias=False),
-                                 nn.Conv2d(out_feature,out_feature,(1,1),(1,1),(1,2),bias=False),])
+                                 nn.Conv2d(out_feature,out_feature,(5,3),(1,1),(2,1),bias=False),])
         self.feature_different=DimixLoss_neg()
     def forward(self,x):
         x=self.downsample(x)
@@ -362,7 +362,7 @@ class three_dim_Layer(nn.Module):
         self.shape = shape
         self.device = device
         self.dropout = p
-        self.diag_T = Trinomial_operation(max(self.x, self.y, self.z))
+        self.diag_T = Trinomial_operation(max(self.a, self.b, self.c))
         self.a_join, self.b_join, self.c_join = LastJoiner(2), LastJoiner(2), LastJoiner(2)
     def forward(self, m):
         """
@@ -383,6 +383,7 @@ class three_dim_Layer(nn.Module):
         self.point_layer = {}
         self.turn_layer = {}
         self.in_shape = data.shape
+        print(feature_list,size_list,hidden_size_list,path_nums_list)
         assert len(feature_list)==4 and len(size_list) == 4 and len(hidden_size_list) ==3 and len(path_nums_list)==3
         f1,f2,f3,f4=feature_list[0],feature_list[1],feature_list[2],feature_list[3]
         s1,s2,s3,s4=size_list[0],size_list[1],size_list[2],size_list[3]
@@ -392,7 +393,7 @@ class three_dim_Layer(nn.Module):
         self.point_layer["1"]=two_dim_layer(f3,f3,h2,s3,s3,p2,p2,mult_k,self.dropout)
         self.point_layer["2"]=two_dim_layer(f4,f4,h3,s4,s4,p3,p3,mult_k,self.dropout)
         self.turn_layer["0"]=turn_layer(f1,f2,1,self.dropout)
-        self.turn_layer["1"]=turn_layer(f1,f3,2,self.dropout)
+        self.turn_layer["1"]=turn_layer(f2,f3,2,self.dropout)
         self.turn_layer["2"]=turn_layer(f3,f4,2,self.dropout)
         self.turn_layer_module = nn.ModuleDict(self.turn_layer)
         self.point_layer_module = nn.ModuleDict(self.point_layer)
@@ -442,10 +443,10 @@ class merge_layer(nn.Module):
                 x = x.view(x.shape[0], 3, 96, 96)
             else:
                 raise KeyError()
-        m = self.inf(x)
-        m= self.eq(m)
-        m = self.cl(F.avg_pool2d(m, m.shape[-1]))
-        return m
+        x = self.inf(x)
+        x = self.InputGenerateNet(x)
+        x = self.out_classifier(x)
+        return x
 
     def initiate_layer(self, data, num_classes,feature_list,size_list,hidden_size_list,path_nums_list,mult_k=2):
         """
