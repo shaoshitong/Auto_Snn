@@ -6,9 +6,9 @@ set_seed:
 pytorch_seed:
   2021
 data:
-  car
+  cifar100
 num_classes:
-  10
+  100
 feature_list:
   - 16
   - 128
@@ -30,15 +30,6 @@ push_nums_list:
 mult_k:
   1
 densenetparameter:
-  feature_list:
-    - - 16
-      - 16
-      - 16
-      - 16
-    - - 32
-      - 32
-      - 32
-      - 32
   bn_size:
     2
   drop_rate:
@@ -49,22 +40,25 @@ parameters:
   # default parameters
   loss_option:
     smooth_cross
-  push_num:
-    3
+  sigma_list:
+    - 0.1
+    - 0.01
   s:
-    1
+    4
+  push_num:
+    2
   length:
     25
   tmp_feature:
-    64
+    8
   sigma:
     0.1
   batch_size:
-    25
+    112
   epoch:
     200
   dropout:
-    0.2
+    0.1
   filter_tau_m:
     4
   filter_tau_s:
@@ -75,22 +69,22 @@ parameters:
     True
   membrane_filer:
     False
-shape: [[2,2,2]]
+shape: [2,2,2]
 optimizer:
   optimizer_choice:
     'SGD'
   Adam:
-    lr: 0.001
+    lr: 0.005
     weight_decay: 0
   AdamW:
     lr: 0.005
     weight_decay: 1e-4
   SAM:
-    lr: 0.005
-    weight_decay: 1e-4
+    lr: 0.05
+    weight_decay: 4e-5
   SGD:
     momentum: 0.9
-    lr: 0.01
+    lr: 0.1
     weight_decay: 1e-4
   ASGD:
     lr: 0.0001
@@ -105,10 +99,11 @@ scheduler:
     'SchedulerLR'
   SchedulerLR:
     milestones:
-      - 0.5
-      - 0.75
+      - 0.3
+      - 0.6
+      - 0.8
     gamma:
-      0.1
+      0.2
   MultiStepLR:
     milestones:
       - 25

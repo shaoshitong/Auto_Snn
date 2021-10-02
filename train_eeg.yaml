@@ -1,15 +1,34 @@
 
 experiment_name:
   Auto_config
-mult_k: 1
 set_seed:
   False
 pytorch_seed:
   2021
 data:
   eeg
-set_share_layer:
-  True
+num_classes:
+  2
+feature_list:
+  - 16
+  - 128
+  - 256
+  - 512
+size_list:
+  - 32
+  - 32
+  - 16
+  - 8
+hidden_size_list:
+  - 128
+  - 128
+  - 128
+push_nums_list:
+  - 2
+  - 2
+  - 2
+mult_k:
+  1
 densenetparameter:
   feature_list:
     - - 16

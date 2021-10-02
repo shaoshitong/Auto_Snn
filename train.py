@@ -16,15 +16,15 @@ from torchvision import datasets
 import torch.nn.functional as F
 sys.path.append("D:\Product")
 sys.path.append("/home/sst/product")
-from Snn_Auto_master.lib.accuracy import accuracy
-from Snn_Auto_master.lib.criterion import criterion
-from Snn_Auto_master.lib.data_loaders import MNISTDataset, get_rand_transform, load_data, EEGDateset, load_data_car, \
+from lib.accuracy import accuracy
+from lib.criterion import criterion
+from lib.data_loaders import MNISTDataset, get_rand_transform, load_data, EEGDateset, load_data_car, \
     load_data_svhn, load_data_c100, load_data_stl
-from Snn_Auto_master.lib.log import Log
-from Snn_Auto_master.lib.optimizer import get_optimizer
-from Snn_Auto_master.lib.scheduler import get_scheduler, SchedulerLR
-from Snn_Auto_master.lib.three_dsnn import merge_layer, filename
-from Snn_Auto_master.lib.parameters_check import parametersgradCheck, parametersNameCheck
+from lib.log import Log
+from lib.optimizer import get_optimizer
+from lib.scheduler import get_scheduler, SchedulerLR
+from lib.three_dsnn import merge_layer, filename
+from lib.parameters_check import parametersgradCheck, parametersNameCheck
 
 parser = argparse.ArgumentParser(description='SNN AUTO MASTER')
 parser.add_argument('--config_file', type=str, default='train.yaml',
@@ -142,12 +142,6 @@ def test2(model, data, yaml, criterion_loss):
             output= model(input)
             #z=args.neg_mul * F.mse_loss(potg.squeeze(1), target.float(), reduction="mean")
             loss_list = [criterion(criterion_loss, output, target)]
-            # if i == 0:
-            #     print("\r", f"{(torch.eq(torch.argmax(potg_a, dim=-1), target).sum() / potg_a.size()[0]).item()},"
-            #                 f"{(torch.eq(torch.argmax(potg_b, dim=-1), target).sum() / potg_b.size()[0]).item()},"
-            #                 f"{(torch.eq(torch.argmax(potg_c, dim=-1), target).sum() / potg_c.size()[0]).item()},"
-            #                 f"{(torch.eq(torch.argmax(output, dim=-1), target).sum() / output.size()[0]).item()},",
-            #           end="", flush=True)
             loss = model.L2_biasoption(loss_list, yaml["parameters"]['sigma_list'])
             torch.cuda.synchronize()
             if yaml['data'] == 'eeg':
@@ -161,63 +155,71 @@ def test2(model, data, yaml, criterion_loss):
 def test(path, data, yaml, criterion_loss):
     log.eval(len_dataset=len(data))
     torch.cuda.empty_cache()
-    the_model = merge_layer(set_device(), shape=yaml['shape'], dropout=yaml['parameters']['dropout'], test=True)
+    the_model = merge_layer(set_device(), shape=yaml['shape'], dropout=yaml['parameters']['dropout'])
     if yaml['data'] == 'mnist':
-        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 1, 28, 28), 1, 1, int(10),
-                                 tmp_feature=yaml['parameters']['tmp_feature'],
-                                 tau_m=yaml['parameters']['filter_tau_m'], tau_s=yaml['parameters']['filter_tau_s'],
-                                 use_gauss=False, mult_k=yaml['mult_k'], p=yaml['parameters']['dropout'],
-                                 use_share_layer=yaml['set_share_layer'], push_num=yaml['parameters']['push_num'],
-                                 s=yaml['parameters']['s'], use_feature_change=yaml['use_feature_change'])
+        the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 1, 32, 32),
+                                 num_classes=yaml["num_classes"],
+                                 feature_list=yaml["feature_list"],
+                                 size_list=["size_list"],
+                                 hidden_size_list=["hidden_size_list"],
+                                 path_nums_list=["path_nums_list"],
+                                 mult_k=yaml["mult_k"])
     elif yaml['data'] == 'cifar10':
-        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 3, 32, 32), 3, 3, int(10),
-                                 tmp_feature=yaml['parameters']['tmp_feature'],
-                                 tau_m=yaml['parameters']['filter_tau_m'], tau_s=yaml['parameters']['filter_tau_s'],
-                                 use_gauss=False, mult_k=yaml['mult_k'], p=yaml['parameters']['dropout'],
-                                 use_share_layer=yaml['set_share_layer'], push_num=yaml['parameters']['push_num'],
-                                 s=yaml['parameters']['s'], use_feature_change=yaml['use_feature_change'])
+        the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 3, 32, 32),
+                                 num_classes=yaml["num_classes"],
+                                 feature_list=yaml["feature_list"],
+                                 size_list=["size_list"],
+                                 hidden_size_list=["hidden_size_list"],
+                                 path_nums_list=["path_nums_list"],
+                                 mult_k=yaml["mult_k"])
     elif yaml['data'] == 'cifar100':
-        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 3, 32, 32), 3, 3, int(100),
-                                 tmp_feature=yaml['parameters']['tmp_feature'],
-                                 tau_m=yaml['parameters']['filter_tau_m'], tau_s=yaml['parameters']['filter_tau_s'],
-                                 use_gauss=False, mult_k=yaml['mult_k'], p=yaml['parameters']['dropout'],
-                                 use_share_layer=yaml['set_share_layer'], push_num=yaml['parameters']['push_num'],
-                                 s=yaml['parameters']['s'], use_feature_change=yaml['use_feature_change'])
+        the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 3, 32, 32),
+                                 num_classes=yaml["num_classes"],
+                                 feature_list=yaml["feature_list"],
+                                 size_list=["size_list"],
+                                 hidden_size_list=["hidden_size_list"],
+                                 path_nums_list=["path_nums_list"],
+                                 mult_k=yaml["mult_k"])
     elif yaml['data'] == 'fashionmnist':
-        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 1, 28, 28), 1, 1, int(10),
-                                 tmp_feature=yaml['parameters']['tmp_feature'],
-                                 tau_m=yaml['parameters']['filter_tau_m'], tau_s=yaml['parameters']['filter_tau_s'],
-                                 use_gauss=False, mult_k=yaml['mult_k'], p=yaml['parameters']['dropout'],
-                                 use_share_layer=yaml['set_share_layer'], push_num=yaml['parameters']['push_num'],
-                                 s=yaml['parameters']['s'], use_feature_change=yaml['use_feature_change'])
+        the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 1, 32, 32),
+                                 num_classes=yaml["num_classes"],
+                                 feature_list=yaml["feature_list"],
+                                 size_list=["size_list"],
+                                 hidden_size_list=["hidden_size_list"],
+                                 path_nums_list=["path_nums_list"],
+                                 mult_k=yaml["mult_k"])
     elif yaml['data'] == 'eeg':
-        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 14, 64, 64), 14, 14, int(2),
-                                 tmp_feature=yaml['parameters']['tmp_feature'],
-                                 tau_m=yaml['parameters']['filter_tau_m'], tau_s=yaml['parameters']['filter_tau_s'],
-                                 use_gauss=False, mult_k=yaml['mult_k'], p=yaml['parameters']['dropout'],
-                                 use_share_layer=yaml['set_share_layer'], push_num=yaml['parameters']['push_num'],
-                                 s=yaml['parameters']['s'], use_feature_change=yaml['use_feature_change'])
+        the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 14, 64, 64),
+                                 num_classes=yaml["num_classes"],
+                                 feature_list=yaml["feature_list"],
+                                 size_list=["size_list"],
+                                 hidden_size_list=["hidden_size_list"],
+                                 path_nums_list=["path_nums_list"],
+                                 mult_k=yaml["mult_k"])
     elif yaml['data'] == 'car':
-        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 3, 64, 64), 3, 3, int(10),
-                                 tmp_feature=yaml['parameters']['tmp_feature'],
-                                 tau_m=yaml['parameters']['filter_tau_m'], tau_s=yaml['parameters']['filter_tau_s'],
-                                 use_gauss=False, mult_k=yaml['mult_k'], p=yaml['parameters']['dropout'],
-                                 use_share_layer=yaml['set_share_layer'], push_num=yaml['parameters']['push_num'],
-                                 s=yaml['parameters']['s'], use_feature_change=yaml['use_feature_change'])
+        the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 3, 64, 64),
+                                 num_classes=yaml["num_classes"],
+                                 feature_list=yaml["feature_list"],
+                                 size_list=["size_list"],
+                                 hidden_size_list=["hidden_size_list"],
+                                 path_nums_list=["path_nums_list"],
+                                 mult_k=yaml["mult_k"])
     elif yaml['data'] == 'svhn':
-        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 3, 32, 32), 3, 3, int(10),
-                                 tmp_feature=yaml['parameters']['tmp_feature'],
-                                 tau_m=yaml['parameters']['filter_tau_m'], tau_s=yaml['parameters']['filter_tau_s'],
-                                 use_gauss=False, mult_k=yaml['mult_k'], p=yaml['parameters']['dropout'],
-                                 use_share_layer=yaml['set_share_layer'], push_num=yaml['parameters']['push_num'],
-                                 s=yaml['parameters']['s'], use_feature_change=yaml['use_feature_change'])
+        the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 3, 32, 32),
+                                 num_classes=yaml["num_classes"],
+                                 feature_list=yaml["feature_list"],
+                                 size_list=["size_list"],
+                                 hidden_size_list=["hidden_size_list"],
+                                 path_nums_list=["path_nums_list"],
+                                 mult_k=yaml["mult_k"])
     elif yaml['data'] == 'stl-10':
-        the_model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 3, 96, 96), 3, 3, int(10),
-                                 tmp_feature=yaml['parameters']['tmp_feature'],
-                                 tau_m=yaml['parameters']['filter_tau_m'], tau_s=yaml['parameters']['filter_tau_s'],
-                                 use_gauss=False, mult_k=yaml['mult_k'], p=yaml['parameters']['dropout'],
-                                 use_share_layer=yaml['set_share_layer'], push_num=yaml['parameters']['push_num'],
-                                 s=yaml['parameters']['s'], use_feature_change=yaml['use_feature_change'])
+        the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 3, 96, 96),
+                                 num_classes=yaml["num_classes"],
+                                 feature_list=yaml["feature_list"],
+                                 size_list=["size_list"],
+                                 hidden_size_list=["hidden_size_list"],
+                                 path_nums_list=["path_nums_list"],
+                                 mult_k=yaml["mult_k"])
     else:
         raise KeyError('not have this dataset')
     the_model.load_state_dict(torch.load(path)['snn_state_dict'])
@@ -236,9 +238,8 @@ def test(path, data, yaml, criterion_loss):
             target = target.to(device)
             input.requires_grad_()
             torch.cuda.synchronize()
-            output, potg = model(input)
-            z=args.neg_mul * F.mse_loss(potg.squeeze(1), target.float(), reduction="mean")
-            loss_list = [criterion(criterion_loss, output, target), z]
+            output= model(input)
+            loss_list = [criterion(criterion_loss, output, target)]
             loss = model.L2_biasoption(loss_list, yaml["parameters"]['sigma_list'])
             torch.cuda.synchronize()
             if yaml['data'] == 'eeg':
@@ -306,7 +307,7 @@ if __name__ == "__main__":
     yaml = yaml_config_get(args)
     if yaml['set_seed'] is True:
         set_random_seed(yaml)
-    model = merge_layer(set_device(), shape=yaml['shape'], dropout=yaml['parameters']['dropout'], test=False)
+    model = merge_layer(set_device(), shape=yaml['shape'], dropout=yaml['parameters']['dropout'])
     writer = SummaryWriter()
     rand_transform = get_rand_transform(yaml['transform'])
     if yaml['data'] == 'mnist':
@@ -320,59 +321,65 @@ if __name__ == "__main__":
         test_dataloader = DataLoader(test_data, batch_size=yaml['parameters']['batch_size'], shuffle=True,
                                      num_workers=4,
                                      drop_last=True)
-        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 1, 28, 28), 1, 1, int(10),
-                             tmp_feature=yaml['parameters']['tmp_feature'], tau_m=yaml['parameters']['filter_tau_m'],
-                             tau_s=yaml['parameters']['filter_tau_s'], use_gauss=False, mult_k=yaml['mult_k'],
-                             p=yaml['parameters']['dropout'], use_share_layer=yaml['set_share_layer'],
-                             push_num=yaml['parameters']['push_num'], s=yaml['parameters']['s'],
-                             use_feature_change=yaml['use_feature_change'])
+        model.initiate_layer(    data=torch.randn(yaml['parameters']['batch_size'], 1, 32, 32),
+                                 num_classes=yaml["num_classes"],
+                                 feature_list=yaml["feature_list"],
+                                 size_list=["size_list"],
+                                 hidden_size_list=["hidden_size_list"],
+                                 path_nums_list=["path_nums_list"],
+                                 mult_k=yaml["mult_k"])
     elif yaml['data'] == 'svhn':
         train_dataloader, test_dataloader = load_data_svhn(yaml['parameters']['batch_size'],
                                                            yaml['parameters']['batch_size'], args.data_url)
-        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 3, 32, 32), 3, 3, int(10),
-                             tmp_feature=yaml['parameters']['tmp_feature'], tau_m=yaml['parameters']['filter_tau_m'],
-                             tau_s=yaml['parameters']['filter_tau_s'], use_gauss=False, mult_k=yaml['mult_k'],
-                             p=yaml['parameters']['dropout'], use_share_layer=yaml['set_share_layer'],
-                             push_num=yaml['parameters']['push_num'], s=yaml['parameters']['s'],
-                             use_feature_change=yaml['use_feature_change'])
+        model.initiate_layer(    data=torch.randn(yaml['parameters']['batch_size'], 3, 32, 32),
+                                 num_classes=yaml["num_classes"],
+                                 feature_list=yaml["feature_list"],
+                                 size_list=["size_list"],
+                                 hidden_size_list=["hidden_size_list"],
+                                 path_nums_list=["path_nums_list"],
+                                 mult_k=yaml["mult_k"])
     elif yaml['data'] == 'cifar10':
         train_dataloader, test_dataloader = load_data(yaml['parameters']['batch_size'],
                                                       yaml['parameters']['batch_size'], args.data_url,
                                                       yaml['use_standard'])
-        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 3, 32, 32), 3, 3, int(10),
-                             tmp_feature=yaml['parameters']['tmp_feature'], tau_m=yaml['parameters']['filter_tau_m'],
-                             tau_s=yaml['parameters']['filter_tau_s'], use_gauss=False, mult_k=yaml['mult_k'],
-                             p=yaml['parameters']['dropout'], use_share_layer=yaml['set_share_layer'],
-                             push_num=yaml['parameters']['push_num'], s=yaml['parameters']['s'],
-                             use_feature_change=yaml['use_feature_change'])
+        model.initiate_layer(    data=torch.randn(yaml['parameters']['batch_size'], 3, 32, 32),
+                                 num_classes=yaml["num_classes"],
+                                 feature_list=yaml["feature_list"],
+                                 size_list=["size_list"],
+                                 hidden_size_list=["hidden_size_list"],
+                                 path_nums_list=["path_nums_list"],
+                                 mult_k=yaml["mult_k"])
     elif yaml['data'] == 'cifar100':
         train_dataloader, test_dataloader = load_data_c100(yaml['parameters']['batch_size'],
                                                            yaml['parameters']['batch_size'], args.data_url,
                                                            yaml['use_standard'])
-        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 3, 32, 32), 3, 3, int(100),
-                             tmp_feature=yaml['parameters']['tmp_feature'], tau_m=yaml['parameters']['filter_tau_m'],
-                             tau_s=yaml['parameters']['filter_tau_s'], use_gauss=False, mult_k=yaml['mult_k'],
-                             p=yaml['parameters']['dropout'], use_share_layer=yaml['set_share_layer'],
-                             push_num=yaml['parameters']['push_num'], s=yaml['parameters']['s'],
-                             use_feature_change=yaml['use_feature_change'])
+        model.initiate_layer(    data=torch.randn(yaml['parameters']['batch_size'], 3, 32, 32),
+                                 num_classes=yaml["num_classes"],
+                                 feature_list=yaml["feature_list"],
+                                 size_list=["size_list"],
+                                 hidden_size_list=["hidden_size_list"],
+                                 path_nums_list=["path_nums_list"],
+                                 mult_k=yaml["mult_k"])
     elif yaml['data'] == 'stl-10':
         train_dataloader, test_dataloader = load_data_stl(yaml['parameters']['batch_size'],
                                                           yaml['parameters']['batch_size'], args.data_url)
-        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 3, 96, 96), 3, 3, int(10),
-                             tmp_feature=yaml['parameters']['tmp_feature'], tau_m=yaml['parameters']['filter_tau_m'],
-                             tau_s=yaml['parameters']['filter_tau_s'], use_gauss=False, mult_k=yaml['mult_k'],
-                             p=yaml['parameters']['dropout'], use_share_layer=yaml['set_share_layer'],
-                             push_num=yaml['parameters']['push_num'], s=yaml['parameters']['s'],
-                             use_feature_change=yaml['use_feature_change'])
+        model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 3, 96, 96),
+                             num_classes=yaml["num_classes"],
+                             feature_list=yaml["feature_list"],
+                             size_list=["size_list"],
+                             hidden_size_list=["hidden_size_list"],
+                             path_nums_list=["path_nums_list"],
+                             mult_k=yaml["mult_k"])
     elif yaml['data'] == 'car':
         train_dataloader, test_dataloader = load_data_car(yaml['parameters']['batch_size'],
                                                           yaml['parameters']['batch_size'])
-        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 3, 32, 32), 3, 3, int(10),
-                             tmp_feature=yaml['parameters']['tmp_feature'], tau_m=yaml['parameters']['filter_tau_m'],
-                             tau_s=yaml['parameters']['filter_tau_s'], use_gauss=False, mult_k=yaml['mult_k'],
-                             p=yaml['parameters']['dropout'], use_share_layer=yaml['set_share_layer'],
-                             push_num=yaml['parameters']['push_num'], s=yaml['parameters']['s'],
-                             use_feature_change=yaml['use_feature_change'])
+        model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 3, 32, 32),
+                             num_classes=yaml["num_classes"],
+                             feature_list=yaml["feature_list"],
+                             size_list=["size_list"],
+                             hidden_size_list=["hidden_size_list"],
+                             path_nums_list=["path_nums_list"],
+                             mult_k=yaml["mult_k"])
     elif yaml['data'] == 'fashionmnist':
         fashionmnist_trainset = datasets.FashionMNIST(root=args.data_url, train=True, download=True,
                                                       transform=rand_transform)
@@ -385,12 +392,13 @@ if __name__ == "__main__":
         test_dataloader = DataLoader(test_data, batch_size=yaml['parameters']['batch_size'], shuffle=True,
                                      num_workers=4,
                                      drop_last=True)
-        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 1, 28, 28), 1, 1, int(10),
-                             tmp_feature=yaml['parameters']['tmp_feature'], tau_m=yaml['parameters']['filter_tau_m'],
-                             tau_s=yaml['parameters']['filter_tau_s'], use_gauss=False, mult_k=yaml['mult_k'],
-                             p=yaml['parameters']['dropout'], use_share_layer=yaml['set_share_layer'],
-                             push_num=yaml['parameters']['push_num'], s=yaml['parameters']['s'],
-                             use_feature_change=yaml['use_feature_change'])
+        model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 1, 32, 32),
+                             num_classes=yaml["num_classes"],
+                             feature_list=yaml["feature_list"],
+                             size_list=["size_list"],
+                             hidden_size_list=["hidden_size_list"],
+                             path_nums_list=["path_nums_list"],
+                             mult_k=yaml["mult_k"])
     elif yaml['data'] == 'eeg':
         p = random.randint(0, 4)
         print(p)
@@ -402,22 +410,16 @@ if __name__ == "__main__":
         test_dataloader = DataLoader(test_data, batch_size=yaml['parameters']['batch_size'], shuffle=True,
                                      num_workers=4,
                                      drop_last=True)
-        model.initiate_layer(torch.randn(yaml['parameters']['batch_size'], 14, 64, 64), 14, 14, int(2),
-                             tmp_feature=yaml['parameters']['tmp_feature'], tau_m=yaml['parameters']['filter_tau_m'],
-                             tau_s=yaml['parameters']['filter_tau_s'], use_gauss=False, mult_k=yaml['mult_k'],
-                             p=yaml['parameters']['dropout'], use_share_layer=yaml['set_share_layer'],
-                             push_num=yaml['parameters']['push_num'], s=yaml['parameters']['s'],
-                             use_feature_change=yaml['use_feature_change'])
-
+        model.initiate_layer(    data=torch.randn(yaml['parameters']['batch_size'], 14, 64, 64),
+                                 num_classes=yaml["num_classes"],
+                                 feature_list=yaml["feature_list"],
+                                 size_list=["size_list"],
+                                 hidden_size_list=["hidden_size_list"],
+                                 path_nums_list=["path_nums_list"],
+                                 mult_k=yaml["mult_k"])
     else:
         raise KeyError('There is no corresponding dataset')
-    params1 = list(filter(lambda i: i.requires_grad, model.out_classifier.parameters()))
-    params2 = list(filter(lambda i: i.requires_grad, model.InputGenerateNet.parameters()))
-    params3 = list(filter(lambda i: i.requires_grad, model.feature_forward.parameters()))
     params4 = list(filter(lambda i: i.requires_grad, model.parameters()))
-    dict_list1 = dict(params=params1, weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay'])
-    dict_list2 = dict(params=params2, weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay'])
-    dict_list3 = dict(params=params3,weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay'])
     dict_list4 = dict(params=params4,weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay'])
     optimizer = get_optimizer([dict_list4], yaml, model)
     scheduler = get_scheduler(optimizer, yaml)
