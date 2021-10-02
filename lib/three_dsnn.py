@@ -279,7 +279,6 @@ class point_cul_Layer(nn.Module):
         """
         super(point_cul_Layer, self).__init__()
         self.DoorMach = multi_GRU(in_feature,hidden_size,dropout)
-        self.gaussbur = multi_block_eq(in_feature, out_feature, hidden_size, multi_k=mult_k)
         self.cat=Cat(out_feature,in_feature)
         self.STuning = STuning
         self.grad_lr = grad_lr
@@ -302,6 +301,7 @@ class two_dim_layer(nn.Module):
         self.y = y
         self.point_cul_layer = {}
         self.test = False
+        self.advance_layer=multi_block_eq(out_feature, out_feature, hidden_size, multi_k=mult_k)
         for i in range(self.x):
             for j in range(self.y):
                 if not (i == self.x - 1 and j == self.y - 1):
@@ -339,7 +339,7 @@ class two_dim_layer(nn.Module):
                     xx = tensor_prev[j - 1][i]
                 tensor_prev[j][i] = self.point_layer_module[str(i) + '_' + str(j)](
                     torch.stack([xx, yy, zz], dim=-1))
-        result= tensor_prev[-1][-1].clone()
+        result=self.advance_layer(tensor_prev[-1][-1])
         del tensor_prev
         return result
 
