@@ -110,7 +110,16 @@ class block_out(nn.Module):
         self.use_pool = use_pool
         self.size = size
         self.classes = classes
-
+        self._initialize()
+    def _initialize(self):
+        for layer in self.modules():
+            if isinstance(layer,nn.Conv2d):
+                nn.init.kaiming_normal_(layer.weight.data,mode="fan_in",nonlinearity="relu")
+                if layer.bias is not None:
+                    layer.bias.data.zero_()
+            elif isinstance(layer,nn.BatchNorm2d):
+                layer.weight.data.fill_(1.)
+                layer.bias.data.zero_()
 
     def forward(self, x):
         x = self.transition_layer(x)
@@ -343,11 +352,26 @@ class turn_layer(nn.Module):
         self.turn=nn.ModuleList([nn.Conv2d(out_feature,out_feature,(3,5),(1,1),(1,2),bias=False),
                                  nn.Conv2d(out_feature,out_feature,(5,3),(1,1),(2,1),bias=False),])
         self.feature_different=DimixLoss_neg()
+        self._initialize()
+
+    def _initialize(self):
+        for layer in self.modules():
+            if isinstance(layer, nn.Conv2d):
+                nn.init.kaiming_normal_(layer.weight.data, mode="fan_in", nonlinearity="relu")
+                if layer.bias is not None:
+                    nn.init.zeros_(layer.bias.data)
+            elif isinstance(layer, nn.BatchNorm2d):
+                nn.init.ones_(layer.weight.data)
+                nn.init.zeros_(layer.bias.data)
+            elif isinstance(layer, nn.Linear):
+                nn.init.zeros_(layer.weight.data)
+                if layer.bias is not None:
+                    nn.init.zeros_(layer.bias.data)
     def forward(self,x):
         x=self.downsample(x)
         a,b=self.turn[0](x),self.turn[1](x)
         l=self.feature_different(a,b)
-        return (x,a,b),l
+        return (a,b,x),l
 
 class three_dim_Layer(nn.Module):
     def __init__(self, shape, device, p=0.1):

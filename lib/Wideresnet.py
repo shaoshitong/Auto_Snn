@@ -47,6 +47,7 @@ class WideResNetBlock(nn.Module):
         self.block_2=nn.Sequential(*[
             BasicUnit(out_channels,dropout) for _ in range(depth)
         ])
+        self._initialize()
     def forward(self,x):
         x=self.block_1(x)
         x=self.block_2(x)

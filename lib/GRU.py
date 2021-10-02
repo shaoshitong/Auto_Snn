@@ -162,7 +162,11 @@ class Cat(nn.Module):
         super(Cat, self).__init__()
         self.i_feature=i_feature
         self.r_feature=r_feature
-        self.conv1=nn.Sequential(*[nn.Conv2d(i_feature+r_feature,i_feature,(1,1),(1,1),bias=False),
+        self.conv1=nn.Sequential(*[nn.Conv2d(i_feature,i_feature,(1,1),(1,1),bias=False),
+                                   nn.ReLU(inplace=True),
+                                   nn.BatchNorm2d(i_feature),
+                                   nn.Conv2d(i_feature,i_feature,(3,3),(1,1),(1,1),bias=False)])
+        self.conv2=nn.Sequential(*[nn.Conv2d(r_feature,i_feature,(1,1),(1,1),bias=False),
                                    nn.ReLU(inplace=True),
                                    nn.BatchNorm2d(i_feature),
                                    nn.Conv2d(i_feature,i_feature,(3,3),(1,1),(1,1),bias=False)])
@@ -183,5 +187,5 @@ class Cat(nn.Module):
                     nn.init.zeros_(layer.bias.data)
     def forward(self,m):
         x,y=m
-        xy=torch.cat([x,y],dim=1)
-        return self.conv1(xy)
+        xy=self.conv1(x)+self.conv2(y)
+        return xy
