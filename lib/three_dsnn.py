@@ -192,10 +192,10 @@ class block_out(nn.Module):
 
 
 class block_eq(nn.Module):
-    def __init__(self, eq_feature,dropout):
+    def __init__(self, eq_feature,tmp_feature,dropout):
         super(block_eq, self).__init__()
         self.eq_feature = eq_feature
-        tmp_feature = int(eq_feature)
+        self.tmp_feature=tmp_feature
         self.convz1 = nn.Conv2d(eq_feature + tmp_feature, eq_feature, (1, 5), padding=(0, 2))
         self.convr1 = nn.Conv2d(eq_feature + tmp_feature, eq_feature, (1, 5), padding=(0, 2))
         self.convq1 = nn.Conv2d(eq_feature + tmp_feature, eq_feature, (1, 5), padding=(0, 2))
@@ -208,10 +208,8 @@ class block_eq(nn.Module):
             nn.Dropout(p=dropout),
             nn.BatchNorm2d(eq_feature),
         ])
-        self.xgru=nn.Sequential(nn.Conv2d(eq_feature,eq_feature,(1,1),(1,1),padding=0,bias=False))
+        self.xgru=nn.Sequential(nn.Conv2d(eq_feature,tmp_feature,(1,1),(1,1),padding=0,bias=False))
         self._initialize()
-        self.gru1 = torch.randn(1, eq_feature, 1, 1, requires_grad=False).cuda()
-
     def _initialize(self):
         for layer in self.modules():
             if isinstance(layer, nn.Conv2d):
@@ -236,22 +234,20 @@ class block_eq(nn.Module):
         z = torch.sigmoid(self.convz1(hx))
         r = torch.sigmoid(self.convr1(hx))
         q = torch.tanh(self.convq1(torch.cat([r * h, x], dim=1)))
-        h_1 = (1 - z) * h + z * q
-        h = F.relu(h_1 + h)
-        hx = torch.cat([h, x], dim=1)
+        h = F.relu((1 + z) * h + (1 - z) * q)
+        hx  = torch.cat([h, x], dim=1)
         z = torch.sigmoid(self.convz2(hx))
         r = torch.sigmoid(self.convr2(hx))
         q = torch.tanh(self.convq2(torch.cat([r * h, x], dim=1)))
-        h_1 = (1 - z) * h + z * q
-        h = F.relu(h_1 + h)
+        h = F.relu((1 + z) * h + (1 - z) * q)
         x =  self.xgru(h)
-        h = self.convo(h)
-        del  m, z, r, q, h_1
+        h =  self.convo(h)
+        del  m, z, r, q
         return (h, x)
 
 
 class multi_block_eq(nn.Module):
-    def __init__(self, in_feature, out_feature, multi_k=1, stride=1,dropout=0.1):
+    def __init__(self, in_feature, out_feature,hidden_size, multi_k=1, stride=1,dropout=0.1):
         super(multi_block_eq, self).__init__()
         if in_feature != out_feature or stride != 1:
             self.sample = nn.Sequential(
@@ -259,9 +255,11 @@ class multi_block_eq(nn.Module):
                 nn.ReLU(inplace=True),
                 nn.BatchNorm2d(out_feature))
             self.psample = nn.Sequential(
-                nn.Conv2d(in_feature, out_feature, (stride, stride), (stride, stride), bias=False),
+                nn.Conv2d(in_feature, hidden_size, (stride, stride), (stride, stride), bias=False),
                 nn.ReLU(inplace=True),
-                nn.BatchNorm2d(out_feature))
+                nn.BatchNorm2d(hidden_size))
+            self.qsample= nn.Sequential(
+                nn.Conv2d(hidden_size, out_feature, (1,1),(1,1), bias=False))
             for layer in self.sample.modules():
                 if isinstance(layer, nn.Conv2d):
                     nn.init.kaiming_normal_(layer.weight.data, mode="fan_in", nonlinearity="relu")
@@ -276,9 +274,8 @@ class multi_block_eq(nn.Module):
                     nn.init.zeros_(layer.bias.data)
         self.xgru=nn.Sequential(nn.Conv2d(in_feature,in_feature,(1,1),(1,1),padding=0,bias=False))
         self.model = nn.Sequential(*[
-            block_eq(out_feature,dropout) for _ in range(multi_k)
+            block_eq(out_feature,hidden_size,dropout) for _ in range(multi_k)
         ])
-        self.gru1 = torch.randn(1, in_feature, 1, 1, requires_grad=False).cuda()
 
     def forward(self, x):
         x,h=x
@@ -287,7 +284,9 @@ class multi_block_eq(nn.Module):
         if hasattr(self, "sample"):
             x = self.sample(x)
             h = self.psample(h)
-        return self.model((x, h))
+        x,h=self.model((x, h))
+        h=self.qsample(h)
+        return (x,h)
 
 
 class threshold(torch.autograd.Function):
@@ -556,24 +555,25 @@ class point_cul_Layer(nn.Module):
         self.in_pointnum, self.out_pointnum = in_pointnum, out_pointnum
         self.in_size = int(math.sqrt(self.in_pointnum // self.in_feature))
         self.out_size = int(math.sqrt(self.out_pointnum // self.out_feature))
+        hidden_size=128
         g = False
         self.DoorMach = DoorMechanism(in_pointnum, in_pointnum, in_feature, in_feature)
         if dataoption == 'mnist':
-            self.gaussbur = multi_block_eq(in_feature, out_feature, multi_k=mult_k)
+            self.gaussbur = multi_block_eq(in_feature, out_feature, hidden_size,multi_k=mult_k)
         elif dataoption == 'cifar10':
-            self.gaussbur = multi_block_eq(in_feature, out_feature, multi_k=mult_k)
+            self.gaussbur = multi_block_eq(in_feature, out_feature, hidden_size,multi_k=mult_k)
         elif dataoption == 'cifar100':
-            self.gaussbur = multi_block_eq(in_feature, out_feature, multi_k=mult_k)
+            self.gaussbur = multi_block_eq(in_feature, out_feature, hidden_size,multi_k=mult_k)
         elif dataoption == 'svhn':
-            self.gaussbur = multi_block_eq(in_feature, out_feature, multi_k=mult_k)
+            self.gaussbur = multi_block_eq(in_feature, out_feature, hidden_size,multi_k=mult_k)
         elif dataoption == 'car':
-            self.gaussbur = multi_block_eq(in_feature, out_feature, multi_k=mult_k)
+            self.gaussbur = multi_block_eq(in_feature, out_feature, hidden_size,multi_k=mult_k)
         elif dataoption == 'stl-10':
-            self.gaussbur = multi_block_eq(in_feature, out_feature, multi_k=mult_k)
+            self.gaussbur = multi_block_eq(in_feature, out_feature, hidden_size,multi_k=mult_k)
         elif dataoption == 'fashionmnist':
-            self.gaussbur = multi_block_eq(in_feature, out_feature, multi_k=mult_k)
+            self.gaussbur = multi_block_eq(in_feature, out_feature, hidden_size,multi_k=mult_k)
         elif dataoption == 'eeg':
-            self.gaussbur = multi_block_eq(in_feature, out_feature, multi_k=mult_k)
+            self.gaussbur = multi_block_eq(in_feature, out_feature, hidden_size,multi_k=mult_k)
         else:
             raise KeyError("not import gaussbur!")
         self.STuning = STuning
@@ -1002,9 +1002,9 @@ class merge_layer(nn.Module):
                                                     test).to(device)
         self.feature_loss = DimixLoss_neg(0)
         self.time = 0
-        self.eq = nn.Sequential(multi_block_eq(16, 128, 2, stride=1),
-                                multi_block_eq(128, 256, 2, stride=2),
-                                multi_block_eq(256, 512, 2, stride=2))
+        self.eq = nn.Sequential(multi_block_eq(16, 128,128, 2, stride=1),
+                                multi_block_eq(128, 256,128, 2, stride=2),
+                                multi_block_eq(256, 512,128, 2, stride=2))
         self.cl = nn.Sequential(*[
             nn.Flatten(),
             nn.Linear(512, 10)
