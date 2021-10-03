@@ -120,6 +120,9 @@ class block_out(nn.Module):
             elif isinstance(layer,nn.BatchNorm2d):
                 layer.weight.data.fill_(1.)
                 layer.bias.data.zero_()
+            elif isinstance(layer, nn.Linear):
+                layer.weight.data.zero_()
+                layer.bias.data.zero_()
 
     def forward(self, x):
         x = self.transition_layer(x)
@@ -277,17 +280,16 @@ class point_cul_Layer(nn.Module):
         该层通过门机制后进行卷积与归一化
         """
         super(point_cul_Layer, self).__init__()
-        self.DoorMach = multi_GRU(in_feature,hidden_size,dropout)
+        self.DoorMach = multi_GRU(in_feature,hidden_size,dropout,multi_block_eq(in_feature,out_feature,hidden_size,mult_k,stride=1,dropout=dropout))
         self.cat=Cat(out_feature,in_feature)
-        self.gaussbur=multi_block_eq(in_feature,out_feature,hidden_size,mult_k,stride=1,dropout=dropout)
         self.STuning = STuning
         self.grad_lr = grad_lr
         self.sigma = 1
         self.norm = None
     def forward(self, x):
         x1, x2, x3 = x
-        x = self.DoorMach((x1+x3,x2+x3))
-        x = self.gaussbur(x)
+        x = self.DoorMach((x1,x2))
+        x = self.cat((x,x3))
         return x
 
 class two_dim_layer(nn.Module):
@@ -404,10 +406,13 @@ class three_dim_Layer(nn.Module):
         """
         (x,y,z),l1=self.turn_layer_module["0"](m)
         m = self.point_layer_module["0"](x,y,z)
+        # print(torch.norm(m,p=2))
         (x,y,z),l2=self.turn_layer_module["1"](m)
         m = self.point_layer_module["1"](x,y,z)
+        # print(torch.norm(m,p=2))
         (x,y,z),l3=self.turn_layer_module["2"](m)
         m = self.point_layer_module["2"](x,y,z)
+        # print(torch.norm(m,p=2),"\n")
         self.losses=(l1+l2+l3)
         return m
     def initiate_layer(self, data, feature_list,size_list,hidden_size_list,path_nums_list,mult_k=2):
@@ -417,7 +422,6 @@ class three_dim_Layer(nn.Module):
         self.point_layer = {}
         self.turn_layer = {}
         self.in_shape = data.shape
-        print(feature_list,size_list,hidden_size_list,path_nums_list)
         assert len(feature_list)==4 and len(size_list) == 4 and len(hidden_size_list) ==3 and len(path_nums_list)==3
         f1,f2,f3,f4=feature_list[0],feature_list[1],feature_list[2],feature_list[3]
         s1,s2,s3,s4=size_list[0],size_list[1],size_list[2],size_list[3]

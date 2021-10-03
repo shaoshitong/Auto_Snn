@@ -97,28 +97,22 @@ class multi_block_eq(nn.Module):
 
 
 class multi_GRU(nn.Module):
-    def __init__(self, feature, hidden_size, dropout):
+    def __init__(self, feature, hidden_size, dropout,layer):
         super(multi_GRU, self).__init__()
         self.feature = feature
         self.hidden_size = hidden_size
         self.dropout = dropout
-        self.convz1 = nn.Conv2d(feature + hidden_size, feature, (1, 5), padding=(0, 2))
-        self.convr1 = nn.Conv2d(feature + hidden_size, feature, (1, 5), padding=(0, 2))
-        self.convq1 = nn.Conv2d(feature + hidden_size, feature, (1, 5), padding=(0, 2))
-        self.convd1 = nn.Conv2d(feature + feature, feature, (1, 1), padding=(0, 0))
-        self.convd2 = nn.Conv2d(feature + feature, hidden_size, (1, 1), padding=(0, 0))
-        self.convz2 = nn.Conv2d(feature + hidden_size, feature, (5, 1), padding=(2, 0))
-        self.convr2 = nn.Conv2d(feature + hidden_size, feature, (5, 1), padding=(2, 0))
-        self.convq2 = nn.Conv2d(feature + hidden_size, feature, (5, 1), padding=(2, 0))
-        # self.convz3 = nn.Conv2d(feature + feature, feature, (1, 1), padding=(0, 0))
-        self.convo = nn.Sequential(*[
-            nn.Conv2d(feature, feature, (3, 3), (1, 1), (1, 1), bias=False),
-            nn.ReLU(inplace=True),
-            nn.Dropout(p=dropout),
-            nn.BatchNorm2d(feature),
-        ])
+        self.convz1 = nn.Conv2d(feature + hidden_size, feature, (1, 3), padding=(0, 1))
+        self.convr1 = nn.Conv2d(feature + hidden_size, hidden_size, (1, 3), padding=(0, 1))
+        self.convq1 = nn.Conv2d(feature + hidden_size, feature, (1, 3), padding=(0, 1))
+        self.convd1 = nn.Conv2d(feature + feature, hidden_size, (1, 1), padding=(0, 0))
+        self.convd2 = nn.Conv2d(feature + feature, feature, (1, 1), padding=(0, 0))
+        self.convz2 = nn.Conv2d(feature + hidden_size, feature, (3, 1), padding=(1, 0))
+        self.convr2 = nn.Conv2d(feature + hidden_size, hidden_size, (3, 1), padding=(1, 0))
+        self.convq2 = nn.Conv2d(feature + hidden_size, feature, (3, 1), padding=(1, 0))
+        self.convz3 = nn.Conv2d(feature + feature, feature, (1, 1), padding=(0, 0))
         self._initialize()
-
+        self.advance_layer=layer
     def _initialize(self):
         for layer in self.modules():
             if isinstance(layer, nn.Conv2d):
@@ -128,34 +122,30 @@ class multi_GRU(nn.Module):
             if isinstance(layer, nn.BatchNorm2d):
                 nn.init.ones_(layer.weight.data)
                 nn.init.zeros_(layer.bias.data)
-        for layer in self.convo.modules():
-            if isinstance(layer, nn.Conv2d):
-                nn.init.kaiming_normal_(layer.weight.data, mode="fan_in", nonlinearity="relu")
-                if layer.bias is not None:
-                    nn.init.zeros_(layer.bias.data)
         nn.init.kaiming_normal_(self.convd1.weight.data, mode="fan_in", nonlinearity="relu")
-        nn.init.kaiming_normal_(self.convd2.weight.data, mode="fan_in", nonlinearity="relu")
-
+        nn.init.kaiming_normal_(self.convd2.weight.data, mode="fan_in", nonlinearity="sigmoid")
         nn.init.kaiming_normal_(self.convq1.weight.data, mode="fan_in", nonlinearity="tanh")
         nn.init.kaiming_normal_(self.convq2.weight.data, mode="fan_in", nonlinearity="tanh")
 
     def forward(self, m):
         x, y = m
-        m = torch.cat([x, y], dim=1)
-        h = (x+y)/2
-        x = self.convd2(m)
+        m=torch.cat([x, y], dim=1)
+        h = self.convd1(m)
+        p = torch.sigmoid(self.convd2(m))
+        x = (p) * x + (1 - p) * y
         hx = torch.cat([h, x], dim=1)
         z = torch.sigmoid(self.convz1(hx))
         r = torch.sigmoid(self.convr1(hx))
         q = torch.tanh(self.convq1(torch.cat([r * h, x], dim=1)))
-        h = (1 + z) * h + (1 - z) * q
+        x = F.relu((1 + z) * x + (1 - z) * q)
         hx = torch.cat([h, x], dim=1)
         z = torch.sigmoid(self.convz2(hx))
         r = torch.sigmoid(self.convr2(hx))
         q = torch.tanh(self.convq2(torch.cat([r * h, x], dim=1)))
-        h = (1 + z) * h + (1 - z) * q
+        x = F.relu((1 + z) * x + (1 - z) * q)
+        x = self.advance_layer(x)
         del m, z, r, q
-        return h
+        return x
 
 
 class Cat(nn.Module):
@@ -163,14 +153,7 @@ class Cat(nn.Module):
         super(Cat, self).__init__()
         self.i_feature = i_feature
         self.r_feature = r_feature
-        self.conv1 = nn.Sequential(*[nn.Conv2d(i_feature, i_feature, (1, 1), (1, 1), bias=False),
-                                     nn.ReLU(inplace=True),
-                                     nn.BatchNorm2d(i_feature),
-                                     nn.Conv2d(i_feature, i_feature, (3, 3), (1, 1), (1, 1), bias=False)])
-        self.conv2 = nn.Sequential(*[nn.Conv2d(r_feature, i_feature, (1, 1), (1, 1), bias=False),
-                                     nn.ReLU(inplace=True),
-                                     nn.BatchNorm2d(i_feature),
-                                     nn.Conv2d(i_feature, i_feature, (3, 3), (1, 1), (1, 1), bias=False)])
+        self.convsig = nn.Conv2d(i_feature + r_feature, i_feature, (1, 1), (1, 1), (0, 0), bias=False)
         self._initialize()
 
     def _initialize(self):
@@ -188,6 +171,7 @@ class Cat(nn.Module):
                     nn.init.zeros_(layer.bias.data)
 
     def forward(self, m):
-        x, y = m
-        xy = self.conv1(x) + self.conv2(y)
-        return xy
+        x,y=m
+        m = F.avg_pool2d(torch.cat([x, y], dim=1), x.shape[-1])
+        p = torch.sigmoid(self.convsig(m))
+        return x * (0.6- p / 2) + y * (0.4 + p / 2)

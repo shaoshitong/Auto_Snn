@@ -21,8 +21,8 @@ size_list:
   - 8
 hidden_size_list:
   - 64
-  - 64
-  - 64
+  - 128
+  - 256
 path_nums_list:
   - 1
   - 1
@@ -60,7 +60,7 @@ parameters:
   epoch:
     200
   dropout:
-    0.1
+    0.0
   filter_tau_m:
     4
   filter_tau_s:
