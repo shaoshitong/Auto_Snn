@@ -35,6 +35,7 @@ class Downsampleunit(nn.Module):
             self.downsample=nn.Conv2d(in_channel,out_channel,(1,1),stride=(stride,stride),padding=0,bias=False)
         else:
             self.downsample=nn.MaxPool2d((stride,stride),stride=(stride,stride),padding=0)
+
     def forward(self,x):
         x=self.norm(x)
         return self.block(x)+self.downsample(x)

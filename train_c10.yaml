@@ -11,9 +11,9 @@ num_classes:
   10
 feature_list:
   - 16
-  - 64
   - 128
   - 256
+  - 512
 size_list:
   - 32
   - 32
@@ -24,9 +24,9 @@ hidden_size_list:
   - 64
   - 64
 path_nums_list:
-  - 2
-  - 2
-  - 2
+  - 1
+  - 1
+  - 1
 mult_k:
   1
 use_standard:

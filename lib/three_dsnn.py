@@ -247,7 +247,6 @@ class threshold(torch.autograd.Function):
         grad = erfc_grad * grad_output
         return grad, None
 
-
 class Trinomial_operation(object):
     def __init__(self, max_n, tau_m=1., tau_s=4.):
         self.max_n = max_n
@@ -280,14 +279,16 @@ class point_cul_Layer(nn.Module):
         super(point_cul_Layer, self).__init__()
         self.DoorMach = multi_GRU(in_feature,hidden_size,dropout)
         self.cat=Cat(out_feature,in_feature)
+        self.gaussbur=multi_block_eq(in_feature,out_feature,hidden_size,mult_k,stride=1,dropout=dropout)
         self.STuning = STuning
         self.grad_lr = grad_lr
         self.sigma = 1
         self.norm = None
     def forward(self, x):
-        x1, x2, x3 = x.unbind(dim=-1)
-        x = self.DoorMach((x1,x2))
-        return self.cat((x,x3))
+        x1, x2, x3 = x
+        x = self.DoorMach((x1+x3,x2+x3))
+        x = self.gaussbur(x)
+        return x
 
 class two_dim_layer(nn.Module):
     def __init__(self, in_feature, out_feature,hidden_size,in_size,out_size, x, y, mult_k=2, p=0.2):
@@ -338,8 +339,8 @@ class two_dim_layer(nn.Module):
                 else:
                     xx = tensor_prev[j - 1][i]
                 tensor_prev[j][i] = self.point_layer_module[str(i) + '_' + str(j)](
-                    torch.stack([xx, yy, zz], dim=-1))
-        result=self.advance_layer(tensor_prev[-1][-1])
+                    (xx,yy,zz))
+        result=tensor_prev[-1][-1].clone()
         del tensor_prev
         return result
 
@@ -349,8 +350,17 @@ class turn_layer(nn.Module):
     def __init__(self,in_feature,out_feature,stride=1,dropout=0.1):
         super(turn_layer, self).__init__()
         self.downsample=Downsampleunit(in_feature,out_feature,stride,dropout)
-        self.turn=nn.ModuleList([nn.Conv2d(out_feature,out_feature,(3,5),(1,1),(1,2),bias=False),
-                                 nn.Conv2d(out_feature,out_feature,(5,3),(1,1),(2,1),bias=False),])
+        self.turn=nn.ModuleList([
+            nn.Sequential(
+            nn.BatchNorm2d(out_feature),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_feature,out_feature,(3,5),(1,1),(1,2),bias=False),
+                                               ),
+            nn.Sequential(
+            nn.BatchNorm2d(out_feature),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_feature, out_feature, (5, 3), (1, 1), (2, 1), bias=False),
+                                                ),])
         self.feature_different=DimixLoss_neg()
         self._initialize()
 
