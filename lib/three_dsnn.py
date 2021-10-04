@@ -16,7 +16,7 @@ from lib.Wideresnet import Downsampleunit
 from lib.featurefocusing_v2 import Feature_forward
 from lib.dimixloss import DimixLoss, DimixLoss_neg
 from lib.PointConv import PointConv
-from lib.GRU import multi_GRU,multi_block_eq,Cat
+from lib.GRU import multi_GRU, multi_block_eq, Cat
 import math
 import pandas as pd
 from torch.nn.utils import spectral_norm
@@ -98,6 +98,7 @@ class Shortcut(nn.Module):
     def forward(self, x):
         return self.shortcut(x)
 
+
 class block_out(nn.Module):
     def __init__(self, feature, classes, size, use_pool='none'):
         super(block_out, self).__init__()
@@ -111,13 +112,14 @@ class block_out(nn.Module):
         self.size = size
         self.classes = classes
         self._initialize()
+
     def _initialize(self):
         for layer in self.modules():
-            if isinstance(layer,nn.Conv2d):
-                nn.init.kaiming_normal_(layer.weight.data,mode="fan_in",nonlinearity="relu")
+            if isinstance(layer, nn.Conv2d):
+                nn.init.kaiming_normal_(layer.weight.data, mode="fan_in", nonlinearity="relu")
                 if layer.bias is not None:
                     layer.bias.data.zero_()
-            elif isinstance(layer,nn.BatchNorm2d):
+            elif isinstance(layer, nn.BatchNorm2d):
                 layer.weight.data.fill_(1.)
                 layer.bias.data.zero_()
             elif isinstance(layer, nn.Linear):
@@ -127,6 +129,7 @@ class block_out(nn.Module):
     def forward(self, x):
         x = self.transition_layer(x)
         return self.classifiar(x)
+
 
 # class block_eq(nn.Module):
 #     def __init__(self, eq_feature,tmp_feature,dropout):
@@ -250,6 +253,7 @@ class threshold(torch.autograd.Function):
         grad = erfc_grad * grad_output
         return grad, None
 
+
 class Trinomial_operation(object):
     def __init__(self, max_n, tau_m=1., tau_s=4.):
         self.max_n = max_n
@@ -273,38 +277,44 @@ class Trinomial_operation(object):
             exit(-1)
         return self.diag_T[i][j][k]
 
+
 class point_cul_Layer(nn.Module):
-    def __init__(self, in_feature,out_feature,hidden_size,in_size,out_size, STuning=True, grad_lr=0.1, dropout=0.3, use_gauss=True, mult_k=2):
+    def __init__(self, in_feature, out_feature, hidden_size, in_size, out_size, STuning=True, grad_lr=0.1, dropout=0.3,
+                 use_gauss=True, mult_k=2):
         """
         输入的张量维度为（batch_size,64,x//2,y//2）
         该层通过门机制后进行卷积与归一化
         """
         super(point_cul_Layer, self).__init__()
-        self.DoorMach = multi_GRU(in_feature,hidden_size,dropout,multi_block_eq(in_feature,out_feature,hidden_size,mult_k,stride=1,dropout=dropout))
-        self.cat=Cat(out_feature,in_feature)
+        self.DoorMach = multi_GRU(in_feature, hidden_size, dropout,
+                                  multi_block_eq(in_feature, out_feature, hidden_size, mult_k, stride=1,
+                                                 dropout=dropout))
+        self.cat = Cat(out_feature, in_feature)
         self.STuning = STuning
         self.grad_lr = grad_lr
         self.sigma = 1
         self.norm = None
+
     def forward(self, x):
         x1, x2, x3 = x
-        x = self.DoorMach((x1,x2))
-        x = self.cat((x,x3))
+        x = self.DoorMach((x1, x2))
+        x = self.cat((x, x3))
         return x
 
+
 class two_dim_layer(nn.Module):
-    def __init__(self, in_feature, out_feature,hidden_size,in_size,out_size, x, y, mult_k=2, p=0.2):
+    def __init__(self, in_feature, out_feature, hidden_size, in_size, out_size, x, y, mult_k=2, p=0.2):
         super(two_dim_layer, self).__init__()
         self.in_feature = in_feature
         self.out_feature = out_feature
-        self.hidden_size=hidden_size
+        self.hidden_size = hidden_size
         self.in_pointnum = in_size
         self.out_pointnum = out_size
         self.x = x
         self.y = y
         self.point_cul_layer = {}
         self.test = False
-        self.advance_layer=multi_block_eq(out_feature, out_feature, hidden_size, multi_k=mult_k)
+        self.advance_layer = multi_block_eq(out_feature, out_feature, hidden_size, multi_k=mult_k)
         for i in range(self.x):
             for j in range(self.y):
                 if not (i == self.x - 1 and j == self.y - 1):
@@ -326,6 +336,7 @@ class two_dim_layer(nn.Module):
                         dropout=p,
                         mult_k=mult_k)
         self.point_layer_module = nn.ModuleDict(self.point_cul_layer)
+
     def forward(self, x, y, z):
 
         tensor_prev = [[z for i in range(self.x)] for j in range(self.y)]
@@ -341,29 +352,31 @@ class two_dim_layer(nn.Module):
                 else:
                     xx = tensor_prev[j - 1][i]
                 tensor_prev[j][i] = self.point_layer_module[str(i) + '_' + str(j)](
-                    (xx,yy,zz))
-        result=tensor_prev[-1][-1].clone()
+                    (xx, yy, zz))
+        result = tensor_prev[-1][-1].clone()
         del tensor_prev
         return result
 
     def settest(self, test=True):
         self.test = test
+
+
 class turn_layer(nn.Module):
-    def __init__(self,in_feature,out_feature,stride=1,dropout=0.1):
+    def __init__(self, in_feature, out_feature, stride=1, dropout=0.1):
         super(turn_layer, self).__init__()
-        self.downsample=Downsampleunit(in_feature,out_feature,stride,dropout)
-        self.turn=nn.ModuleList([
+        self.downsample = Downsampleunit(in_feature, out_feature, stride, dropout)
+        self.turn = nn.ModuleList([
             nn.Sequential(
-            nn.BatchNorm2d(out_feature),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(out_feature,out_feature,(3,5),(1,1),(1,2),bias=False),
-                                               ),
+                nn.BatchNorm2d(out_feature),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(out_feature, out_feature, (3, 5), (1, 1), (1, 2), bias=False),
+            ),
             nn.Sequential(
-            nn.BatchNorm2d(out_feature),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(out_feature, out_feature, (5, 3), (1, 1), (2, 1), bias=False),
-                                                ),])
-        self.feature_different=DimixLoss_neg()
+                nn.BatchNorm2d(out_feature),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(out_feature, out_feature, (5, 3), (1, 1), (2, 1), bias=False),
+            ), ])
+        self.feature_different = DimixLoss_neg()
         self._initialize()
 
     def _initialize(self):
@@ -379,11 +392,13 @@ class turn_layer(nn.Module):
                 nn.init.zeros_(layer.weight.data)
                 if layer.bias is not None:
                     nn.init.zeros_(layer.bias.data)
-    def forward(self,x):
-        x=self.downsample(x)
-        a,b=self.turn[0](x),self.turn[1](x)
-        l=self.feature_different(a,b)
-        return (a,b,x),l
+
+    def forward(self, x):
+        x = self.downsample(x)
+        a, b = self.turn[0](x), self.turn[1](x)
+        l = self.feature_different(a, b)
+        return (a, b, x), l
+
 
 class three_dim_Layer(nn.Module):
     def __init__(self, shape, device, p=0.1):
@@ -394,49 +409,51 @@ class three_dim_Layer(nn.Module):
         y维度代表原始数据先获得grad后经过卷积变换到[batchsize,64,x//2,y//2]
         z维度目前用0向量填充，未来可以改进
         """
-        self.a,self.b,self.c=shape[0],shape[1],shape[2]
+        self.a, self.b, self.c = shape[0], shape[1], shape[2]
         self.shape = shape
         self.device = device
         self.dropout = p
         self.diag_T = Trinomial_operation(max(self.a, self.b, self.c))
         self.a_join, self.b_join, self.c_join = LastJoiner(2), LastJoiner(2), LastJoiner(2)
+
     def forward(self, m):
         """
         x,y=>[batchsize,64,x_pointnum//2,y_pointnum//2]
         """
-        (x,y,z),l1=self.turn_layer_module["0"](m)
-        m = self.point_layer_module["0"](x,y,z)
+        (x, y, z), l1 = self.turn_layer_module["0"](m)
+        m = self.point_layer_module["0"](x, y, z)
         # print(torch.norm(m,p=2))
-        (x,y,z),l2=self.turn_layer_module["1"](m)
-        m = self.point_layer_module["1"](x,y,z)
+        (x, y, z), l2 = self.turn_layer_module["1"](m)
+        m = self.point_layer_module["1"](x, y, z)
         # print(torch.norm(m,p=2))
-        (x,y,z),l3=self.turn_layer_module["2"](m)
-        m = self.point_layer_module["2"](x,y,z)
+        (x, y, z), l3 = self.turn_layer_module["2"](m)
+        m = self.point_layer_module["2"](x, y, z)
         # print(torch.norm(m,p=2),"\n")
-        self.losses=(l1+l2+l3)
+        self.losses = (l1 + l2 + l3)
         return m
-    def initiate_layer(self, data, feature_list,size_list,hidden_size_list,path_nums_list,mult_k=2):
+
+    def initiate_layer(self, data, feature_list, size_list, hidden_size_list, path_nums_list, mult_k=2):
         """
         three-dim层初始化节点
         """
         self.point_layer = {}
         self.turn_layer = {}
         self.in_shape = data.shape
-        assert len(feature_list)==4 and len(size_list) == 4 and len(hidden_size_list) ==3 and len(path_nums_list)==3
-        f1,f2,f3,f4=feature_list[0],feature_list[1],feature_list[2],feature_list[3]
-        s1,s2,s3,s4=size_list[0],size_list[1],size_list[2],size_list[3]
-        h1,h2,h3=hidden_size_list[0],hidden_size_list[1],hidden_size_list[2]
-        p1,p2,p3=path_nums_list[0],path_nums_list[1],path_nums_list[2]
-        self.point_layer["0"]=two_dim_layer(f2,f2,h1,s2,s2,p1,p1,mult_k,self.dropout)
-        self.point_layer["1"]=two_dim_layer(f3,f3,h2,s3,s3,p2,p2,mult_k,self.dropout)
-        self.point_layer["2"]=two_dim_layer(f4,f4,h3,s4,s4,p3,p3,mult_k,self.dropout)
-        self.turn_layer["0"]=turn_layer(f1,f2,1,self.dropout)
-        self.turn_layer["1"]=turn_layer(f2,f3,2,self.dropout)
-        self.turn_layer["2"]=turn_layer(f3,f4,2,self.dropout)
+        assert len(feature_list) == 4 and len(size_list) == 4 and len(hidden_size_list) == 3 and len(
+            path_nums_list) == 3
+        f1, f2, f3, f4 = feature_list[0], feature_list[1], feature_list[2], feature_list[3]
+        s1, s2, s3, s4 = size_list[0], size_list[1], size_list[2], size_list[3]
+        h1, h2, h3 = hidden_size_list[0], hidden_size_list[1], hidden_size_list[2]
+        p1, p2, p3 = path_nums_list[0], path_nums_list[1], path_nums_list[2]
+        self.point_layer["0"] = two_dim_layer(f2, f2, h1, s2, s2, p1, p1, mult_k, self.dropout)
+        self.point_layer["1"] = two_dim_layer(f3, f3, h2, s3, s3, p2, p2, mult_k, self.dropout)
+        self.point_layer["2"] = two_dim_layer(f4, f4, h3, s4, s4, p3, p3, mult_k, self.dropout)
+        self.turn_layer["0"] = turn_layer(f1, f2, 1, self.dropout)
+        self.turn_layer["1"] = turn_layer(f2, f3, 2, self.dropout)
+        self.turn_layer["2"] = turn_layer(f3, f4, 2, self.dropout)
         self.turn_layer_module = nn.ModuleDict(self.turn_layer)
         self.point_layer_module = nn.ModuleDict(self.point_layer)
         del self.point_layer, self.turn_layer
-
 
 
 class merge_layer(nn.Module):
@@ -450,7 +467,8 @@ class merge_layer(nn.Module):
         else:
             self.shape = shape
         self.device = device
-        self.InputGenerateNet = three_dim_Layer(self.shape,self.device,dropout).to(device)
+        self.InputGenerateNet = three_dim_Layer(self.shape, self.device, dropout).to(device)
+
     def forward(self, x):
         # x, y = self.initdata(x)
         if hasattr(self, 'input_shape'):
@@ -486,19 +504,19 @@ class merge_layer(nn.Module):
         x = self.out_classifier(x)
         return x
 
-    def initiate_layer(self, data, num_classes,feature_list,size_list,hidden_size_list,path_nums_list,mult_k=2):
+    def initiate_layer(self, data, num_classes, feature_list, size_list, hidden_size_list, path_nums_list, mult_k=2):
         """
         配置相应的层
         """
         b, c, h, w = data.shape
-        input_shape = (b,c,h,w)
+        input_shape = (b, c, h, w)
         self.inf = nn.Conv2d(c, feature_list[0], (3, 3), (1, 1), (1, 1), bias=False)
-        self.InputGenerateNet.initiate_layer(data,feature_list,size_list,hidden_size_list,path_nums_list,mult_k)
-        self.out_classifier = block_out(feature_list[-1],num_classes,size_list[-1])
+        self.InputGenerateNet.initiate_layer(data, feature_list, size_list, hidden_size_list, path_nums_list, mult_k)
+        self.out_classifier = block_out(feature_list[-1], num_classes, size_list[-1])
 
     @staticmethod
     def _list_build():
-        return [ 0.1, 0.1]
+        return [0.1, 0.1]
 
     @staticmethod
     def _list_print(list):
@@ -517,11 +535,11 @@ class merge_layer(nn.Module):
                 loss_bias.append(torch.norm(torch.abs(layer.bias.data) - 1., p=2) / layer.bias.data.numel())
             elif isinstance(layer, three_dim_Layer):
                 layer: three_dim_Layer
-                loss_feature+=layer.losses
+                loss_feature += layer.losses
         loss_feature = (loss_feature.squeeze(-1)) * sigma[0]
         loss_bias = torch.stack(loss_bias, dim=-1).mean() * sigma[1]
         loss_list = loss_list + [loss_bias, loss_feature]
-        # self._list_print(loss_list)
+        #self._list_print(loss_list)
         loss = torch.stack(loss_list, dim=-1).sum()
         return loss
 

@@ -28,7 +28,7 @@ path_nums_list:
   - 1
   - 1
 mult_k:
-  1
+  2
 use_standard:
   True
 densenetparameter:
@@ -43,8 +43,8 @@ parameters:
   loss_option:
     smooth_cross
   sigma_list:
-    - 0.1
-    - 0.01
+    - 0.0
+    - 0.0
   s:
     4
   push_num:
@@ -56,7 +56,7 @@ parameters:
   sigma:
     0.1
   batch_size:
-    64
+    128
   epoch:
     200
   dropout:

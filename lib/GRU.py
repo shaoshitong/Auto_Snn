@@ -92,6 +92,7 @@ class multi_block_eq(nn.Module):
                 nn.init.zeros_(layer.bias.data)
 
     def forward(self, x):
+        #x = self.act(x)
         x = self.model(x)
         return x
 
@@ -105,12 +106,20 @@ class multi_GRU(nn.Module):
         self.convz1 = nn.Conv2d(feature + hidden_size, feature, (1, 3), padding=(0, 1))
         self.convr1 = nn.Conv2d(feature + hidden_size, hidden_size, (1, 3), padding=(0, 1))
         self.convq1 = nn.Conv2d(feature + hidden_size, feature, (1, 3), padding=(0, 1))
-        self.convd1 = nn.Conv2d(feature + feature, hidden_size, (1, 1), padding=(0, 0))
+        self.convd1 = nn.Conv2d(feature , hidden_size, (1, 1), padding=(0, 0))
         self.convd2 = nn.Conv2d(feature + feature, feature, (1, 1), padding=(0, 0))
         self.convz2 = nn.Conv2d(feature + hidden_size, feature, (3, 1), padding=(1, 0))
         self.convr2 = nn.Conv2d(feature + hidden_size, hidden_size, (3, 1), padding=(1, 0))
         self.convq2 = nn.Conv2d(feature + hidden_size, feature, (3, 1), padding=(1, 0))
         self.convz3 = nn.Conv2d(feature + feature, feature, (1, 1), padding=(0, 0))
+        self.bn1=nn.Sequential(
+                               nn.BatchNorm2d(feature))
+        self.bn2=nn.Sequential(
+                               nn.BatchNorm2d(feature))
+        self.conv_o= nn.Conv2d(feature , feature, (3,3),(1,1),(1,1),bias=False)
+        self.bn_o = nn.BatchNorm2d(feature)
+        self.dp=nn.Dropout(p=dropout)
+        self.act=nn.ReLU(inplace=True)
         self._initialize()
         self.advance_layer=layer
     def _initialize(self):
@@ -126,13 +135,18 @@ class multi_GRU(nn.Module):
         nn.init.kaiming_normal_(self.convd2.weight.data, mode="fan_in", nonlinearity="sigmoid")
         nn.init.kaiming_normal_(self.convq1.weight.data, mode="fan_in", nonlinearity="tanh")
         nn.init.kaiming_normal_(self.convq2.weight.data, mode="fan_in", nonlinearity="tanh")
+        nn.init.kaiming_normal_(self.conv_o.weight.data, mode="fan_in", nonlinearity="relu")
 
     def forward(self, m):
         x, y = m
+        x=self.bn1(x)
+        y=self.bn2(y)
         m=torch.cat([x, y], dim=1)
-        h = self.convd1(m)
         p = torch.sigmoid(self.convd2(m))
-        x = (p) * x + (1 - p) * y
+        # h = self.convd1(x + y)
+        h = (2*p) * x + (2 - 2*p) * y
+        h = self.conv_o(self.dp(self.act(self.bn_o(h))))+h
+        return h
         hx = torch.cat([h, x], dim=1)
         z = torch.sigmoid(self.convz1(hx))
         r = torch.sigmoid(self.convr1(hx))
@@ -159,7 +173,7 @@ class Cat(nn.Module):
     def _initialize(self):
         for layer in self.modules():
             if isinstance(layer, nn.Conv2d):
-                nn.init.kaiming_normal_(layer.weight.data, mode="fan_in", nonlinearity="relu")
+                nn.init.kaiming_normal_(layer.weight.data, mode="fan_in", nonlinearity="sigmoid")
                 if layer.bias is not None:
                     nn.init.zeros_(layer.bias.data)
             elif isinstance(layer, nn.BatchNorm2d):
@@ -172,6 +186,6 @@ class Cat(nn.Module):
 
     def forward(self, m):
         x,y=m
-        m = F.avg_pool2d(torch.cat([x, y], dim=1), x.shape[-1])
+        m =torch.cat([x, y], dim=1)
         p = torch.sigmoid(self.convsig(m))
-        return x * (0.6- p / 2) + y * (0.4 + p / 2)
+        return x * (1-p) + y* (p)
