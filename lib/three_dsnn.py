@@ -289,7 +289,6 @@ class point_cul_Layer(nn.Module):
         self.DoorMach = multi_GRU(in_feature, hidden_size, dropout,
                                   multi_block_eq(in_feature, out_feature, hidden_size, mult_k, stride=1,
                                                  dropout=dropout))
-        self.cat = Cat(out_feature, in_feature)
         self.STuning = STuning
         self.grad_lr = grad_lr
         self.sigma = 1
@@ -297,8 +296,7 @@ class point_cul_Layer(nn.Module):
 
     def forward(self, x):
         x1, x2, x3 = x
-        x = self.DoorMach((x1, x2))
-        x = self.cat((x, x3))
+        x = self.DoorMach((x1, x2, x3))
         return x
 
 
@@ -539,7 +537,7 @@ class merge_layer(nn.Module):
         loss_feature = (loss_feature.squeeze(-1)) * sigma[0]
         loss_bias = torch.stack(loss_bias, dim=-1).mean() * sigma[1]
         loss_list = loss_list + [loss_bias, loss_feature]
-        #self._list_print(loss_list)
+        # self._list_print(loss_list)
         loss = torch.stack(loss_list, dim=-1).sum()
         return loss
 

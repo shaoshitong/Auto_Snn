@@ -7,6 +7,18 @@ import os, sys
 from torch.nn.parameter import Parameter
 
 
+class semhash(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, v1, v2, training=True):
+        index = torch.randint(low=0, high=v1.shape[0], size=[int(v1.shape[0] / 2)]).long()
+        v1[index] = v2[index]
+        return v1
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return grad_output, None, None
+
+
 class BasicUnit(nn.Module):
     def __init__(self, channel: int, hidden_channel: int, dropout: float):
         super(BasicUnit, self).__init__()
@@ -92,13 +104,12 @@ class multi_block_eq(nn.Module):
                 nn.init.zeros_(layer.bias.data)
 
     def forward(self, x):
-        #x = self.act(x)
         x = self.model(x)
         return x
 
 
 class multi_GRU(nn.Module):
-    def __init__(self, feature, hidden_size, dropout,layer):
+    def __init__(self, feature, hidden_size, dropout, layer):
         super(multi_GRU, self).__init__()
         self.feature = feature
         self.hidden_size = hidden_size
@@ -106,22 +117,24 @@ class multi_GRU(nn.Module):
         self.convz1 = nn.Conv2d(feature + hidden_size, feature, (1, 3), padding=(0, 1))
         self.convr1 = nn.Conv2d(feature + hidden_size, hidden_size, (1, 3), padding=(0, 1))
         self.convq1 = nn.Conv2d(feature + hidden_size, feature, (1, 3), padding=(0, 1))
-        self.convd1 = nn.Conv2d(feature , hidden_size, (1, 1), padding=(0, 0))
+        self.convd1 = nn.Conv2d(feature, hidden_size, (1, 1), padding=(0, 0))
         self.convd2 = nn.Conv2d(feature + feature, feature, (1, 1), padding=(0, 0))
         self.convz2 = nn.Conv2d(feature + hidden_size, feature, (3, 1), padding=(1, 0))
         self.convr2 = nn.Conv2d(feature + hidden_size, hidden_size, (3, 1), padding=(1, 0))
         self.convq2 = nn.Conv2d(feature + hidden_size, feature, (3, 1), padding=(1, 0))
         self.convz3 = nn.Conv2d(feature + feature, feature, (1, 1), padding=(0, 0))
-        self.bn1=nn.Sequential(
-                               nn.BatchNorm2d(feature))
-        self.bn2=nn.Sequential(
-                               nn.BatchNorm2d(feature))
-        self.conv_o= nn.Conv2d(feature , feature, (3,3),(1,1),(1,1),bias=False)
+        self.bn1 = nn.Sequential(nn.ReLU(inplace=False),
+                                 nn.BatchNorm2d(feature))
+        self.bn2 = nn.Sequential(nn.ReLU(inplace=False),
+                                 nn.BatchNorm2d(feature))
+        self.conv_o = nn.Conv2d(feature, feature, (3, 3), (1, 1), (1, 1), bias=False)
         self.bn_o = nn.BatchNorm2d(feature)
-        self.dp=nn.Dropout(p=dropout)
-        self.act=nn.ReLU(inplace=True)
+        self.dp = nn.Dropout(p=dropout)
+        self.act = nn.ReLU(inplace=False)
         self._initialize()
-        self.advance_layer=layer
+        self.advance_layer = layer
+        self.cat = Cat(feature, feature)
+
     def _initialize(self):
         for layer in self.modules():
             if isinstance(layer, nn.Conv2d):
@@ -138,14 +151,21 @@ class multi_GRU(nn.Module):
         nn.init.kaiming_normal_(self.conv_o.weight.data, mode="fan_in", nonlinearity="relu")
 
     def forward(self, m):
-        x, y = m
-        x=self.bn1(x)
-        y=self.bn2(y)
-        m=torch.cat([x, y], dim=1)
-        p = torch.sigmoid(self.convd2(m))
-        # h = self.convd1(x + y)
-        h = (2*p) * x + (2 - 2*p) * y
-        h = self.conv_o(self.dp(self.act(self.bn_o(h))))+h
+        x, y, pre = m
+        x = self.bn1(x)
+        y = self.bn2(y)
+        m = torch.cat([x, y], dim=1)
+        p = self.convd2(m)
+        if p.requires_grad==True:
+            g = torch.randn(p.shape).to(p.device)
+            g = p + g
+            g = torch.gt(g, 0).float()
+            p = torch.clamp(torch.sigmoid(p)*1.2-0.1,0.,1.)
+            v = semhash.apply(p, g)
+        else:
+            v = torch.gt(p,0).float()
+        h = 2 * (v * x + (1 - v) * y) + pre
+        h = self.advance_layer(h)
         return h
         hx = torch.cat([h, x], dim=1)
         z = torch.sigmoid(self.convz1(hx))
@@ -158,7 +178,7 @@ class multi_GRU(nn.Module):
         q = torch.tanh(self.convq2(torch.cat([r * h, x], dim=1)))
         x = F.relu((1 + z) * x + (1 - z) * q)
         x = self.advance_layer(x)
-        del m, z, r, q
+        del m, z, r, q    
         return x
 
 
@@ -185,7 +205,7 @@ class Cat(nn.Module):
                     nn.init.zeros_(layer.bias.data)
 
     def forward(self, m):
-        x,y=m
-        m =torch.cat([x, y], dim=1)
+        x, y = m
+        m = torch.cat([x, y], dim=1)
         p = torch.sigmoid(self.convsig(m))
-        return x * (1-p) + y* (p)
+        return x * (1 - p) + y * (p)
