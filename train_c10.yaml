@@ -11,24 +11,24 @@ num_classes:
   10
 feature_list:
   - 16
+  - 64
   - 128
   - 256
-  - 512
 size_list:
   - 32
   - 32
   - 16
   - 8
 hidden_size_list:
+  - 32
   - 64
   - 128
-  - 256
 path_nums_list:
-  - 1
-  - 1
-  - 1
+  - 2
+  - 2
+  - 2
 mult_k:
-  2
+  1
 use_standard:
   True
 densenetparameter:
@@ -43,8 +43,8 @@ parameters:
   loss_option:
     smooth_cross
   sigma_list:
-    - 0.0
-    - 0.0
+    - 1.0
+    - 0.2
   s:
     4
   push_num:
@@ -56,7 +56,7 @@ parameters:
   sigma:
     0.1
   batch_size:
-    128
+    96
   epoch:
     200
   dropout:

@@ -109,76 +109,42 @@ class multi_block_eq(nn.Module):
 
 
 class multi_GRU(nn.Module):
-    def __init__(self, feature, hidden_size, dropout, layer):
+    def __init__(self, feature, hidden_size, dropout, in_size, out_size, layer):
         super(multi_GRU, self).__init__()
         self.feature = feature
         self.hidden_size = hidden_size
         self.dropout = dropout
-        self.convz1 = nn.Conv2d(feature + hidden_size, feature, (1, 3), padding=(0, 1))
-        self.convr1 = nn.Conv2d(feature + hidden_size, hidden_size, (1, 3), padding=(0, 1))
-        self.convq1 = nn.Conv2d(feature + hidden_size, feature, (1, 3), padding=(0, 1))
-        self.convd1 = nn.Conv2d(feature, hidden_size, (1, 1), padding=(0, 0))
-        self.convd2 = nn.Conv2d(feature + feature, feature, (1, 1), padding=(0, 0))
-        self.convz2 = nn.Conv2d(feature + hidden_size, feature, (3, 1), padding=(1, 0))
-        self.convr2 = nn.Conv2d(feature + hidden_size, hidden_size, (3, 1), padding=(1, 0))
-        self.convq2 = nn.Conv2d(feature + hidden_size, feature, (3, 1), padding=(1, 0))
-        self.convz3 = nn.Conv2d(feature + feature, feature, (1, 1), padding=(0, 0))
-        self.bn1 = nn.Sequential(nn.ReLU(inplace=False),
-                                 nn.BatchNorm2d(feature))
-        self.bn2 = nn.Sequential(nn.ReLU(inplace=False),
-                                 nn.BatchNorm2d(feature))
-        self.conv_o = nn.Conv2d(feature, feature, (3, 3), (1, 1), (1, 1), bias=False)
-        self.bn_o = nn.BatchNorm2d(feature)
-        self.dp = nn.Dropout(p=dropout)
-        self.act = nn.ReLU(inplace=False)
+        self.inx = nn.Conv2d(feature, hidden_size, (1, 1), (1, 1), (0, 0), bias=False)
+        self.iny = nn.Conv2d(feature, hidden_size, (1, 1), (1, 1), (0, 0), bias=False)
+        self.convz1 = nn.Conv2d(feature + feature, feature, (1, 1), (1, 1), (0, 0))
+        self.convr1 = nn.Conv2d(feature + feature, feature, (1, 1), (1, 1), (0, 0))
+        self.convq1 = nn.Conv2d(feature + feature, feature, (1, 1), (1, 1), (0, 0), bias=False)
+        self.convd1 = nn.Conv2d(feature * 2, feature, (1, 1), (1, 1), (0, 0), bias=False)
+        self.convd2 = nn.Conv2d(feature * 2, feature, (1, 1), (1, 1), (0, 0), bias=False)
+        self.b = nn.BatchNorm2d(hidden_size * 2)
+        self.r = nn.ReLU(inplace=True)
         self._initialize()
         self.advance_layer = layer
-        self.cat = Cat(feature, feature)
 
     def _initialize(self):
-        for layer in self.modules():
-            if isinstance(layer, nn.Conv2d):
-                nn.init.kaiming_normal_(layer.weight.data, mode="fan_in", nonlinearity="sigmoid")
-                if layer.bias is not None:
-                    nn.init.zeros_(layer.bias.data)
-            if isinstance(layer, nn.BatchNorm2d):
-                nn.init.ones_(layer.weight.data)
-                nn.init.zeros_(layer.bias.data)
-        nn.init.kaiming_normal_(self.convd1.weight.data, mode="fan_in", nonlinearity="relu")
+        nn.init.kaiming_normal_(self.convr1.weight.data, mode="fan_in", nonlinearity="sigmoid")
+        nn.init.xavier_normal_(self.convq1.weight.data,)
+        nn.init.kaiming_normal_(self.convz1.weight.data, mode="fan_in", nonlinearity="sigmoid")
+        nn.init.xavier_normal_(self.convd1.weight.data)
         nn.init.kaiming_normal_(self.convd2.weight.data, mode="fan_in", nonlinearity="sigmoid")
-        nn.init.kaiming_normal_(self.convq1.weight.data, mode="fan_in", nonlinearity="tanh")
-        nn.init.kaiming_normal_(self.convq2.weight.data, mode="fan_in", nonlinearity="tanh")
-        nn.init.kaiming_normal_(self.conv_o.weight.data, mode="fan_in", nonlinearity="relu")
+        nn.init.zeros_(self.convr1.bias.data)
+        nn.init.zeros_(self.convz1.bias.data)
+        nn.init.ones_(self.b.weight.data)
+        nn.init.zeros_(self.b.bias.data)
 
     def forward(self, m):
         x, y, pre = m
-        x = self.bn1(x)
-        y = self.bn2(y)
         m = torch.cat([x, y], dim=1)
-        p = self.convd2(m)
-        if p.requires_grad==True:
-            g = torch.randn(p.shape).to(p.device)
-            g = p + g
-            g = torch.gt(g, 0).float()
-            p = torch.clamp(torch.sigmoid(p)*1.2-0.1,0.,1.)
-            v = semhash.apply(p, g)
-        else:
-            v = torch.gt(p,0).float()
-        h = 2 * (v * x + (1 - v) * y) + pre
-        h = self.advance_layer(h)
-        return h
-        hx = torch.cat([h, x], dim=1)
-        z = torch.sigmoid(self.convz1(hx))
-        r = torch.sigmoid(self.convr1(hx))
-        q = torch.tanh(self.convq1(torch.cat([r * h, x], dim=1)))
-        x = F.relu((1 + z) * x + (1 - z) * q)
-        hx = torch.cat([h, x], dim=1)
-        z = torch.sigmoid(self.convz2(hx))
-        r = torch.sigmoid(self.convr2(hx))
-        q = torch.tanh(self.convq2(torch.cat([r * h, x], dim=1)))
-        x = F.relu((1 + z) * x + (1 - z) * q)
+        z = torch.sigmoid(self.convz1(m))
+        r = torch.sigmoid(self.convr1(m))
+        q = self.convq1(torch.cat([r * y  , (1 - r) * x ], dim=1))
+        x = (1 - z) * (x + y) + (z) * q + pre/2
         x = self.advance_layer(x)
-        del m, z, r, q    
         return x
 
 

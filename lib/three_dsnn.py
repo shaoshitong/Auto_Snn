@@ -286,7 +286,7 @@ class point_cul_Layer(nn.Module):
         该层通过门机制后进行卷积与归一化
         """
         super(point_cul_Layer, self).__init__()
-        self.DoorMach = multi_GRU(in_feature, hidden_size, dropout,
+        self.DoorMach = multi_GRU(in_feature, hidden_size, dropout,in_size,out_size,
                                   multi_block_eq(in_feature, out_feature, hidden_size, mult_k, stride=1,
                                                  dropout=dropout))
         self.STuning = STuning
@@ -312,7 +312,6 @@ class two_dim_layer(nn.Module):
         self.y = y
         self.point_cul_layer = {}
         self.test = False
-        self.advance_layer = multi_block_eq(out_feature, out_feature, hidden_size, multi_k=mult_k)
         for i in range(self.x):
             for j in range(self.y):
                 if not (i == self.x - 1 and j == self.y - 1):
@@ -530,7 +529,7 @@ class merge_layer(nn.Module):
         for layer in self.modules():
             if isinstance(layer, nn.Conv2d) and layer.bias is not None:
                 layer: nn.Conv2d
-                loss_bias.append(torch.norm(torch.abs(layer.bias.data) - 1., p=2) / layer.bias.data.numel())
+                loss_bias.append(torch.norm(torch.abs(layer.bias.data), p=2) / layer.bias.data.numel())
             elif isinstance(layer, three_dim_Layer):
                 layer: three_dim_Layer
                 loss_feature += layer.losses
