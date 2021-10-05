@@ -9,6 +9,7 @@ from torch.utils.data import Dataset, DataLoader
 import numpy as np
 from torchvision import transforms, utils
 import torch
+import torchvision.datasets as datasets
 import torchvision
 import torch.utils.data
 from data.car.cardataprocess import CarDateset
@@ -153,6 +154,26 @@ def load_data_stl(train_batch_size,test_batch_size,data_url=None):
                                 shuffle=False, num_workers=4, drop_last=False)
 
     return train_loader, test_loader
+def load_data_imagenet(train_batch_size,test_batch_size,data_url=None):
+    train_transform = transforms.Compose([
+        transforms.RandomSizedCrop(224),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485,0.456,0.406],
+                             std=[0.229,0.224,0.225])
+    ])
+    test_transform = transforms.Compose([
+        transforms.Scale(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485,0.456,0.406],
+                             std=[0.229,0.224,0.225])
+    ])
+    train=datasets.ImageFolder(os.path.join(data_url,"ILSVRC2012_img_train/"),train_transform)
+    val=datasets.ImageFolder(os.path.join(data_url,"val"),test_transform)
+    train_loader=DataLoader(train,batch_size=train_batch_size,shuffle=True,num_workers=8)
+    val_loader=DataLoader(val,batch_size=test_batch_size,shuffle=False,num_workers=4)
+    return train_loader,val_loader
 def load_data_c100(train_batch_size, test_batch_size, data_url=None ,use_standard=True):
     if data_url == None:
         data_url = './data'

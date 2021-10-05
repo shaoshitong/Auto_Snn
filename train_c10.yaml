@@ -11,18 +11,18 @@ num_classes:
   10
 feature_list:
   - 16
+  - 64
   - 128
   - 256
-  - 512
 size_list:
   - 32
   - 32
   - 16
   - 8
 hidden_size_list:
+  - 64
   - 128
   - 256
-  - 512
 path_nums_list:
   - 2
   - 2
@@ -41,7 +41,7 @@ densenetparameter:
 parameters:
   # default parameters
   loss_option:
-    smooth_cross
+    cross
   sigma_list:
     - 1.0
     - 0.8

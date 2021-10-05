@@ -533,7 +533,7 @@ class merge_layer(nn.Module):
         for layer in self.modules():
             if isinstance(layer, nn.Conv2d) and layer.bias is not None:
                 layer: nn.Conv2d
-                loss_bias.append(torch.norm(torch.abs(layer.bias.data), p=2) / layer.bias.data.numel())
+                loss_bias.append(torch.norm(torch.abs(layer.weight.data), p=2) / layer.weight.data.numel())
             elif isinstance(layer, three_dim_Layer):
                 layer: three_dim_Layer
                 loss_feature += layer.losses
