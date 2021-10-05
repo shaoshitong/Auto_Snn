@@ -121,10 +121,13 @@ class multi_GRU(nn.Module):
         self.convq1 = nn.Conv2d(feature + feature, feature, (1, 1), (1, 1), (0, 0), bias=False)
         self.convd1 = nn.Conv2d(feature * 2, feature, (1, 1), (1, 1), (0, 0), bias=False)
         self.convd2 = nn.Conv2d(feature * 2, feature, (1, 1), (1, 1), (0, 0), bias=False)
-        self.b = nn.BatchNorm2d(hidden_size * 2)
-        self.r = nn.ReLU(inplace=True)
+        self.b1 = nn.BatchNorm2d(feature)
+        self.b2 = nn.BatchNorm2d(feature)
+        self.r1 = nn.ReLU(inplace=False)
+        self.r2 = nn.ReLU(inplace=False)
         self._initialize()
         self.advance_layer = layer
+        self.cat=Cat(feature,feature)
 
     def _initialize(self):
         nn.init.kaiming_normal_(self.convr1.weight.data, mode="fan_in", nonlinearity="sigmoid")
@@ -134,18 +137,25 @@ class multi_GRU(nn.Module):
         nn.init.kaiming_normal_(self.convd2.weight.data, mode="fan_in", nonlinearity="sigmoid")
         nn.init.zeros_(self.convr1.bias.data)
         nn.init.zeros_(self.convz1.bias.data)
-        nn.init.ones_(self.b.weight.data)
-        nn.init.zeros_(self.b.bias.data)
-
+        nn.init.ones_(self.b1.weight.data)
+        nn.init.zeros_(self.b1.bias.data)
+        nn.init.ones_(self.b2.weight.data)
+        nn.init.zeros_(self.b2.bias.data)
     def forward(self, m):
         x, y, pre = m
+        # print(torch.norm(pre,p=2))
+        f = (x+y)/2
+        x = self.b1(self.r1(x))
+        y = self.b2(self.r2(y))
         m = torch.cat([x, y], dim=1)
         z = torch.sigmoid(self.convz1(m))
         r = torch.sigmoid(self.convr1(m))
         q = self.convq1(torch.cat([r * y  , (1 - r) * x ], dim=1))
-        x = (1 - z) * (x + y) + (z) * q + pre/2
-        x = self.advance_layer(x)
-        return x
+        o = (1-z)*q + (z) * (x + y)/2
+        # print(torch.norm(o,p=2))
+        # print("="*10)
+        # x = self.advance_layer(x)
+        return o+f
 
 
 class Cat(nn.Module):
@@ -174,4 +184,4 @@ class Cat(nn.Module):
         x, y = m
         m = torch.cat([x, y], dim=1)
         p = torch.sigmoid(self.convsig(m))
-        return x * (1 - p) + y * (p)
+        return x * (1 + p)  + y * (1 - p)

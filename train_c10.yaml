@@ -11,18 +11,18 @@ num_classes:
   10
 feature_list:
   - 16
-  - 64
   - 128
   - 256
+  - 512
 size_list:
   - 32
   - 32
   - 16
   - 8
 hidden_size_list:
-  - 32
-  - 64
   - 128
+  - 256
+  - 512
 path_nums_list:
   - 2
   - 2
@@ -44,7 +44,7 @@ parameters:
     smooth_cross
   sigma_list:
     - 1.0
-    - 0.2
+    - 0.8
   s:
     4
   push_num:
@@ -85,7 +85,7 @@ optimizer:
     lr: 0.05
     weight_decay: 4e-5
   SGD:
-    momentum: 0.9
+    momentum: 0.7
     lr: 0.1
     weight_decay: 1e-4
   ASGD:
