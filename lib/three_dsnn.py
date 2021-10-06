@@ -286,7 +286,7 @@ class point_cul_Layer(nn.Module):
         该层通过门机制后进行卷积与归一化
         """
         super(point_cul_Layer, self).__init__()
-        self.DoorMach = multi_GRU(in_feature, hidden_size, dropout, in_size, out_size,
+        self.DoorMach = multi_GRU(in_feature, hidden_size, dropout,
                                   multi_block_eq(in_feature, out_feature, hidden_size, mult_k, stride=1,
                                                  dropout=dropout))
         self.STuning = STuning

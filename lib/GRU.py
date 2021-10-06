@@ -129,37 +129,56 @@ class mixer_GRU(nn.Module):
         h = (1 - z) * h + z * q
         return h
 # (1-z)*[conv(xy)+(x+y)/2]+z*conv(q)+conv(xy)+(x+y)/2
-
 class multi_GRU(nn.Module):
-    def __init__(self, feature, hidden_size, dropout, in_size, out_size, layer):
+    def __init__(self, feature, hidden_size, dropout,layer):
         super(multi_GRU, self).__init__()
         self.feature = feature
         self.hidden_size = hidden_size
-        self.mix_channel = mix_channel = feature//8
         self.dropout = dropout
-        self.convf1 = nn.Conv2d(feature * 2, feature, (1,1), (1, 1), (0,0), bias=False)
-        self.convh2 = nn.Conv2d(feature * 2, mix_channel//2, (1, 1), (1, 1), (0, 0), bias=False)
-        self.b1 = nn.BatchNorm2d(feature * 2)
-        self.r1 = nn.ReLU(inplace=False)
-        nn.init.ones_(self.b1.weight.data)
-        nn.init.zeros_(self.b1.bias.data)
-        nn.init.kaiming_normal_(self.convh2.weight.data)
-        nn.init.kaiming_normal_(self.convf1.weight.data)
-        self.gru=nn.ModuleList([mixer_GRU(mix_channel,mix_channel//2) for _ in range(8)])
-        self.cat = Cat(feature, feature)
+        self.convz1 = nn.Conv2d(feature + hidden_size, feature, (1, 3), padding=(0, 1))
+        self.convr1 = nn.Conv2d(feature + hidden_size, hidden_size, (1, 3), padding=(0, 1))
+        self.convq1 = nn.Conv2d(feature + hidden_size, feature, (1, 3), padding=(0, 1))
+        self.convd1 = nn.Conv2d(feature + feature, hidden_size, (1, 1), padding=(0, 0))
+        self.convd2 = nn.Conv2d(feature + feature, feature, (1, 1), padding=(0, 0))
+        self.convz2 = nn.Conv2d(feature + hidden_size, feature, (3, 1), padding=(1, 0))
+        self.convr2 = nn.Conv2d(feature + hidden_size, hidden_size, (3, 1), padding=(1, 0))
+        self.convq2 = nn.Conv2d(feature + hidden_size, feature, (3, 1), padding=(1, 0))
+        self.convz3 = nn.Conv2d(feature + feature, feature, (1, 1), padding=(0, 0))
+        self._initialize()
+        self.advance_layer=layer
+    def _initialize(self):
+        for layer in self.modules():
+            if isinstance(layer, nn.Conv2d):
+                nn.init.kaiming_normal_(layer.weight.data, mode="fan_in", nonlinearity="sigmoid")
+                if layer.bias is not None:
+                    nn.init.zeros_(layer.bias.data)
+            if isinstance(layer, nn.BatchNorm2d):
+                nn.init.ones_(layer.weight.data)
+                nn.init.zeros_(layer.bias.data)
+        nn.init.kaiming_normal_(self.convd1.weight.data, mode="fan_in", nonlinearity="relu")
+        nn.init.kaiming_normal_(self.convd2.weight.data, mode="fan_in", nonlinearity="sigmoid")
+        nn.init.kaiming_normal_(self.convq1.weight.data, mode="fan_in", nonlinearity="tanh")
+        nn.init.kaiming_normal_(self.convq2.weight.data, mode="fan_in", nonlinearity="tanh")
 
     def forward(self, m):
-        x, y, pre = m
-        # print(torch.norm(pre,p=2))
-        xy=self.r1(self.b1(torch.cat([x,y],dim=1)))
-        f = self.convf1(xy)+(x+y)/2
-        h = self.convh2(xy)
-        # max_value, max_index = torch.sort(f, 1, descending=True)
-        max_value_split = list(torch.split(f, self.mix_channel, 1))
-        for i in range(len(max_value_split)):
-            max_value_split[i]=self.gru[i]((max_value_split[i],h))
-        o=torch.cat(max_value_split,dim=1)+(x+y)/2
-        return o
+        x, y ,_= m
+        m=torch.cat([x, y], dim=1)
+        h = self.convd1(m)
+        p = torch.sigmoid(F.avg_pool2d(self.convd2(m),m.shape[-1]))
+        x = (p) * x + (1 - p) * y
+        hx = torch.cat([h, x], dim=1)
+        z = torch.sigmoid(F.avg_pool2d(self.convz1(hx),hx.shape[-1]))
+        r = torch.sigmoid(F.avg_pool2d(self.convr1(hx),hx.shape[-1]))
+        q = torch.tanh(self.convq1(torch.cat([r * h, x], dim=1)))
+        x = F.relu((1 + z) * x + (1 - z) * q)
+        hx = torch.cat([h, x], dim=1)
+        z = torch.sigmoid(F.avg_pool2d(self.convz2(hx),hx.shape[-1]))
+        r = torch.sigmoid(F.avg_pool2d(self.convr2(hx),hx.shape[-1]))
+        q = torch.tanh(self.convq2(torch.cat([r * h, x], dim=1)))
+        x = F.relu((1 + z) * x + (1 - z) * q)
+        x = self.advance_layer(x)
+        del m, z, r, q
+        return x
 
 
 class Cat(nn.Module):
