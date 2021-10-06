@@ -5,8 +5,17 @@ from collections import OrderedDict
 import numpy as np
 import os, sys
 from torch.nn.parameter import Parameter
+class attnetion(nn.Module):
+    def __init__(self,x_channel,y_channel):
+        super(attnetion, self).__init__()
 
-
+def cat_result_get(tensor_prev,i,j):
+    m=[]
+    for t_i in range(i + 1):
+        for t_j in range(j + 1):
+            if (t_i != i or t_j != j) and (t_i!=0 or t_j!=0):
+                m.append(tensor_prev[t_i][t_j])
+    return torch.cat(m,dim=1)
 class semhash(torch.autograd.Function):
     @staticmethod
     def forward(ctx, v1, v2, training=True):
@@ -39,11 +48,10 @@ class DenseLayer(nn.Sequential):
         super(DenseLayer, self).__init__()
         self.add_module('norm1', nn.BatchNorm2d(num_input_features)),
         self.add_module('relu1', nn.ReLU(inplace=True)),
-        self.add_module('conv1', nn.Conv2d(num_input_features, bn_size *
-                                           growth_rate, kernel_size=(1, 1), stride=(1, 1), bias=False)),
-        self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate)),
+        self.add_module('conv1', nn.Conv2d(num_input_features,bn_size*growth_rate, kernel_size=(1, 1), stride=(1, 1), bias=False)),
+        self.add_module('norm2', nn.BatchNorm2d(bn_size*growth_rate)),
         self.add_module('relu2', nn.ReLU(inplace=True)),
-        self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
+        self.add_module('conv2', nn.Conv2d(bn_size*growth_rate, growth_rate,
                                            kernel_size=(3, 3), stride=(1, 1), padding=1, bias=False)),
         self.drop_rate = drop_rate
 
@@ -51,12 +59,15 @@ class DenseLayer(nn.Sequential):
         new_features = super(DenseLayer, self).forward(x)
         if self.drop_rate > 0:
             new_features = F.dropout(new_features, p=self.drop_rate, training=self.training)
-        return torch.cat([x, new_features], 1)
+        return new_features
 
 class DenseBlock(nn.Module):
-    def __init__(self,cat_feature,eq_feature,dropout):
+    def __init__(self,cat_feature,eq_feature,hidden_size,cat_x,cat_y,dropout):
         super(DenseBlock, self).__init__()
-        self.denselayer=DenseLayer(cat_feature,eq_feature,5,dropout)
+        self.denselayer=DenseLayer(cat_feature,eq_feature,hidden_size,dropout)
+        self.eq_feature=eq_feature
+        self.cat_x=cat_x
+        self.cat_y=cat_y
         self._initialize()
     def _initialize(self):
         for layer in self.modules():
@@ -72,7 +83,7 @@ class DenseBlock(nn.Module):
                 if layer.bias is not None:
                     nn.init.zeros_(layer.bias.data)
     def forward(self,x):
-        x= self.denselayer(x)
+        x=self.denselayer(x)
         return x
 
 class block_eq(nn.Module):

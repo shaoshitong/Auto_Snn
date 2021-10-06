@@ -16,7 +16,7 @@ from lib.Wideresnet import Downsampleunit
 from lib.featurefocusing_v2 import Feature_forward
 from lib.dimixloss import DimixLoss, DimixLoss_neg
 from lib.PointConv import PointConv
-from lib.GRU import multi_GRU, multi_block_eq, Cat,DenseBlock
+from lib.GRU import multi_GRU, multi_block_eq, Cat,DenseBlock,cat_result_get
 import math
 import pandas as pd
 from torch.nn.utils import spectral_norm
@@ -279,22 +279,22 @@ class Trinomial_operation(object):
 
 
 class point_cul_Layer(nn.Module):
-    def __init__(self, in_feature, out_feature, hidden_size, in_size, out_size,path_len, STuning=True, grad_lr=0.1, dropout=0.3,
+    def __init__(self, in_feature, out_feature, hidden_size, in_size, out_size,path_len,cat_x,cat_y, STuning=True, grad_lr=0.1, dropout=0.3,
                  use_gauss=True, mult_k=2):
         """
         输入的张量维度为（batch_size,64,x//2,y//2）
         该层通过门机制后进行卷积与归一化
         """
         super(point_cul_Layer, self).__init__()
-        self.DoorMach = DenseBlock(path_len*(in_feature),in_feature,dropout)
+        self.DoorMach = DenseBlock(path_len*(in_feature),in_feature,hidden_size,cat_x,cat_y,dropout)
         self.STuning = STuning
         self.grad_lr = grad_lr
         self.sigma = 1
         self.norm = None
 
     def forward(self, x):
-        x1, x2, x3 = x
-        x = self.DoorMach(torch.cat([x1,x2],dim=1))
+        tensor_prev,(i,j)= x
+        x = self.DoorMach(cat_result_get(tensor_prev,i,j))
         return x
 
 
@@ -309,22 +309,15 @@ class two_dim_layer(nn.Module):
         self.x = x
         self.y = y
         """
-        +3 + + +
-        +2 +3 +6 +10
-        +1 +2 +4 +7
+        +3 +7 +11 +15
+        +2 +5 +8 +11
+        +1 +3 +5 +7
         +1 +1 +2 +3
         """
         self.point_cul_layer = {}
         self.test = False
-        self.x_eq=nn.ModuleList([DenseBlock(in_feature*(_+1),in_feature,p) for _ in range(self.x-1)])
-        self.y_eq=nn.ModuleList([DenseBlock(in_feature*(_+1),in_feature,p) for _ in range(self.y-1)])
-        np=[[i for i in range(self.y+1)] for j in range(self.x+1)]
-        for i in range(1,self.y+1):
-            np[0][i]=i
-            np[i][0]=i
-        for i in range(1, self.y + 1):
-            for j in range(1,self.x+1):
-                np[i][j]=np[i-1][j]+np[i][j-1]+1
+        self.x_eq=nn.ModuleList([DenseBlock(in_feature*(_+1),in_feature,hidden_size,0,0,p) for _ in range(self.x-1)])
+        self.y_eq=nn.ModuleList([DenseBlock(in_feature*(_+1),in_feature,hidden_size,0,0,p) for _ in range(self.y-1)])
         for i in range(self.x):
             for j in range(self.y):
                 if not (i == self.x - 1 and j == self.y - 1):
@@ -334,7 +327,9 @@ class two_dim_layer(nn.Module):
                         hidden_size,
                         in_size,
                         in_size,
-                        np[i+1][j+1]-1,
+                        (i+2)*(j+2)-2,
+                        i+1,
+                        j+1,
                         dropout=p,
                         mult_k=mult_k)
                 else:
@@ -344,28 +339,34 @@ class two_dim_layer(nn.Module):
                         hidden_size,
                         in_size,
                         out_size,
-                        np[i+1][j+1]-1,
+                        (i+2)*(j+2)-2,
+                        i+1,
+                        j+1,
                         dropout=p,
                         mult_k=mult_k)
         self.point_layer_module = nn.ModuleDict(self.point_cul_layer)
-        print(np)
-        self.np_last=np[-1][-1]
+        self.np_last=(self.x+1)*(self.y+1)-1
 
     def forward(self, x, y, z):
 
-        tensor_prev = [y,x]
+        tensor_prev = [[z for i in range(self.x+1)] for j in range(self.y+1)]
+        tensor_prev[0][1]=x
+        tensor_prev[1][0]=y
+
         for i in range(self.y-1):
-            x=self.x_eq[i](x)
-            tensor_prev.append(x)
+            tensor_prev[0][i+2]=self.x_eq[i](cat_result_get(tensor_prev,0,i+2))
+        for i in range(self.x-1):
+            tensor_prev[i+2][0]=self.y_eq[i](cat_result_get(tensor_prev,i+2,0))
         for i in range(1,self.x+1):
             for j in range(1,self.y+1):
-                yy=tensor_prev[j-1]
-                xx=tensor_prev[j]
-                tensor_prev[j] = self.point_layer_module[str(i-1) + '_' + str(j-1)](
-                    (xx, yy, z))
-            if i!=self.x:
-                tensor_prev[0]=self.y_eq[i-1](tensor_prev[0])
-        result = tensor_prev[-1].clone()
+                tensor_prev[i][j] = self.point_layer_module[str(i-1) + '_' + str(j-1)]((
+                    tensor_prev,(i,j)))
+        result=[]
+        for i in range(self.x+1):
+            for j in range(self.y+1):
+                if (i!=0 or j!=0):
+                    result.append(tensor_prev[i][j])
+        result=torch.cat(result,dim=1)
         del tensor_prev
         return result
 
@@ -379,18 +380,16 @@ class turn_layer(nn.Module):
         self.downsample = nn.Sequential(*[ ])
         self.downsample.add_module('norm', nn.BatchNorm2d(in_feature))
         self.downsample.add_module('relu', nn.ReLU(inplace=True))
-        self.downsample.add_module('conv', nn.Conv2d(in_feature, out_feature,
+        self.xsample=nn.Sequential(*[ ])
+        self.xsample.add_module('conv', nn.Conv2d(in_feature, out_feature,
                                           kernel_size=(1, 1), stride=(1, 1), bias=False))
-        self.downsample.add_module('pool', nn.AvgPool2d(kernel_size=stride, stride=stride))
+        self.xsample.add_module('pool', nn.AvgPool2d(kernel_size=stride, stride=stride))
         self.turn = nn.ModuleList([
             nn.Sequential(
-                nn.BatchNorm2d(out_feature),
-                nn.ReLU(inplace=True),
-                nn.Conv2d(out_feature, out_feature, (3, 5), (1, 1), (1, 2), bias=False),
+                nn.Conv2d(in_feature, out_feature, (3, 5), (stride, stride), (1, 2), bias=False),
             ),
             nn.Sequential(
-                nn.BatchNorm2d(out_feature),
-                nn.Conv2d(out_feature, out_feature, (5, 3), (1, 1), (2, 1), bias=False),
+                nn.Conv2d(in_feature, out_feature, (5, 3), (stride, stride), (2, 1), bias=False),
             ), ])
         self.feature_different = DimixLoss_neg()
         self._initialize()
@@ -411,9 +410,9 @@ class turn_layer(nn.Module):
 
     def forward(self, x):
         x = self.downsample(x)
-        a, b = self.turn[0](x), self.turn[1](x)
-        l = self.feature_different(a, b)
-        return (a+x, b+x, x), l
+        a, b ,x= self.turn[0](x), self.turn[1](x),self.xsample(x)
+        l = self.feature_different(a, b) + self.feature_different(a, x)+self.feature_different(b, x)
+        return (a+x/2, b+x/2, x), l
 
 
 class three_dim_Layer(nn.Module):
