@@ -16,7 +16,7 @@ from lib.Wideresnet import Downsampleunit
 from lib.featurefocusing_v2 import Feature_forward
 from lib.dimixloss import DimixLoss, DimixLoss_neg
 from lib.PointConv import PointConv
-from lib.GRU import multi_GRU, multi_block_eq, Cat
+from lib.GRU import multi_GRU, multi_block_eq, Cat,DenseBlock
 import math
 import pandas as pd
 from torch.nn.utils import spectral_norm
@@ -40,7 +40,7 @@ class Lambda(nn.Module):
         self.function = function
 
     def forward(self, x, *args):
-        return self.function(x, x.size()[-1]//2, *args)
+        return self.function(x, x.size()[-1], *args)
 
 
 def batch_norm(input):
@@ -102,7 +102,7 @@ class Shortcut(nn.Module):
 class block_out(nn.Module):
     def __init__(self, feature, classes, size, use_pool='none'):
         super(block_out, self).__init__()
-        self.classifiar = nn.Sequential(nn.Flatten(), nn.Linear(feature*2*2, classes))
+        self.classifiar = nn.Sequential(nn.Flatten(), nn.Linear(feature, classes))
         self.transition_layer = nn.Sequential(*[
             nn.BatchNorm2d(feature),
             nn.ReLU(inplace=True),
@@ -279,16 +279,14 @@ class Trinomial_operation(object):
 
 
 class point_cul_Layer(nn.Module):
-    def __init__(self, in_feature, out_feature, hidden_size, in_size, out_size, STuning=True, grad_lr=0.1, dropout=0.3,
+    def __init__(self, in_feature, out_feature, hidden_size, in_size, out_size,path_len, STuning=True, grad_lr=0.1, dropout=0.3,
                  use_gauss=True, mult_k=2):
         """
         输入的张量维度为（batch_size,64,x//2,y//2）
         该层通过门机制后进行卷积与归一化
         """
         super(point_cul_Layer, self).__init__()
-        self.DoorMach = multi_GRU(in_feature, hidden_size, dropout,
-                                  multi_block_eq(in_feature, out_feature, hidden_size, mult_k, stride=1,
-                                                 dropout=dropout))
+        self.DoorMach = DenseBlock(path_len*(in_feature),in_feature,dropout)
         self.STuning = STuning
         self.grad_lr = grad_lr
         self.sigma = 1
@@ -296,7 +294,7 @@ class point_cul_Layer(nn.Module):
 
     def forward(self, x):
         x1, x2, x3 = x
-        x = self.DoorMach((x1, x2, x3))
+        x = self.DoorMach(torch.cat([x1,x2],dim=1))
         return x
 
 
@@ -310,10 +308,23 @@ class two_dim_layer(nn.Module):
         self.out_pointnum = out_size
         self.x = x
         self.y = y
+        """
+        +3 + + +
+        +2 +3 +6 +10
+        +1 +2 +4 +7
+        +1 +1 +2 +3
+        """
         self.point_cul_layer = {}
         self.test = False
-        self.x_eq=nn.ModuleList([multi_block_eq(in_feature,in_feature,hidden_size,mult_k,1,p) for _ in range(self.x-1)])
-        self.y_eq=nn.ModuleList([multi_block_eq(in_feature,in_feature,hidden_size,mult_k,1,p) for _ in range(self.y-1)])
+        self.x_eq=nn.ModuleList([DenseBlock(in_feature*(_+1),in_feature,p) for _ in range(self.x-1)])
+        self.y_eq=nn.ModuleList([DenseBlock(in_feature*(_+1),in_feature,p) for _ in range(self.y-1)])
+        np=[[i for i in range(self.y+1)] for j in range(self.x+1)]
+        for i in range(1,self.y+1):
+            np[0][i]=i
+            np[i][0]=i
+        for i in range(1, self.y + 1):
+            for j in range(1,self.x+1):
+                np[i][j]=np[i-1][j]+np[i][j-1]+1
         for i in range(self.x):
             for j in range(self.y):
                 if not (i == self.x - 1 and j == self.y - 1):
@@ -323,6 +334,7 @@ class two_dim_layer(nn.Module):
                         hidden_size,
                         in_size,
                         in_size,
+                        np[i+1][j+1]-1,
                         dropout=p,
                         mult_k=mult_k)
                 else:
@@ -332,35 +344,28 @@ class two_dim_layer(nn.Module):
                         hidden_size,
                         in_size,
                         out_size,
+                        np[i+1][j+1]-1,
                         dropout=p,
                         mult_k=mult_k)
         self.point_layer_module = nn.ModuleDict(self.point_cul_layer)
+        print(np)
+        self.np_last=np[-1][-1]
 
     def forward(self, x, y, z):
 
-        tensor_prev = [[z for i in range(self.x)] for j in range(self.y)]
-        tensor_x=[x]
-        tensor_y=[y]
-        for i in range(self.x-1):
+        tensor_prev = [y,x]
+        for i in range(self.y-1):
             x=self.x_eq[i](x)
-            tensor_x.append(x)
-        for i in range(self.y - 1):
-            y = self.y_eq[i](y)
-            tensor_y.append(y)
-        for i in range(self.x):
-            for j in range(self.y):
-                zz = z
-                if i == 0:
-                    yy = tensor_y[j]
-                else:
-                    yy = tensor_prev[j][i - 1]
-                if j == 0:
-                    xx = tensor_x[i]
-                else:
-                    xx = tensor_prev[j - 1][i]
-                tensor_prev[j][i] = self.point_layer_module[str(i) + '_' + str(j)](
-                    (xx, yy, zz))
-        result = tensor_prev[-1][-1].clone()
+            tensor_prev.append(x)
+        for i in range(1,self.x+1):
+            for j in range(1,self.y+1):
+                yy=tensor_prev[j-1]
+                xx=tensor_prev[j]
+                tensor_prev[j] = self.point_layer_module[str(i-1) + '_' + str(j-1)](
+                    (xx, yy, z))
+            if i!=self.x:
+                tensor_prev[0]=self.y_eq[i-1](tensor_prev[0])
+        result = tensor_prev[-1].clone()
         del tensor_prev
         return result
 
@@ -371,19 +376,21 @@ class two_dim_layer(nn.Module):
 class turn_layer(nn.Module):
     def __init__(self, in_feature, out_feature, stride=1, dropout=0.1):
         super(turn_layer, self).__init__()
-        self.downsample = Downsampleunit(in_feature, out_feature, stride, dropout)
+        self.downsample = nn.Sequential(*[ ])
+        self.downsample.add_module('norm', nn.BatchNorm2d(in_feature))
+        self.downsample.add_module('relu', nn.ReLU(inplace=True))
+        self.downsample.add_module('conv', nn.Conv2d(in_feature, out_feature,
+                                          kernel_size=(1, 1), stride=(1, 1), bias=False))
+        self.downsample.add_module('pool', nn.AvgPool2d(kernel_size=stride, stride=stride))
         self.turn = nn.ModuleList([
             nn.Sequential(
                 nn.BatchNorm2d(out_feature),
                 nn.ReLU(inplace=True),
-                nn.ReflectionPad2d([0, 0, 1, 0]),
-                nn.Conv2d(out_feature, out_feature, (2, 5), (1, 1), (0, 2), bias=False),
+                nn.Conv2d(out_feature, out_feature, (3, 5), (1, 1), (1, 2), bias=False),
             ),
             nn.Sequential(
                 nn.BatchNorm2d(out_feature),
-                nn.ReLU(inplace=True),
-                nn.ReflectionPad2d([1, 0, 0, 0]),
-                nn.Conv2d(out_feature, out_feature, (5, 2), (1, 1), (2, 0), bias=False),
+                nn.Conv2d(out_feature, out_feature, (5, 3), (1, 1), (2, 1), bias=False),
             ), ])
         self.feature_different = DimixLoss_neg()
         self._initialize()
@@ -449,12 +456,17 @@ class three_dim_Layer(nn.Module):
             s1,s2=size_list[i],size_list[i+1]
             h1=hidden_size_list[i]
             p1=path_nums_list[i]
+            if i==0:
+                self.turn_layer[str(i)]=turn_layer(f1,f2,int(s1//s2),self.dropout)
+            else:
+                self.turn_layer[str(i)]=turn_layer(h,f2,int(s1//s2),self.dropout)
             self.point_layer[str(i)]=two_dim_layer(f2, f2, h1, s2, s2, p1, p1, mult_k, self.dropout)
-            self.turn_layer[str(i)]=turn_layer(f1,f2,int(s1//s2),self.dropout)
+            h=self.point_layer[str(i)].np_last*f2
         self.turn_layer_module = nn.ModuleDict(self.turn_layer)
         self.point_layer_module = nn.ModuleDict(self.point_layer)
         self.len=len(hidden_size_list)
         del self.point_layer, self.turn_layer
+        return h
 
 
 class merge_layer(nn.Module):
@@ -512,8 +524,8 @@ class merge_layer(nn.Module):
         b, c, h, w = data.shape
         input_shape = (b, c, h, w)
         self.inf = nn.Conv2d(c, feature_list[0], (3, 3), (1, 1), (1, 1), bias=False)
-        self.InputGenerateNet.initiate_layer(data, feature_list, size_list, hidden_size_list, path_nums_list, mult_k)
-        self.out_classifier = block_out(feature_list[-1], num_classes, size_list[-1])
+        h=self.InputGenerateNet.initiate_layer(data, feature_list, size_list, hidden_size_list, path_nums_list, mult_k)
+        self.out_classifier = block_out(h, num_classes, size_list[-1])
 
     @staticmethod
     def _list_build():

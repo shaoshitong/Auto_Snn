@@ -422,7 +422,6 @@ if __name__ == "__main__":
     optimizer = get_optimizer([dict_list4], yaml, model)
     scheduler = get_scheduler(optimizer, yaml)
     criterion_loss = Loss_get(yaml["parameters"]["loss_option"])
-    print(model)
     model.to(set_device())
 
     get_params_numeric(model)  # 5.261376

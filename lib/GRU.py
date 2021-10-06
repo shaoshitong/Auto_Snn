@@ -34,7 +34,46 @@ class BasicUnit(nn.Module):
 
     def forward(self, x):
         return x + self.block(x)
+class DenseLayer(nn.Sequential):
+    def __init__(self, num_input_features, growth_rate, bn_size, drop_rate):
+        super(DenseLayer, self).__init__()
+        self.add_module('norm1', nn.BatchNorm2d(num_input_features)),
+        self.add_module('relu1', nn.ReLU(inplace=True)),
+        self.add_module('conv1', nn.Conv2d(num_input_features, bn_size *
+                                           growth_rate, kernel_size=(1, 1), stride=(1, 1), bias=False)),
+        self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate)),
+        self.add_module('relu2', nn.ReLU(inplace=True)),
+        self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
+                                           kernel_size=(3, 3), stride=(1, 1), padding=1, bias=False)),
+        self.drop_rate = drop_rate
 
+    def forward(self, x):
+        new_features = super(DenseLayer, self).forward(x)
+        if self.drop_rate > 0:
+            new_features = F.dropout(new_features, p=self.drop_rate, training=self.training)
+        return torch.cat([x, new_features], 1)
+
+class DenseBlock(nn.Module):
+    def __init__(self,cat_feature,eq_feature,dropout):
+        super(DenseBlock, self).__init__()
+        self.denselayer=DenseLayer(cat_feature,eq_feature,5,dropout)
+        self._initialize()
+    def _initialize(self):
+        for layer in self.modules():
+            if isinstance(layer, nn.Conv2d):
+                nn.init.kaiming_normal_(layer.weight.data, mode="fan_in", nonlinearity="relu")
+                if layer.bias is not None:
+                    nn.init.zeros_(layer.bias.data)
+            elif isinstance(layer, nn.BatchNorm2d):
+                nn.init.ones_(layer.weight.data)
+                nn.init.zeros_(layer.bias.data)
+            elif isinstance(layer, nn.Linear):
+                nn.init.zeros_(layer.weight.data)
+                if layer.bias is not None:
+                    nn.init.zeros_(layer.bias.data)
+    def forward(self,x):
+        x= self.denselayer(x)
+        return x
 
 class block_eq(nn.Module):
     def __init__(self, eq_feature, tmp_feature, dropout):
