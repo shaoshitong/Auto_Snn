@@ -162,6 +162,7 @@ def test(path, data, yaml, criterion_loss):
                                  size_list=yaml["size_list"],
                                  hidden_size_list=yaml["hidden_size_list"],
                                  path_nums_list=yaml["path_nums_list"],
+                                 nums_layer_list=yaml["nums_layer_list"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'cifar10':
         the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 3, 32, 32),
@@ -170,6 +171,7 @@ def test(path, data, yaml, criterion_loss):
                                  size_list=yaml["size_list"],
                                  hidden_size_list=yaml["hidden_size_list"],
                                  path_nums_list=yaml["path_nums_list"],
+                                 nums_layer_list=yaml["nums_layer_list"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'cifar100':
         the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 3, 32, 32),
@@ -178,6 +180,7 @@ def test(path, data, yaml, criterion_loss):
                                  size_list=yaml["size_list"],
                                  hidden_size_list=yaml["hidden_size_list"],
                                  path_nums_list=yaml["path_nums_list"],
+                                 nums_layer_list=yaml["nums_layer_list"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'fashionmnist':
         the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 1, 32, 32),
@@ -186,6 +189,7 @@ def test(path, data, yaml, criterion_loss):
                                  size_list=yaml["size_list"],
                                  hidden_size_list=yaml["hidden_size_list"],
                                  path_nums_list=yaml["path_nums_list"],
+                                 nums_layer_list=yaml["nums_layer_list"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'eeg':
         the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 14, 64, 64),
@@ -194,6 +198,7 @@ def test(path, data, yaml, criterion_loss):
                                  size_list=yaml["size_list"],
                                  hidden_size_list=yaml["hidden_size_list"],
                                  path_nums_list=yaml["path_nums_list"],
+                                 nums_layer_list=yaml["nums_layer_list"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'car':
         the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 3, 64, 64),
@@ -202,6 +207,7 @@ def test(path, data, yaml, criterion_loss):
                                  size_list=yaml["size_list"],
                                  hidden_size_list=yaml["hidden_size_list"],
                                  path_nums_list=yaml["path_nums_list"],
+                                 nums_layer_list=yaml["nums_layer_list"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'svhn':
         the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 3, 32, 32),
@@ -210,6 +216,7 @@ def test(path, data, yaml, criterion_loss):
                                  size_list=yaml["size_list"],
                                  hidden_size_list=yaml["hidden_size_list"],
                                  path_nums_list=yaml["path_nums_list"],
+                                 nums_layer_list=yaml["nums_layer_list"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'stl-10':
         the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 3, 96, 96),
@@ -218,6 +225,7 @@ def test(path, data, yaml, criterion_loss):
                                  size_list=yaml["size_list"],
                                  hidden_size_list=yaml["hidden_size_list"],
                                  path_nums_list=yaml["path_nums_list"],
+                                 nums_layer_list=yaml["nums_layer_list"],
                                  mult_k=yaml["mult_k"])
     else:
         raise KeyError('not have this dataset')
@@ -325,6 +333,7 @@ if __name__ == "__main__":
                                  size_list=yaml["size_list"],
                                  hidden_size_list=yaml["hidden_size_list"],
                                  path_nums_list=yaml["path_nums_list"],
+                                 nums_layer_list=yaml["nums_layer_list"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'svhn':
         train_dataloader, test_dataloader = load_data_svhn(yaml['parameters']['batch_size'],
@@ -335,6 +344,7 @@ if __name__ == "__main__":
                                  size_list=yaml["size_list"],
                                  hidden_size_list=yaml["hidden_size_list"],
                                  path_nums_list=yaml["path_nums_list"],
+                                 nums_layer_list=yaml["nums_layer_list"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'cifar10':
         train_dataloader, test_dataloader = load_data(yaml['parameters']['batch_size'],
@@ -346,6 +356,7 @@ if __name__ == "__main__":
                                  size_list=yaml["size_list"],
                                  hidden_size_list=yaml["hidden_size_list"],
                                  path_nums_list=yaml["path_nums_list"],
+                                 nums_layer_list=yaml["nums_layer_list"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'cifar100':
         train_dataloader, test_dataloader = load_data_c100(yaml['parameters']['batch_size'],
@@ -357,6 +368,7 @@ if __name__ == "__main__":
                                  size_list=yaml["size_list"],
                                  hidden_size_list=yaml["hidden_size_list"],
                                  path_nums_list=yaml["path_nums_list"],
+                                 nums_layer_list=yaml["nums_layer_list"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'stl-10':
         train_dataloader, test_dataloader = load_data_stl(yaml['parameters']['batch_size'],
@@ -367,6 +379,7 @@ if __name__ == "__main__":
                              size_list=yaml["size_list"],
                              hidden_size_list=yaml["hidden_size_list"],
                              path_nums_list=yaml["path_nums_list"],
+                             nums_layer_list=yaml["nums_layer_list"],
                              mult_k=yaml["mult_k"])
     elif yaml['data'] == 'car':
         train_dataloader, test_dataloader = load_data_car(yaml['parameters']['batch_size'],
@@ -377,6 +390,7 @@ if __name__ == "__main__":
                              size_list=yaml["size_list"],
                              hidden_size_list=yaml["hidden_size_list"],
                              path_nums_list=yaml["path_nums_list"],
+                             nums_layer_list=yaml["nums_layer_list"],
                              mult_k=yaml["mult_k"])
     elif yaml['data'] == 'fashionmnist':
         fashionmnist_trainset = datasets.FashionMNIST(root=args.data_url, train=True, download=True,
@@ -396,6 +410,7 @@ if __name__ == "__main__":
                              size_list=yaml["size_list"],
                              hidden_size_list=yaml["hidden_size_list"],
                              path_nums_list=yaml["path_nums_list"],
+                             nums_layer_list=yaml["nums_layer_list"],
                              mult_k=yaml["mult_k"])
     elif yaml['data'] == 'eeg':
         p = random.randint(0, 4)
@@ -414,6 +429,7 @@ if __name__ == "__main__":
                                  size_list=yaml["size_list"],
                                  hidden_size_list=yaml["hidden_size_list"],
                                  path_nums_list=yaml["path_nums_list"],
+                                 nums_layer_list=yaml["nums_layer_list"],
                                  mult_k=yaml["mult_k"])
     else:
         raise KeyError('There is no corresponding dataset')

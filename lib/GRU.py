@@ -13,7 +13,7 @@ def cat_result_get(tensor_prev,i,j):
     m=[]
     for t_i in range(i + 1):
         for t_j in range(j + 1):
-            if (t_i != i or t_j != j) and (t_i!=0 or t_j!=0):
+            if (t_i != i or t_j != j) :
                 m.append(tensor_prev[t_i][t_j])
     return torch.cat(m,dim=1)
 class semhash(torch.autograd.Function):

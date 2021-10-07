@@ -17,6 +17,7 @@ from lib.featurefocusing_v2 import Feature_forward
 from lib.dimixloss import DimixLoss, DimixLoss_neg
 from lib.PointConv import PointConv
 from lib.GRU import multi_GRU, multi_block_eq, Cat,DenseBlock,cat_result_get
+from lib.DenseNet import DenseBlock as DenseDeepBlock
 import math
 import pandas as pd
 from torch.nn.utils import spectral_norm
@@ -316,8 +317,8 @@ class two_dim_layer(nn.Module):
         """
         self.point_cul_layer = {}
         self.test = False
-        self.x_eq=nn.ModuleList([DenseBlock(in_feature*(_+1),in_feature,hidden_size,0,0,p) for _ in range(self.x-1)])
-        self.y_eq=nn.ModuleList([DenseBlock(in_feature*(_+1),in_feature,hidden_size,0,0,p) for _ in range(self.y-1)])
+        self.x_eq=nn.ModuleList([DenseBlock(in_feature*(_+2),in_feature,hidden_size,0,0,p) for _ in range(self.x-1)])
+        self.y_eq=nn.ModuleList([DenseBlock(in_feature*(_+2),in_feature,hidden_size,0,0,p) for _ in range(self.y-1)])
         for i in range(self.x):
             for j in range(self.y):
                 if not (i == self.x - 1 and j == self.y - 1):
@@ -327,7 +328,7 @@ class two_dim_layer(nn.Module):
                         hidden_size,
                         in_size,
                         in_size,
-                        (i+2)*(j+2)-2,
+                        (i+2)*(j+2)-1,
                         i+1,
                         j+1,
                         dropout=p,
@@ -339,13 +340,13 @@ class two_dim_layer(nn.Module):
                         hidden_size,
                         in_size,
                         out_size,
-                        (i+2)*(j+2)-2,
+                        (i+2)*(j+2)-1,
                         i+1,
                         j+1,
                         dropout=p,
                         mult_k=mult_k)
         self.point_layer_module = nn.ModuleDict(self.point_cul_layer)
-        self.np_last=(self.x+1)*(self.y+1)-1
+        self.np_last=(self.x+1)*(self.y+1)
 
     def forward(self, x, y, z):
 
@@ -364,7 +365,6 @@ class two_dim_layer(nn.Module):
         result=[]
         for i in range(self.x+1):
             for j in range(self.y+1):
-                if (i!=0 or j!=0):
                     result.append(tensor_prev[i][j])
         result=torch.cat(result,dim=1)
         del tensor_prev
@@ -375,21 +375,25 @@ class two_dim_layer(nn.Module):
 
 
 class turn_layer(nn.Module):
-    def __init__(self, in_feature, out_feature, stride=1, dropout=0.1):
+    def __init__(self, in_feature, out_feature,bn_size, num_layer,stride=1, dropout=0.1):
         super(turn_layer, self).__init__()
+        if num_layer!=0:
+            self.dense_deep_block=DenseDeepBlock([in_feature]+[out_feature]*num_layer,bn_size,dropout,num_layer)
+        in_feature=in_feature+out_feature*num_layer
+        self.num_layer=num_layer
         self.downsample = nn.Sequential(*[ ])
         self.downsample.add_module('norm', nn.BatchNorm2d(in_feature))
         self.downsample.add_module('relu', nn.ReLU(inplace=True))
+        self.downsample.add_module('conv', nn.Conv2d(in_feature, out_feature,
+                                                  kernel_size=(1, 1), stride=(1, 1), bias=False))
         self.xsample=nn.Sequential(*[ ])
-        self.xsample.add_module('conv', nn.Conv2d(in_feature, out_feature,
-                                          kernel_size=(1, 1), stride=(1, 1), bias=False))
         self.xsample.add_module('pool', nn.AvgPool2d(kernel_size=stride, stride=stride))
         self.turn = nn.ModuleList([
             nn.Sequential(
-                nn.Conv2d(in_feature, out_feature, (3, 5), (stride, stride), (1, 2), bias=False),
+                nn.Conv2d(out_feature, out_feature, (3, 5), (stride, stride), (1, 2), bias=False),
             ),
             nn.Sequential(
-                nn.Conv2d(in_feature, out_feature, (5, 3), (stride, stride), (2, 1), bias=False),
+                nn.Conv2d(out_feature, out_feature, (5, 3), (stride, stride), (2, 1), bias=False),
             ), ])
         self.feature_different = DimixLoss_neg()
         self._initialize()
@@ -409,10 +413,12 @@ class turn_layer(nn.Module):
                     nn.init.zeros_(layer.bias.data)
 
     def forward(self, x):
+        if self.num_layer!=0:
+            x = self.dense_deep_block(x)
         x = self.downsample(x)
         a, b ,x= self.turn[0](x), self.turn[1](x),self.xsample(x)
         l = self.feature_different(a, b) + self.feature_different(a, x)+self.feature_different(b, x)
-        return (a+x/2, b+x/2, x), l
+        return (a, b, x), l
 
 
 class three_dim_Layer(nn.Module):
@@ -442,23 +448,24 @@ class three_dim_Layer(nn.Module):
             m = self.point_layer_module[str(i)](x, y, z)
         return m
 
-    def initiate_layer(self, data, feature_list, size_list, hidden_size_list, path_nums_list, mult_k=2):
+    def initiate_layer(self, data, feature_list, size_list, hidden_size_list, path_nums_list,nums_layer, mult_k=2):
         """
         three-dim层初始化节点
         """
         self.point_layer = {}
         self.turn_layer = {}
         self.in_shape = data.shape
-        assert len(feature_list) ==len(size_list) and len(hidden_size_list) ==len(path_nums_list)
+        assert len(feature_list) ==len(size_list) and len(hidden_size_list) ==len(path_nums_list) and len(path_nums_list)==len(nums_layer)
         for i in range(len(hidden_size_list)):
             f1,f2=feature_list[i],feature_list[i+1]
             s1,s2=size_list[i],size_list[i+1]
             h1=hidden_size_list[i]
             p1=path_nums_list[i]
+            n1=nums_layer[i]
             if i==0:
-                self.turn_layer[str(i)]=turn_layer(f1,f2,int(s1//s2),self.dropout)
+                self.turn_layer[str(i)]=turn_layer(f1,f2,h1,n1,int(s1//s2),self.dropout)
             else:
-                self.turn_layer[str(i)]=turn_layer(h,f2,int(s1//s2),self.dropout)
+                self.turn_layer[str(i)]=turn_layer(h,f2,h1,n1,int(s1//s2),self.dropout)
             self.point_layer[str(i)]=two_dim_layer(f2, f2, h1, s2, s2, p1, p1, mult_k, self.dropout)
             h=self.point_layer[str(i)].np_last*f2
         self.turn_layer_module = nn.ModuleDict(self.turn_layer)
@@ -516,14 +523,14 @@ class merge_layer(nn.Module):
         x = self.out_classifier(x)
         return x
 
-    def initiate_layer(self, data, num_classes, feature_list, size_list, hidden_size_list, path_nums_list, mult_k=2):
+    def initiate_layer(self, data, num_classes, feature_list, size_list, hidden_size_list, path_nums_list,nums_layer_list, mult_k=2):
         """
         配置相应的层
         """
         b, c, h, w = data.shape
         input_shape = (b, c, h, w)
         self.inf = nn.Conv2d(c, feature_list[0], (3, 3), (1, 1), (1, 1), bias=False)
-        h=self.InputGenerateNet.initiate_layer(data, feature_list, size_list, hidden_size_list, path_nums_list, mult_k)
+        h=self.InputGenerateNet.initiate_layer(data, feature_list, size_list, hidden_size_list, path_nums_list,nums_layer_list, mult_k)
         self.out_classifier = block_out(h, num_classes, size_list[-1])
 
     @staticmethod
