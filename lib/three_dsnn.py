@@ -41,7 +41,7 @@ class Lambda(nn.Module):
         self.function = function
 
     def forward(self, x, *args):
-        return self.function(x, x.size()[-1], *args)
+        return self.function(x, x.size()[-1]//2, *args)
 
 
 def batch_norm(input):
@@ -103,7 +103,7 @@ class Shortcut(nn.Module):
 class block_out(nn.Module):
     def __init__(self, feature, classes, size, use_pool='none'):
         super(block_out, self).__init__()
-        self.classifiar = nn.Sequential(nn.Flatten(), nn.Linear(feature, classes))
+        self.classifiar = nn.Sequential(nn.Flatten(), nn.Linear(feature*2*2, classes))
         self.transition_layer = nn.Sequential(*[
             nn.BatchNorm2d(feature),
             nn.ReLU(inplace=True),
@@ -385,15 +385,15 @@ class turn_layer(nn.Module):
         self.downsample.add_module('norm', nn.BatchNorm2d(in_feature))
         self.downsample.add_module('relu', nn.ReLU(inplace=True))
         self.downsample.add_module('conv', nn.Conv2d(in_feature, out_feature,
-                                                  kernel_size=(1, 1), stride=(1, 1), bias=False))
+                                                  kernel_size=(1, 1), stride=(1, 1), bias=True))
         self.xsample=nn.Sequential(*[ ])
         self.xsample.add_module('pool', nn.AvgPool2d(kernel_size=stride, stride=stride))
         self.turn = nn.ModuleList([
             nn.Sequential(
-                nn.Conv2d(out_feature, out_feature, (3, 5), (stride, stride), (1, 2), bias=False),
+                nn.AvgPool2d((stride, 5), (stride, stride), (0, 2)),
             ),
             nn.Sequential(
-                nn.Conv2d(out_feature, out_feature, (5, 3), (stride, stride), (2, 1), bias=False),
+                nn.AvgPool2d((5, stride), (stride, stride), (2, 0)),
             ), ])
         self.feature_different = DimixLoss_neg()
         self._initialize()
@@ -401,7 +401,7 @@ class turn_layer(nn.Module):
     def _initialize(self):
         for layer in self.modules():
             if isinstance(layer, nn.Conv2d):
-                nn.init.kaiming_normal_(layer.weight.data, mode="fan_in", nonlinearity="relu")
+                nn.init.kaiming_uniform_(layer.weight.data, mode="fan_in", nonlinearity="relu")
                 if layer.bias is not None:
                     nn.init.zeros_(layer.bias.data)
             elif isinstance(layer, nn.BatchNorm2d):
@@ -416,8 +416,8 @@ class turn_layer(nn.Module):
         if self.num_layer!=0:
             x = self.dense_deep_block(x)
         x = self.downsample(x)
-        a, b ,x= self.turn[0](x), self.turn[1](x),self.xsample(x)
-        l = self.feature_different(a, b) + self.feature_different(a, x)+self.feature_different(b, x)
+        a,b,x=self.turn[0](x), self.turn[1](x),self.xsample(x)
+        l = self.feature_different(a, b)
         return (a, b, x), l
 
 

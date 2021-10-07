@@ -22,20 +22,20 @@ size_list:
   - 8
   - 4
 hidden_size_list:
-  - 6
-  - 6
-  - 6
-  - 6
+  - 4
+  - 4
+  - 4
+  - 4
 path_nums_list:
   - 2
   - 3
   - 4
   - 3
 nums_layer_list:
-  - 0
-  - 1
-  - 8
-  - 9
+  - 2
+  - 3
+  - 4
+  - 5
 mult_k:
   1
 use_standard:
@@ -52,8 +52,8 @@ parameters:
   loss_option:
     smooth_cross
   sigma_list:
-    - 0.6
-    - 0.2
+    - 0.4
+    - 0.01
   s:
     4
   push_num:
@@ -69,7 +69,7 @@ parameters:
   epoch:
     200
   dropout:
-    0.0
+    0.1
   filter_tau_m:
     4
   filter_tau_s:
@@ -85,8 +85,8 @@ optimizer:
   optimizer_choice:
     'SGD'
   Adam:
-    lr: 0.1
-    weight_decay: 0
+    lr: 0.001
+    weight_decay: 4e-5
   AdamW:
     lr: 0.1
     weight_decay: 4e-5
@@ -94,12 +94,12 @@ optimizer:
     lr: 0.05
     weight_decay: 4e-5
   SGD:
-    momentum: 0.9
+    momentum: 0.7
     lr: 0.1
     weight_decay: 4e-5
   ASGD:
-    lr: 0.0001
-    weight_decay: 1e-4
+    lr: 0.01
+    weight_decay: 4e-5
   Rprop:
     lr: 0.0001
     etas: (0.5,1.5)

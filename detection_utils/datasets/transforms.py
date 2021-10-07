@@ -19,6 +19,9 @@ from detection_utils.utils.box_ops import box_xyxy_to_cxcywh
 from detection_utils.utils.misc import interpolate
 
 def crop(image, target, region):
+    """
+    mubiao cvaijian baokuo box and mask
+    """
     cropped_image = F.crop(image, *region)
 
     target = target.copy()
@@ -62,6 +65,9 @@ def crop(image, target, region):
 
 
 def hflip(image, target):
+    """
+    shui ping fanzhuang
+    """
     flipped_image = F.hflip(image)
 
     w, h = image.size
@@ -69,6 +75,8 @@ def hflip(image, target):
     target = target.copy()
     if "boxes" in target:
         boxes = target["boxes"]
+        # x1,y1,x2,y2
+        # w-x2 y1 w-x1 y2
         boxes = boxes[:, [2, 1, 0, 3]] * torch.as_tensor([-1, 1, -1, 1]) + torch.as_tensor([w, 0, w, 0])
         target["boxes"] = boxes
 
@@ -79,6 +87,9 @@ def hflip(image, target):
 
 
 def resize(image, target, size, max_size=None):
+    """
+    resize and change target
+    """
     # size can be min_size (scalar) or (w, h) tuple
 
     def get_size_with_aspect_ratio(image_size, size, max_size=None):

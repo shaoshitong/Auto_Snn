@@ -20,11 +20,11 @@ def get_optimizer(params, conf, model):
         weight_decay = optimizer_conf['SGD']['weight_decay']
         print('optimizer:', optimizer_conf['optimizer_choice'], 'lr:', lr, 'momentum:', momentum)
         return torch.optim.SGD(params, lr, momentum=momentum,weight_decay=weight_decay)
-    elif optimizer_choice == 'ASCD':
+    elif optimizer_choice == 'ASGD':
         lr = optimizer_conf['ASGD']['lr']
         weight_decay = optimizer_conf['ASGD']['weight_decay']
         print('optimizer:', optimizer_conf['optimizer_choice'], 'lr:', lr)
-        return torch.optim.ASGD(params, lr,)
+        return torch.optim.ASGD(params, lr,weight_decay=weight_decay)
     elif optimizer_choice == 'Rprop':
         lr = optimizer_conf['Rprop']['lr']
         etas = optimizer_conf['Rprop']['etas']
