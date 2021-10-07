@@ -69,6 +69,7 @@ class DenseBlock(nn.Module):
         self.cat_x=cat_x
         self.cat_y=cat_y
         self._initialize()
+        # self.transformer=nn.TransformerEncoderLayer(eq_feature,1,dim_feedforward=int(eq_feature*1.5),batch_first=True,layer_norm_eps=1e-6)
     def _initialize(self):
         for layer in self.modules():
             if isinstance(layer, nn.Conv2d):
@@ -83,7 +84,8 @@ class DenseBlock(nn.Module):
                 if layer.bias is not None:
                     nn.init.zeros_(layer.bias.data)
     def forward(self,x):
-        x=self.denselayer(x)
+        x=self.denselayer(x) # .permute(0,2,1)
+        # x=self.transformer(x).permute(0,2,1)
         return x
 
 class block_eq(nn.Module):
