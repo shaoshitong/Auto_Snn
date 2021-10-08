@@ -125,7 +125,7 @@ class block_out(nn.Module):
                 layer.weight.data.fill_(1.)
                 layer.bias.data.zero_()
             elif isinstance(layer, nn.Linear):
-                layer.weight.data.zero_()
+                # layer.weight.data.zero_()
                 layer.bias.data.zero_()
 
     def forward(self, x):
@@ -265,8 +265,14 @@ class point_cul_Layer(nn.Module):
         """
         super(point_cul_Layer, self).__init__()
         self.cat_feature = (path_len - 1) * (out_feature) + in_feature
+        if cat_x==cat_y:
+            fusion=1
+        elif cat_x>cat_y:
+            fusion=0
+        else:
+            fusion=2
         self.DoorMach = DenseBlock(self.cat_feature, out_feature, hidden_size, cat_x, cat_y,
-                                   dropout)
+                                   dropout,fusion)
         self.STuning = STuning
         self.grad_lr = grad_lr
         self.sigma = 1
@@ -296,43 +302,46 @@ class two_dim_layer(nn.Module):
         """
         self.point_cul_layer = {}
         self.test = False
-        self.x_eq = nn.ModuleList(
-            [DenseBlock(out_feature * (_ + 1) + in_feature, out_feature, hidden_size, 0, 0, p) for _ in
-             range(self.x - 1)])
-        self.y_eq = nn.ModuleList(
-            [DenseBlock(out_feature * (_ + 1) + in_feature, out_feature, hidden_size, 0, 0, p) for _ in
-             range(self.y - 1)])
-        for i in range(self.x):
-            for j in range(self.y):
-                if not (i == self.x - 1 and j == self.y - 1):
-                    self.point_cul_layer[str(i) + "_" + str(j)] = point_cul_Layer(
-                        in_feature,
-                        out_feature,
-                        hidden_size,
-                        in_size,
-                        out_size,
-                        (i + 2) * (j + 2) - 1,
-                        i + 1,
-                        j + 1,
-                        dropout=p,
-                        mult_k=mult_k)
-                else:
-                    self.point_cul_layer[str(i) + "_" + str(j)] = point_cul_Layer(
-                        in_feature,
-                        out_feature,
-                        hidden_size,
-                        in_size,
-                        out_size,
-                        (i + 2) * (j + 2) - 1,
-                        i + 1,
-                        j + 1,
-                        dropout=p,
-                        mult_k=mult_k)
-        self.point_layer_module = nn.ModuleDict(self.point_cul_layer)
-        self.np_last = (self.x + 1) * (self.y + 1) - 1
-
+        if self.x>0 and self.y>0:
+            self.x_eq = nn.ModuleList(
+                [DenseBlock(out_feature * (_ + 1) + in_feature, out_feature, hidden_size, 0, 0, p,1) for _ in
+                 range(self.x - 1)])
+            self.y_eq = nn.ModuleList(
+                [DenseBlock(out_feature * (_ + 1) + in_feature, out_feature, hidden_size, 0, 0, p,1) for _ in
+                 range(self.y - 1)])
+            for i in range(self.x):
+                for j in range(self.y):
+                    if not (i == self.x - 1 and j == self.y - 1):
+                        self.point_cul_layer[str(i) + "_" + str(j)] = point_cul_Layer(
+                            in_feature,
+                            out_feature,
+                            hidden_size,
+                            in_size,
+                            out_size,
+                            (i + 2) * (j + 2) - 1,
+                            i + 1,
+                            j + 1,
+                            dropout=p,
+                            mult_k=mult_k)
+                    else:
+                        self.point_cul_layer[str(i) + "_" + str(j)] = point_cul_Layer(
+                            in_feature,
+                            out_feature,
+                            hidden_size,
+                            in_size,
+                            out_size,
+                            (i + 2) * (j + 2) - 1,
+                            i + 1,
+                            j + 1,
+                            dropout=p,
+                            mult_k=mult_k)
+            self.point_layer_module = nn.ModuleDict(self.point_cul_layer)
+            self.np_last = (self.x + 1) * (self.y + 1) - 1
+        else:
+            self.np_last = 1
     def forward(self, x, y, z):
-
+        if self.x==0 and self.y==0:
+            return z
         tensor_prev = [[z for i in range(self.x + 1)] for j in range(self.y + 1)]
         tensor_prev[0][1] = x
         tensor_prev[1][0] = y

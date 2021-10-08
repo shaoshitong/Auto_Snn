@@ -44,27 +44,53 @@ class BasicUnit(nn.Module):
     def forward(self, x):
         return x + self.block(x)
 class DenseLayer(nn.Sequential):
-    def __init__(self, num_input_features, growth_rate, bn_size, drop_rate):
+    def __init__(self, num_input_features, growth_rate, bn_size, drop_rate , class_fusion):
         super(DenseLayer, self).__init__()
-        self.add_module('norm1', nn.BatchNorm2d(num_input_features)),
-        self.add_module('relu1', nn.ReLU(inplace=True)),
-        self.add_module('conv1', nn.Conv2d(num_input_features,bn_size*growth_rate, kernel_size=(1, 1), stride=(1, 1), bias=False)),
-        self.add_module('norm2', nn.BatchNorm2d(bn_size*growth_rate)),
-        self.add_module('relu2', nn.ReLU(inplace=True)),
-        self.add_module('conv2', nn.Conv2d(bn_size*growth_rate, growth_rate,
-                                           kernel_size=(3, 3), stride=(1, 1), padding=1, bias=False)),
+        print(class_fusion)
+        if class_fusion==0:
+            self.add_module('norm1', nn.BatchNorm2d(num_input_features)),
+            self.add_module('relu1', nn.ReLU(inplace=True)),
+            self.add_module('conv1',
+                            nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=(1, 1), stride=(1, 1),
+                                      padding=(0, 0), bias=False)),
+            self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate)),
+            self.add_module('relu2', nn.ReLU(inplace=True)),
+            self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
+                                               kernel_size=(2, 5), stride=(1, 1),dilation=(2,1), padding=(1, 2), bias=False))
+        elif class_fusion==1:
+            self.add_module('norm1', nn.BatchNorm2d(num_input_features)),
+            self.add_module('relu1', nn.ReLU(inplace=True)),
+            self.add_module('conv1',
+                            nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=(1, 1), stride=(1, 1),
+                                      padding=(0, 0), bias=False)),
+            self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate)),
+            self.add_module('relu2', nn.ReLU(inplace=True)),
+            self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
+                                               kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False))
+        else:
+            self.add_module('norm1', nn.BatchNorm2d(num_input_features)),
+            self.add_module('relu1', nn.ReLU(inplace=True)),
+            self.add_module('conv1',
+                            nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=(1, 1), stride=(1, 1),
+                                      padding=(0, 0), bias=False)),
+            self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate)),
+            self.add_module('relu2', nn.ReLU(inplace=True)),
+            self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
+                                               kernel_size=(5, 2), stride=(1, 1), dilation=(1, 2), padding=(2, 1),bias=False))
         self.drop_rate = drop_rate
+
 
     def forward(self, x):
         new_features = super(DenseLayer, self).forward(x)
         if self.drop_rate > 0:
-            new_features = F.dropout(new_features, p=self.drop_rate, training=self.training)
+            if x.requires_grad:
+                new_features = F.dropout(new_features, p=self.drop_rate, training=self.training)
         return new_features
 
 class DenseBlock(nn.Module):
-    def __init__(self,cat_feature,eq_feature,hidden_size,cat_x,cat_y,dropout):
+    def __init__(self,cat_feature,eq_feature,hidden_size,cat_x,cat_y,dropout ,class_fusion):
         super(DenseBlock, self).__init__()
-        self.denselayer=DenseLayer(cat_feature,eq_feature,hidden_size,dropout)
+        self.denselayer=DenseLayer(cat_feature,eq_feature,hidden_size,dropout ,class_fusion)
         self.eq_feature=eq_feature
         self.cat_x=cat_x
         self.cat_y=cat_y
