@@ -256,7 +256,7 @@ class Trinomial_operation(object):
 
 
 class point_cul_Layer(nn.Module):
-    def __init__(self, in_feature, out_feature, hidden_size, in_size, out_size, path_len, cat_x, cat_y, STuning=True,
+    def __init__(self, in_feature, out_feature, hidden_size, in_size, out_size, path_len, cat_x, cat_y,dil_rate, STuning=True,
                  grad_lr=0.1, dropout=0.3,
                  use_gauss=True, mult_k=2):
         """
@@ -264,28 +264,31 @@ class point_cul_Layer(nn.Module):
         该层通过门机制后进行卷积与归一化
         """
         super(point_cul_Layer, self).__init__()
-        self.cat_feature = (path_len - 1) * (out_feature) + in_feature
+        self.cat_feature = (path_len - 1) * [out_feature] + [in_feature]
         if cat_x==cat_y:
             fusion=1
         elif cat_x>cat_y:
             fusion=0
         else:
             fusion=2
-        self.DoorMach = DenseBlock(self.cat_feature, out_feature, hidden_size, cat_x, cat_y,
+        import copy
+        self.DoorMach = DenseBlock(copy.deepcopy(self.cat_feature), out_feature, hidden_size, cat_x, cat_y,
                                    dropout,fusion)
         self.STuning = STuning
         self.grad_lr = grad_lr
         self.sigma = 1
         self.norm = None
+        self.dil_rate=dil_rate
 
     def forward(self, x):
         tensor_prev, (i, j) = x
-        x = self.DoorMach(cat_result_get(tensor_prev, i, j))
+        choose_list=cat_result_get(i, j,self.dil_rate)
+        x = self.DoorMach(tensor_prev,choose_list,i,j)
         return x
 
 
 class two_dim_layer(nn.Module):
-    def __init__(self, in_feature, out_feature, hidden_size, in_size, out_size, x, y, mult_k=2, p=0.2):
+    def __init__(self, in_feature, out_feature, hidden_size, in_size, out_size, x, y,dil_rate, mult_k=2, p=0.2):
         super(two_dim_layer, self).__init__()
         self.in_feature = in_feature
         self.out_feature = out_feature
@@ -302,12 +305,14 @@ class two_dim_layer(nn.Module):
         """
         self.point_cul_layer = {}
         self.test = False
+        self.dil_rate=dil_rate
         if self.x>0 and self.y>0:
+
             self.x_eq = nn.ModuleList(
-                [DenseBlock(out_feature * (_ + 1) + in_feature, out_feature, hidden_size, 0, 0, p,1) for _ in
+                [DenseBlock([in_feature]+[out_feature] * (_ + 1) , out_feature, hidden_size, 0, 0, p,1) for _ in
                  range(self.x - 1)])
             self.y_eq = nn.ModuleList(
-                [DenseBlock(out_feature * (_ + 1) + in_feature, out_feature, hidden_size, 0, 0, p,1) for _ in
+                [DenseBlock([in_feature]+[out_feature] * (_ + 1) , out_feature, hidden_size, 0, 0, p,1) for _ in
                  range(self.y - 1)])
             for i in range(self.x):
                 for j in range(self.y):
@@ -321,6 +326,7 @@ class two_dim_layer(nn.Module):
                             (i + 2) * (j + 2) - 1,
                             i + 1,
                             j + 1,
+                            dil_rate,
                             dropout=p,
                             mult_k=mult_k)
                     else:
@@ -333,6 +339,7 @@ class two_dim_layer(nn.Module):
                             (i + 2) * (j + 2) - 1,
                             i + 1,
                             j + 1,
+                            dil_rate,
                             dropout=p,
                             mult_k=mult_k)
             self.point_layer_module = nn.ModuleDict(self.point_cul_layer)
@@ -345,11 +352,12 @@ class two_dim_layer(nn.Module):
         tensor_prev = [[z for i in range(self.x + 1)] for j in range(self.y + 1)]
         tensor_prev[0][1] = x
         tensor_prev[1][0] = y
-
         for i in range(self.y - 1):
-            tensor_prev[0][i + 2] = self.x_eq[i](cat_result_get(tensor_prev, 0, i + 2))
+            choose_list = cat_result_get(0,i+2, self.dil_rate)
+            tensor_prev[0][i + 2] = self.x_eq[i](tensor_prev,choose_list,0,i+2)
         for i in range(self.x - 1):
-            tensor_prev[i + 2][0] = self.y_eq[i](cat_result_get(tensor_prev, i + 2, 0))
+            choose_list = cat_result_get(i+2,0, self.dil_rate)
+            tensor_prev[i + 2][0] = self.y_eq[i](tensor_prev,choose_list,i+2,0)
         for i in range(1, self.x + 1):
             for j in range(1, self.y + 1):
                 tensor_prev[i][j] = self.point_layer_module[str(i - 1) + '_' + str(j - 1)]((
@@ -465,7 +473,7 @@ class three_dim_Layer(nn.Module):
             m = self.point_layer_module[str(i)](x, y, z)
         return m
 
-    def initiate_layer(self, data, feature_list, size_list, hidden_size_list, path_nums_list, nums_layer, decay_rate=2,
+    def initiate_layer(self, data, feature_list, size_list, hidden_size_list, path_nums_list, nums_layer,dil_rate,decay_rate,
                        mult_k=2):
         """
         three-dim层初始化节点
@@ -486,7 +494,7 @@ class three_dim_Layer(nn.Module):
             else:
                 self.turn_layer[str(i)] = turn_layer(h, f2, h1, n1, decay_rate, int(s1 // s2), self.dropout)
             m = self.turn_layer[str(i)].origin_out_feature
-            self.point_layer[str(i)] = two_dim_layer(m, f2, h1, s2, s2, p1, p1, mult_k, self.dropout)
+            self.point_layer[str(i)] = two_dim_layer(m, f2, h1, s2, s2, p1, p1, dil_rate,mult_k, self.dropout)
             h = self.point_layer[str(i)].np_last * f2 + m
         self.turn_layer_module = nn.ModuleDict(self.turn_layer)
         self.point_layer_module = nn.ModuleDict(self.point_layer)
@@ -544,7 +552,7 @@ class merge_layer(nn.Module):
         return x
 
     def initiate_layer(self, data, num_classes, feature_list, size_list, hidden_size_list, path_nums_list,
-                       nums_layer_list, mult_k=2,drop_rate=2):
+                       nums_layer_list, dil_rate,drop_rate,mult_k=2):
         """
         配置相应的层
         """
@@ -552,7 +560,7 @@ class merge_layer(nn.Module):
         input_shape = (b, c, h, w)
         self.inf = nn.Conv2d(c, feature_list[0], (3, 3), (1,1), (1, 1), bias=False)
         h = self.InputGenerateNet.initiate_layer(data, feature_list, size_list, hidden_size_list, path_nums_list,
-                                                 nums_layer_list, drop_rate,mult_k)
+                                                 nums_layer_list, dil_rate,drop_rate,mult_k)
         self.out_classifier = block_out(h, num_classes, size_list[-1])
         self._initialize()
     def _initialize(self):

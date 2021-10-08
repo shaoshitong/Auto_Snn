@@ -38,6 +38,10 @@ nums_layer_list:
   - 8
 mult_k:
   1
+dil_rate:
+  0.5
+drop_rate:
+  2
 use_standard:
   True
 densenetparameter:
