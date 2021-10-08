@@ -1,13 +1,12 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from Snn_Auto_master.lib.SNnorm import SNConv2d
+import torchvision.models
+from lib.SNnorm import SNConv2d
 import torch.nn.utils as utils
 import numpy as np
 import os, sys
 import copy
-
-
 class DenseLayer(nn.Sequential):
     def __init__(self, num_input_features, growth_rate, bn_size, drop_rate):
         super(DenseLayer, self).__init__()
@@ -26,8 +25,7 @@ class DenseLayer(nn.Sequential):
         if self.drop_rate > 0:
             new_features = F.dropout(new_features, p=self.drop_rate, training=self.training)
         return torch.cat([x, new_features], 1)
-
-
+torchvision.models.DenseNet
 class DenseBlock(nn.Sequential):
     def __init__(self, num_input_features_list, bn_size, drop_rate, num_layers=None, ):
         super(DenseBlock, self).__init__()

@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import os
 import random
 import numpy as np
+import torchvision.models
 from torch.nn.modules.utils import _single, _pair, _triple
 from lib.data_loaders import revertNoramlImgae
 from lib.plt_analyze import vis_img
@@ -263,7 +264,7 @@ class point_cul_Layer(nn.Module):
         该层通过门机制后进行卷积与归一化
         """
         super(point_cul_Layer, self).__init__()
-        self.cat_feature=(path_len - 1) * (out_feature) + in_feature
+        self.cat_feature = (path_len - 1) * (out_feature) + in_feature
         self.DoorMach = DenseBlock(self.cat_feature, out_feature, hidden_size, cat_x, cat_y,
                                    dropout)
         self.STuning = STuning
@@ -355,40 +356,56 @@ class two_dim_layer(nn.Module):
     def settest(self, test=True):
         self.test = test
 
-
 class turn_layer(nn.Module):
-    def __init__(self, in_feature, out_feature, bn_size, num_layer, stride=1, dropout=0.1):
+    def __init__(self, in_feature, out_feature, bn_size, num_layer, decay_rate=2, stride=1, dropout=0.1):
         super(turn_layer, self).__init__()
         if num_layer != 0:
             self.dense_deep_block = DenseDeepBlock([in_feature] + [out_feature] * num_layer, bn_size, dropout,
                                                    num_layer)
-        in_feature = in_feature + out_feature * num_layer
-        self.origin_out_feature = origin_out_feature=int(in_feature // 2)
-        self.num_layer = num_layer
-        self.downsample = nn.Sequential(*[])
-        self.downsample.add_module('norm', nn.BatchNorm2d(in_feature))
-        self.downsample.add_module("dropout", nn.Dropout(0.1))
-        self.downsample.add_module("act", nn.ReLU(inplace=True))
-        self.downsample.add_module("conv",
-                                   nn.Conv2d(in_feature, origin_out_feature, (1, 1), (1, 1), (0, 0), bias=False))
-        self.xsample = nn.Sequential(*[])
-        self.xsample.add_module('pool', nn.AvgPool2d(kernel_size=(stride, stride), stride=(stride, stride)))
-        self.turn = nn.ModuleList([
-            nn.Sequential(
-                nn.Conv2d(origin_out_feature, out_feature, (1, 1), (1, 1), (0, 0), bias=False),
-                nn.AvgPool2d(kernel_size=(stride, 5), stride=(stride, stride), padding=(0, 2)),
-            ),
-            nn.Sequential(
-                nn.Conv2d(origin_out_feature, out_feature, (1, 1), (1, 1), (0, 0), bias=False),
-                nn.AvgPool2d(kernel_size=(5, stride), stride=(stride, stride), padding=(2, 0)),
-            ), ])
+            in_feature = in_feature + out_feature * num_layer
+        if num_layer!=0:
+            self.origin_out_feature = origin_out_feature = int(in_feature // decay_rate)
+            self.num_layer = num_layer
+            self.downsample = nn.Sequential(*[])
+            self.downsample.add_module('norm', nn.BatchNorm2d(in_feature))
+            self.downsample.add_module("act", nn.ReLU(inplace=True))
+            self.downsample.add_module("dropout", nn.Dropout(dropout))
+            self.downsample.add_module("conv",
+                                       nn.Conv2d(in_feature, origin_out_feature, (1, 1), (1, 1), (0, 0), bias=False))
+            self.xsample = nn.Sequential(*[])
+            self.xsample.add_module('pool', nn.AvgPool2d(kernel_size=(stride, stride), stride=(stride, stride)))
+        else:
+            self.origin_out_feature = origin_out_feature = int(in_feature)
+            self.num_layer = num_layer
+            self.downsample = nn.Sequential(*[])
+            self.downsample.add_module('norm', nn.BatchNorm2d(in_feature))
+            self.downsample.add_module("relu", nn.ReLU(inplace=True))
+            self.downsample.add_module("pool", nn.MaxPool2d((stride,stride),(stride,stride)))
+        if num_layer!=0:
+            self.turn = nn.ModuleList([
+                nn.Sequential(
+                    nn.Conv2d(origin_out_feature, out_feature, (1, 3), (1, 1), (0, 1), bias=False),
+                    nn.MaxPool2d(kernel_size=(stride, 5), stride=(stride, stride), padding=(0, 2)),
+                ),
+                nn.Sequential(
+                    nn.Conv2d(origin_out_feature, out_feature, (3, 1), (1, 1), (1, 0), bias=False),
+                    nn.MaxPool2d(kernel_size=(5, stride), stride=(stride, stride), padding=(2, 0)),
+                ), ])
+        else:
+            self.turn = nn.ModuleList([
+                nn.Sequential(
+                    nn.Conv2d(origin_out_feature, out_feature, (5, 3), (1, 1), (2, 1), bias=False),
+                ),
+                nn.Sequential(
+                    nn.Conv2d(origin_out_feature, out_feature, (3, 5), (1, 1), (1, 2), bias=False),
+                ), ])
         self.feature_different = DimixLoss_neg()
         self._initialize()
 
     def _initialize(self):
         for layer in self.modules():
             if isinstance(layer, nn.Conv2d):
-                nn.init.kaiming_uniform_(layer.weight.data, mode="fan_in", nonlinearity="relu")
+                nn.init.kaiming_normal_(layer.weight.data, mode="fan_in", nonlinearity="relu")
                 if layer.bias is not None:
                     nn.init.zeros_(layer.bias.data)
             elif isinstance(layer, nn.BatchNorm2d):
@@ -402,9 +419,11 @@ class turn_layer(nn.Module):
     def forward(self, x):
         if self.num_layer != 0:
             x = self.dense_deep_block(x)
-        # m=F.avg_pool2d(x,x.shape[-1])
-        x = self.downsample(x)
-        a, b, x = self.turn[0](x), self.turn[1](x), self.xsample(x)
+            x = self.downsample(x)
+            a, b, x = self.turn[0](x), self.turn[1](x), self.xsample(x)
+        else:
+            x=self.downsample(x)
+            a,b=self.turn[0](x),self.turn[1](x)
         l = self.feature_different(a, b)
         # print(a.shape,b.shape,x.shape)
         return (a, b, x), l
@@ -435,10 +454,10 @@ class three_dim_Layer(nn.Module):
             (x, y, z), l1 = self.turn_layer_module[str(i)](m)
             self.losses = self.losses + l1
             m = self.point_layer_module[str(i)](x, y, z)
-            # print(m.shape)
         return m
 
-    def initiate_layer(self, data, feature_list, size_list, hidden_size_list, path_nums_list, nums_layer, mult_k=2):
+    def initiate_layer(self, data, feature_list, size_list, hidden_size_list, path_nums_list, nums_layer, decay_rate=2,
+                       mult_k=2):
         """
         three-dim层初始化节点
         """
@@ -454,12 +473,12 @@ class three_dim_Layer(nn.Module):
             p1 = path_nums_list[i]
             n1 = nums_layer[i]
             if i == 0:
-                self.turn_layer[str(i)] = turn_layer(f1, f2, h1, n1, int(s1 // s2), self.dropout)
+                self.turn_layer[str(i)] = turn_layer(f1, f2, h1, n1, decay_rate, int(s1 // s2), self.dropout)
             else:
-                self.turn_layer[str(i)] = turn_layer(h, f2, h1, n1, int(s1 // s2), self.dropout)
-            m=self.turn_layer[str(i)].origin_out_feature
+                self.turn_layer[str(i)] = turn_layer(h, f2, h1, n1, decay_rate, int(s1 // s2), self.dropout)
+            m = self.turn_layer[str(i)].origin_out_feature
             self.point_layer[str(i)] = two_dim_layer(m, f2, h1, s2, s2, p1, p1, mult_k, self.dropout)
-            h = self.point_layer[str(i)].np_last * f2+m
+            h = self.point_layer[str(i)].np_last * f2 + m
         self.turn_layer_module = nn.ModuleDict(self.turn_layer)
         self.point_layer_module = nn.ModuleDict(self.point_layer)
         self.len = len(hidden_size_list)
@@ -516,16 +535,27 @@ class merge_layer(nn.Module):
         return x
 
     def initiate_layer(self, data, num_classes, feature_list, size_list, hidden_size_list, path_nums_list,
-                       nums_layer_list, mult_k=2):
+                       nums_layer_list, mult_k=2,drop_rate=2):
         """
         配置相应的层
         """
         b, c, h, w = data.shape
         input_shape = (b, c, h, w)
-        self.inf = nn.Conv2d(c, feature_list[0], (3, 3), (1, 1), (1, 1), bias=False)
+        self.inf = nn.Conv2d(c, feature_list[0], (3, 3), (1,1), (1, 1), bias=False)
         h = self.InputGenerateNet.initiate_layer(data, feature_list, size_list, hidden_size_list, path_nums_list,
-                                                 nums_layer_list, mult_k)
+                                                 nums_layer_list, drop_rate,mult_k)
         self.out_classifier = block_out(h, num_classes, size_list[-1])
+        self._initialize()
+    def _initialize(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                m.weight.data.normal_(0, math.sqrt(2. / n))
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+            elif isinstance(m, nn.Linear):
+                m.bias.data.zero_()
 
     @staticmethod
     def _list_build():
