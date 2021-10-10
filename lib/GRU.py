@@ -16,6 +16,12 @@ def cat_result_get(tensor_prev,i,j):
             if (t_i != i or t_j != j) :
                 m.append(tensor_prev[t_i][t_j])
     return torch.cat(m,dim=1)
+def return_tensor_add(tensor_prev,i,j):
+    p=(i+1)*(j+1)-1
+    for a in range(i+1):
+        for b in range(j+1):
+            if tensor_prev[i][j].shape[1]==tensor_prev[a][b].shape[1] and (a!=i or b!=j):
+                tensor_prev[i][j]+=(tensor_prev[a][b]/p)
 class semhash(torch.autograd.Function):
     @staticmethod
     def forward(ctx, v1, v2, training=True):

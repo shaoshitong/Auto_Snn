@@ -17,7 +17,7 @@ from lib.Wideresnet import Downsampleunit
 from lib.featurefocusing_v2 import Feature_forward
 from lib.dimixloss import DimixLoss, DimixLoss_neg
 from lib.PointConv import PointConv
-from lib.GRU import multi_GRU, multi_block_eq, Cat, DenseBlock, cat_result_get
+from lib.GRU import multi_GRU, multi_block_eq, Cat, DenseBlock, cat_result_get,return_tensor_add
 from lib.DenseNet import DenseBlock as DenseDeepBlock
 import math
 import pandas as pd
@@ -56,7 +56,6 @@ filename = "./train_c10.yaml"
 yaml = yaml_config_get(filename)
 # yaml = yaml_config_get("./train.yaml")
 dataoption = yaml['data']
-
 
 def size_change(f, s):
     def change(xx):
@@ -348,17 +347,21 @@ class two_dim_layer(nn.Module):
 
         for i in range(self.y - 1):
             tensor_prev[0][i + 2] = self.x_eq[i](cat_result_get(tensor_prev, 0, i + 2))
+            return_tensor_add(tensor_prev,0,i+2)
         for i in range(self.x - 1):
             tensor_prev[i + 2][0] = self.y_eq[i](cat_result_get(tensor_prev, i + 2, 0))
+            return_tensor_add(tensor_prev,i+2,0)
         for i in range(1, self.x + 1):
             for j in range(1, self.y + 1):
                 tensor_prev[i][j] = self.point_layer_module[str(i - 1) + '_' + str(j - 1)]((
                     tensor_prev, (i, j)))
+                return_tensor_add(tensor_prev, i,j)
         result = []
         for i in range(self.x + 1):
             for j in range(self.y + 1):
                 result.append(tensor_prev[i][j])
         result = torch.cat(result, dim=1)
+
         del tensor_prev
         return result
 
