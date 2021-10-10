@@ -351,11 +351,18 @@ class two_dim_layer(nn.Module):
         for i in range(self.x - 1):
             tensor_prev[i + 2][0] = self.y_eq[i](cat_result_get(tensor_prev, i + 2, 0))
             return_tensor_add(tensor_prev,i+2,0)
-        for i in range(1, self.x + 1):
+        if random.random()>0.5:
+            for i in range(1, self.x + 1):
+                for j in range(1, self.y + 1):
+                    tensor_prev[i][j] = self.point_layer_module[str(i - 1) + '_' + str(j - 1)]((
+                        tensor_prev, (i, j)))
+                    return_tensor_add(tensor_prev, i,j)
+        else:
             for j in range(1, self.y + 1):
-                tensor_prev[i][j] = self.point_layer_module[str(i - 1) + '_' + str(j - 1)]((
-                    tensor_prev, (i, j)))
-                return_tensor_add(tensor_prev, i,j)
+                for i in range(1, self.x + 1):
+                    tensor_prev[i][j] = self.point_layer_module[str(i - 1) + '_' + str(j - 1)]((
+                        tensor_prev, (i, j)))
+                    return_tensor_add(tensor_prev, i,j)
         result = []
         for i in range(self.x + 1):
             for j in range(self.y + 1):
