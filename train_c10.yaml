@@ -27,15 +27,15 @@ hidden_size_list:
   - 4
   - 4
 path_nums_list:
+  - 1
   - 2
   - 2
-  - 3
-  - 3
+  - 2
 nums_layer_list:
   - 0
-  - 3
-  - 16
-  - 16
+  - 2
+  - 2
+  - 2
 mult_k:
   1
 use_standard:

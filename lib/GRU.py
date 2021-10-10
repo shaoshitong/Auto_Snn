@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from collections import OrderedDict
+from einops import rearrange
 import numpy as np
 import os, sys
 from torch.nn.parameter import Parameter
@@ -94,14 +95,23 @@ class DenseLayer(nn.Sequential):
         return new_features
 
 class DenseBlock(nn.Module):
-    def __init__(self,cat_feature,eq_feature,hidden_size,cat_x,cat_y,dropout ,class_fusion):
+    def __init__(self,cat_feature,eq_feature,hidden_size,cat_x,cat_y,dropout ,class_fusion,size):
         super(DenseBlock, self).__init__()
         self.denselayer=DenseLayer(cat_feature,eq_feature,hidden_size,dropout ,class_fusion)
         self.eq_feature=eq_feature
         self.cat_x=cat_x
         self.cat_y=cat_y
         self._initialize()
-        # self.transformer=nn.TransformerEncoderLayer(eq_feature,1,dim_feedforward=int(eq_feature*1.5),batch_first=True,layer_norm_eps=1e-6)
+        self.transformer=nn.TransformerEncoderLayer(size**2,size,dim_feedforward=int(size*2),batch_first=True,layer_norm_eps=1e-6)
+        if size>32:
+            kernel_size=8
+        elif 32>=size>8:
+            kernel_size=4
+        else:
+            kernel_size=2
+        self.unfold = lambda image: F.unfold(image,(kernel_size,kernel_size),stride=(kernel_size,kernel_size), )
+        self.fold = lambda image:F.fold(image,(size,size),(kernel_size,kernel_size),stride=(kernel_size,kernel_size))
+        self.kernel_size=kernel_size
     def _initialize(self):
         for layer in self.modules():
             if isinstance(layer, nn.Conv2d):
@@ -116,8 +126,11 @@ class DenseBlock(nn.Module):
                 if layer.bias is not None:
                     nn.init.zeros_(layer.bias.data)
     def forward(self,x):
-        x=self.denselayer(x) # .permute(0,2,1)
-        # x=self.transformer(x).permute(0,2,1)
+        x=self.denselayer(x)
+        x=self.unfold(x) # b,c*mh*mw,l
+        x=rearrange(x,"b ( c mh mw ) l -> b  c ( mh mw l )",mh=self.kernel_size,ml=self.kernel_size)
+        x=rearrange(self.transformer(x),"b  c ( mh mw l ) -> b ( c mh mw ) l",mh=self.kernel_size,ml=self.kernel_size)
+        x=self.fold(x)
         return x
 
 class block_eq(nn.Module):

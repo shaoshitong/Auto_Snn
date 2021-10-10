@@ -271,7 +271,7 @@ class point_cul_Layer(nn.Module):
         else:
             fusion=2
         self.DoorMach = DenseBlock(self.cat_feature, out_feature, hidden_size, cat_x, cat_y,
-                                   dropout,fusion)
+                                   dropout,fusion,in_size)
         self.STuning = STuning
         self.grad_lr = grad_lr
         self.sigma = 1
@@ -303,10 +303,10 @@ class two_dim_layer(nn.Module):
         self.test = False
         if self.x>0 and self.y>0:
             self.x_eq = nn.ModuleList(
-                [DenseBlock(out_feature * (_ + 1) + in_feature, out_feature, hidden_size, 0, 0, p,1) for _ in
+                [DenseBlock(out_feature * (_ + 1) + in_feature, out_feature, hidden_size, 0, 0, p,1,in_size) for _ in
                  range(self.x - 1)])
             self.y_eq = nn.ModuleList(
-                [DenseBlock(out_feature * (_ + 1) + in_feature, out_feature, hidden_size, 0, 0, p,1) for _ in
+                [DenseBlock(out_feature * (_ + 1) + in_feature, out_feature, hidden_size, 0, 0, p,1,in_size) for _ in
                  range(self.y - 1)])
             for i in range(self.x):
                 for j in range(self.y):
