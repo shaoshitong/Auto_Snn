@@ -33,13 +33,13 @@ path_nums_list:
   - 3
 nums_layer_list:
   - 0
-  - 4
   - 8
-  - 8
+  - 12
+  - 12
 mult_k:
   1
 dil_rate:
-  1
+  0.5
 drop_rate:
   2
 use_standard:

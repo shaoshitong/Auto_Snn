@@ -13,9 +13,11 @@ def cat_result_get(i,j,dil_rate):
     all = (i+1) * (j+1)-1
     choose = int(all * dil_rate)
     row, col = np.meshgrid( np.arange(0, i + 1, 1), np.arange(0, j + 1, 1))
-    choose_list = [[0,0]]+sorted(list(filter(lambda x: (x[0] != 0 or x[1] != 0) and (x[0] != i or x[1] != j),
+    choose_list = sorted(list(filter(lambda x: (x[0] != i or x[1] != j),
                               np.concatenate([row.flatten()[..., None], col.flatten()[..., None]], axis=1)[
                                   np.random.choice(all, choose, replace=False)].tolist())),key=lambda x:x[0]*(j+1)+x[1],reverse=False)
+    if len(choose_list)==0:
+        choose_list=[[0,0]]
     return choose_list
 class semhash(torch.autograd.Function):
     @staticmethod
@@ -125,15 +127,42 @@ class DenseLayer_last(nn.Module):
     def __init__(self,cat_feature,growth_rate,bn_size,cat_x,cat_y,dropout,class_fusion):
         super(DenseLayer_last, self).__init__()
         self.denselayer=nn.ModuleList([])
+        self.cat_feature=cat_feature
         for feature in cat_feature:
             self.denselayer.append(DenseLayer_first(feature,bn_size,growth_rate))
         self.transition=DenseLayer_second(bn_size,growth_rate,dropout,class_fusion)
+        self._initialize_first(self.denselayer)
+        self._initialize_second(self.transition)
+        
+    def _initialize_first(self,m):
+        for layer in m.modules():
+            if isinstance(layer, nn.Conv2d):
+                nn.init.kaiming_normal_(layer.weight.data, mode="fan_in", nonlinearity="relu")
+                layer.weight.data/=len(self.cat_feature)
+                if layer.bias is not None:
+                    nn.init.zeros_(layer.bias.data)
+            elif isinstance(layer, nn.BatchNorm2d):
+                nn.init.ones_(layer.weight.data)
+                nn.init.zeros_(layer.bias.data)
+            elif isinstance(layer, nn.Linear):
+                nn.init.zeros_(layer.weight.data)
+                if layer.bias is not None:
+                    nn.init.zeros_(layer.bias.data)
+    def _initialize_second(self,m):
+        for layer in m.modules():
+            if isinstance(layer, nn.Conv2d):
+                nn.init.kaiming_normal_(layer.weight.data, mode="fan_in", nonlinearity="relu")
+                if layer.bias is not None:
+                    nn.init.zeros_(layer.bias.data)
+            elif isinstance(layer, nn.BatchNorm2d):
+                nn.init.ones_(layer.weight.data)
+                nn.init.zeros_(layer.bias.data)
+            elif isinstance(layer, nn.Linear):
+                nn.init.zeros_(layer.weight.data)
+                if layer.bias is not None:
+                    nn.init.zeros_(layer.bias.data)
     def forward(self,x,choose_indices,i,j):
-        r=0.
-        print(i,j,choose_indices)
-        for indices in choose_indices:
-            z=self.denselayer[indices[0]*(j+1)+indices[1]](x[indices[0]][indices[1]])
-            r+=z
+        r=torch.sum(torch.stack([self.denselayer[indices[0]*(j+1)+indices[1]](x[indices[0]][indices[1]]) for indices in choose_indices],dim=0),dim=0).squeeze(0)
         r=self.transition(r)
         return r
 
@@ -146,21 +175,7 @@ class DenseBlock(nn.Module):
         self.eq_feature=eq_feature
         self.cat_x=cat_x
         self.cat_y=cat_y
-        self._initialize()
         # self.transformer=nn.TransformerEncoderLayer(eq_feature,1,dim_feedforward=int(eq_feature*1.5),batch_first=True,layer_norm_eps=1e-6)
-    def _initialize(self):
-        for layer in self.modules():
-            if isinstance(layer, nn.Conv2d):
-                nn.init.kaiming_normal_(layer.weight.data, mode="fan_in", nonlinearity="relu")
-                if layer.bias is not None:
-                    nn.init.zeros_(layer.bias.data)
-            elif isinstance(layer, nn.BatchNorm2d):
-                nn.init.ones_(layer.weight.data)
-                nn.init.zeros_(layer.bias.data)
-            elif isinstance(layer, nn.Linear):
-                nn.init.zeros_(layer.weight.data)
-                if layer.bias is not None:
-                    nn.init.zeros_(layer.bias.data)
     def forward(self,x,choose_indices,i,j):
         x=self.denselayer(x,choose_indices,i,j)
         return x
