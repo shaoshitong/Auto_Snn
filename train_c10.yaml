@@ -39,7 +39,7 @@ nums_layer_list:
 mult_k:
   1
 dil_rate:
-  0.5
+  1
 drop_rate:
   2
 use_standard:

@@ -264,7 +264,7 @@ class point_cul_Layer(nn.Module):
         该层通过门机制后进行卷积与归一化
         """
         super(point_cul_Layer, self).__init__()
-        self.cat_feature = (path_len - 1) * [out_feature] + [in_feature]
+        self.cat_feature =  [in_feature]+(path_len - 1) * [out_feature]
         if cat_x==cat_y:
             fusion=1
         elif cat_x>cat_y:

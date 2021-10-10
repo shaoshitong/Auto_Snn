@@ -10,7 +10,7 @@ class attnetion(nn.Module):
         super(attnetion, self).__init__()
 
 def cat_result_get(i,j,dil_rate):
-    all = i * j
+    all = (i+1) * (j+1)-1
     choose = int(all * dil_rate)
     row, col = np.meshgrid( np.arange(0, i + 1, 1), np.arange(0, j + 1, 1))
     choose_list = [[0,0]]+sorted(list(filter(lambda x: (x[0] != 0 or x[1] != 0) and (x[0] != i or x[1] != j),
@@ -47,7 +47,6 @@ class BasicUnit(nn.Module):
 class DenseLayer(nn.Sequential):
     def __init__(self, num_input_features, growth_rate, bn_size, drop_rate , class_fusion):
         super(DenseLayer, self).__init__()
-        print(class_fusion)
         if class_fusion==0:
             self.add_module('norm1', nn.BatchNorm2d(num_input_features)),
             self.add_module('relu1', nn.ReLU(inplace=True)),
@@ -100,7 +99,6 @@ class DenseLayer_first(nn.Sequential):
 class DenseLayer_second(nn.Sequential):
     def __init__(self,bn_size,growth_rate,drop_rate,class_fusion):
         super(DenseLayer_second, self).__init__()
-        print(class_fusion)
         if class_fusion==0:
             self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate)),
             self.add_module('relu2', nn.ReLU(inplace=True)),
@@ -132,8 +130,10 @@ class DenseLayer_last(nn.Module):
         self.transition=DenseLayer_second(bn_size,growth_rate,dropout,class_fusion)
     def forward(self,x,choose_indices,i,j):
         r=0.
+        print(i,j,choose_indices)
         for indices in choose_indices:
-            r=r+self.denselayer[indices[0]*(j+1)+indices[1]](x[indices[0]][indices[1]])
+            z=self.denselayer[indices[0]*(j+1)+indices[1]](x[indices[0]][indices[1]])
+            r+=z
         r=self.transition(r)
         return r
 
@@ -161,8 +161,8 @@ class DenseBlock(nn.Module):
                 nn.init.zeros_(layer.weight.data)
                 if layer.bias is not None:
                     nn.init.zeros_(layer.bias.data)
-    def forward(self,x,choose_indices):
-        x=self.denselayer(x,choose_indices)
+    def forward(self,x,choose_indices,i,j):
+        x=self.denselayer(x,choose_indices,i,j)
         return x
 
 class block_eq(nn.Module):
@@ -232,8 +232,9 @@ class multi_block_eq(nn.Module):
                 nn.init.ones_(layer.weight.data)
                 nn.init.zeros_(layer.bias.data)
 
-    def forward(self, x):
-        x = self.model(x)
+    def forward(self, x,choose_indices,i,j):
+
+        x = self.model(x,choose_indices,i,j)
         return x
 
 
