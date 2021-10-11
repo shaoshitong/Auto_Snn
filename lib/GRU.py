@@ -28,7 +28,7 @@ def cat_result_get(tensor_prev, i, j ,b):
         y = len(tensor_prev[0])
         for t_i in range(x):
             for t_j in range(y):
-                if t_i < i or t_j < j and abs(t_i - t_j)<b:
+                if (t_i < i or t_j < j) and abs(t_i - t_j)<b:
                     m.append(tensor_prev[t_i][t_j])
     return torch.cat(m, dim=1)
 def numeric_get(x,y,b):

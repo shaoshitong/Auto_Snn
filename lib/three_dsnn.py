@@ -295,7 +295,7 @@ class two_dim_layer(nn.Module):
         self.x = x
         self.y = y
         self.b=b
-        assert self.x>self.b
+        assert self.x>=self.b
         assert self.x>=1 and self.y>=1
         """
         +3 +7 +11 +15
@@ -336,14 +336,14 @@ class two_dim_layer(nn.Module):
                                 hidden_size,
                                 in_size,
                                 out_size,
-                                i*(2*self.x-i)-self.tensor_check[i][j],
+                                i*(2*self.x-i)-(self.tensor_check[self.x-1][j]+self.tensor_check[i][self.y-1]-self.tensor_check[i][j]),
                                 i ,
                                 j ,
                                 b,
                                 dropout=p,
                                 mult_k=mult_k)
             self.point_layer_module = nn.ModuleDict(self.point_cul_layer)
-            self.np_last = (self.x) * (self.y) - 1--self.tensor_check[self.x-1][self.y-1]
+            self.np_last = (self.x) * (self.y) - 1 - self.tensor_check[self.x-1][self.y-1]
         else:
             self.np_last = 1
         self.dimixloss=DimixLoss_neg()
@@ -372,7 +372,6 @@ class two_dim_layer(nn.Module):
                 if abs(i-j)<self.b:
                     result.append(tensor_prev[i][j])
         result = torch.cat(result, dim=1)
-
         del tensor_prev
         return result
 
