@@ -293,6 +293,7 @@ class two_dim_layer(nn.Module):
         self.out_pointnum = out_size
         self.x = x
         self.y = y
+        assert self.x>=1 and self.y>=1
         """
         +3 +7 +11 +15
         +2 +5 +8 +11
@@ -303,23 +304,23 @@ class two_dim_layer(nn.Module):
         self.test = False
         if self.x>0 and self.y>0:
             self.x_eq = nn.ModuleList(
-                [DenseBlock(out_feature * (_ + 1) + in_feature, out_feature, hidden_size, 0, 0, p,1,in_size) for _ in
+                [DenseBlock(out_feature * (_) + in_feature, out_feature, hidden_size, 0, 0, p,1,in_size) for _ in
                  range(self.x - 1)])
             self.y_eq = nn.ModuleList(
-                [DenseBlock(out_feature * (_ + 1) + in_feature, out_feature, hidden_size, 0, 0, p,1,in_size) for _ in
+                [DenseBlock(out_feature * (_) + in_feature, out_feature, hidden_size, 0, 0, p,1,in_size) for _ in
                  range(self.y - 1)])
-            for i in range(self.x):
-                for j in range(self.y):
-                    if not (i == self.x - 1 and j == self.y - 1):
+            for i in range(1,self.x):
+                for j in range(1,self.y):
+                    if not (i==j):
                         self.point_cul_layer[str(i) + "_" + str(j)] = point_cul_Layer(
                             in_feature,
                             out_feature,
                             hidden_size,
                             in_size,
                             out_size,
-                            (i + 2) * (j + 2) - 1,
-                            i + 1,
-                            j + 1,
+                            (i+1)*(j+1)-1,
+                            i ,
+                            j ,
                             dropout=p,
                             mult_k=mult_k)
                     else:
@@ -329,43 +330,38 @@ class two_dim_layer(nn.Module):
                             hidden_size,
                             in_size,
                             out_size,
-                            (i + 2) * (j + 2) - 1,
-                            i + 1,
-                            j + 1,
+                            i*(2*self.x-i),
+                            i ,
+                            j ,
                             dropout=p,
                             mult_k=mult_k)
             self.point_layer_module = nn.ModuleDict(self.point_cul_layer)
-            self.np_last = (self.x + 1) * (self.y + 1) - 1
+            self.np_last = (self.x) * (self.y) - 1
         else:
             self.np_last = 1
-    def forward(self, x, y, z):
+        self.dimixloss=DimixLoss_neg()
+    def forward(self, z):
         if self.x==0 and self.y==0:
             return z
-        tensor_prev = [[z for i in range(self.x + 1)] for j in range(self.y + 1)]
-        tensor_prev[0][1] = x
-        tensor_prev[1][0] = y
-
+        tensor_prev = [[z for i in range(self.x)] for j in range(self.y)]
         for i in range(self.y - 1):
-            tensor_prev[0][i + 2] = self.x_eq[i](cat_result_get(tensor_prev, 0, i + 2))
-            return_tensor_add(tensor_prev,0,i+2)
+            tensor_prev[0][i + 1] = self.x_eq[i](cat_result_get(tensor_prev, 0, i + 1))
+            return_tensor_add(tensor_prev,0,i+1)
         for i in range(self.x - 1):
-            tensor_prev[i + 2][0] = self.y_eq[i](cat_result_get(tensor_prev, i + 2, 0))
-            return_tensor_add(tensor_prev,i+2,0)
-        if random.random()>0.5:
-            for i in range(1, self.x + 1):
-                for j in range(1, self.y + 1):
-                    tensor_prev[i][j] = self.point_layer_module[str(i - 1) + '_' + str(j - 1)]((
-                        tensor_prev, (i, j)))
-                    return_tensor_add(tensor_prev, i,j)
-        else:
-            for j in range(1, self.y + 1):
-                for i in range(1, self.x + 1):
-                    tensor_prev[i][j] = self.point_layer_module[str(i - 1) + '_' + str(j - 1)]((
-                        tensor_prev, (i, j)))
-                    return_tensor_add(tensor_prev, i,j)
+            tensor_prev[i + 1][0] = self.y_eq[i](cat_result_get(tensor_prev, i + 1, 0))
+            return_tensor_add(tensor_prev,i+1,0)
+        self.losses = self.dimixloss(tensor_prev[self.x - 1][0], tensor_prev[0][self.y - 1])
+        for l in range(1,min(self.x,self.y)):
+            tensor_prev[l][l]= self.point_layer_module[str(l) + '_' + str(l)]((
+                        tensor_prev, (l,l)))
+            for i in range(l+1,self.y):
+                tensor_prev[l][i] =self.point_layer_module[str(l) + '_' + str(i)]((tensor_prev,(l,i)))
+            for i in range(l+1,self.x):
+                tensor_prev[i][l] =self.point_layer_module[str(i) + '_' + str(l)]((tensor_prev,(i,l)))
+            self.losses =self.losses+self.dimixloss(tensor_prev[self.x - 1][l], tensor_prev[l][self.y - 1])
         result = []
-        for i in range(self.x + 1):
-            for j in range(self.y + 1):
+        for i in range(self.x):
+            for j in range(self.y):
                 result.append(tensor_prev[i][j])
         result = torch.cat(result, dim=1)
 
@@ -387,10 +383,8 @@ class turn_layer(nn.Module):
             self.num_layer = num_layer
             self.downsample = nn.Sequential(*[])
             self.downsample.add_module('norm', nn.BatchNorm2d(in_feature))
-            self.downsample.add_module("act", nn.ReLU(inplace=True))
-            self.downsample.add_module("dropout", nn.Dropout(dropout))
-            self.downsample.add_module("conv",
-                                       nn.Conv2d(in_feature, origin_out_feature, (1, 1), (1, 1), (0, 0), bias=False))
+            self.downsample.add_module("relu", nn.ReLU(inplace=True))
+            self.downsample.add_module("conv",nn.Conv2d(in_feature, origin_out_feature, (1, 1), (1, 1), (0, 0), bias=False))
             self.xsample = nn.Sequential(*[])
             self.xsample.add_module('pool', nn.AvgPool2d(kernel_size=(stride, stride), stride=(stride, stride)))
         else:
@@ -400,24 +394,6 @@ class turn_layer(nn.Module):
             self.downsample.add_module('norm', nn.BatchNorm2d(in_feature))
             self.downsample.add_module("relu", nn.ReLU(inplace=True))
             self.downsample.add_module("pool", nn.MaxPool2d((stride,stride),(stride,stride)))
-        if num_layer!=0:
-            self.turn = nn.ModuleList([
-                nn.Sequential(
-                    nn.Conv2d(origin_out_feature, out_feature, (1, 3), (1, 1), (0, 1), bias=False),
-                    nn.MaxPool2d(kernel_size=(stride, 5), stride=(stride, stride), padding=(0, 2)),
-                ),
-                nn.Sequential(
-                    nn.Conv2d(origin_out_feature, out_feature, (3, 1), (1, 1), (1, 0), bias=False),
-                    nn.MaxPool2d(kernel_size=(5, stride), stride=(stride, stride), padding=(2, 0)),
-                ), ])
-        else:
-            self.turn = nn.ModuleList([
-                nn.Sequential(
-                    nn.Conv2d(origin_out_feature, out_feature, (5, 3), (1, 1), (2, 1), bias=False),
-                ),
-                nn.Sequential(
-                    nn.Conv2d(origin_out_feature, out_feature, (3, 5), (1, 1), (1, 2), bias=False),
-                ), ])
         self.feature_different = DimixLoss_neg()
         self._initialize()
 
@@ -439,13 +415,10 @@ class turn_layer(nn.Module):
         if self.num_layer != 0:
             x = self.dense_deep_block(x)
             x = self.downsample(x)
-            a, b, x = self.turn[0](x), self.turn[1](x), self.xsample(x)
+            x = self.xsample(x)
         else:
             x=self.downsample(x)
-            a,b=self.turn[0](x),self.turn[1](x)
-        l = self.feature_different(a, b)
-        # print(a.shape,b.shape,x.shape)
-        return (a, b, x), l
+        return x
 
 
 class three_dim_Layer(nn.Module):
@@ -470,9 +443,8 @@ class three_dim_Layer(nn.Module):
         """
         self.losses = 0.
         for i in range(self.len):
-            (x, y, z), l1 = self.turn_layer_module[str(i)](m)
-            self.losses = self.losses + l1
-            m = self.point_layer_module[str(i)](x, y, z)
+            z = self.turn_layer_module[str(i)](m)
+            m = self.point_layer_module[str(i)](z)
         return m
 
     def initiate_layer(self, data, feature_list, size_list, hidden_size_list, path_nums_list, nums_layer, decay_rate=2,
@@ -595,8 +567,8 @@ class merge_layer(nn.Module):
             if isinstance(layer, nn.Conv2d) and layer.bias is not None:
                 layer: nn.Conv2d
                 loss_bias.append(torch.norm(torch.abs(layer.weight.data), p=2) / layer.weight.data.numel())
-            elif isinstance(layer, three_dim_Layer):
-                layer: three_dim_Layer
+            elif isinstance(layer, two_dim_layer):
+                layer: two_dim_layer
                 loss_feature += layer.losses
         loss_feature = (loss_feature.squeeze(-1)) * sigma[0]
         loss_bias = torch.stack(loss_bias, dim=-1).mean() * sigma[1]

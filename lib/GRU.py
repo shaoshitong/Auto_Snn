@@ -1,3 +1,5 @@
+import random
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -6,23 +8,38 @@ from einops import rearrange
 import numpy as np
 import os, sys
 from torch.nn.parameter import Parameter
+
+
 class attnetion(nn.Module):
-    def __init__(self,x_channel,y_channel):
+    def __init__(self, x_channel, y_channel):
         super(attnetion, self).__init__()
 
-def cat_result_get(tensor_prev,i,j):
-    m=[]
-    for t_i in range(i + 1):
-        for t_j in range(j + 1):
-            if (t_i != i or t_j != j) :
-                m.append(tensor_prev[t_i][t_j])
-    return torch.cat(m,dim=1)
-def return_tensor_add(tensor_prev,i,j):
-    p=(i+1)*(j+1)-1
-    for a in range(i+1):
-        for b in range(j+1):
-            if tensor_prev[i][j].shape[1]==tensor_prev[a][b].shape[1] and (a!=i or b!=j):
-                tensor_prev[i][j]+=(tensor_prev[a][b]/p)
+
+def cat_result_get(tensor_prev, i, j):
+    m = []
+    if not (i == j):
+        for t_i in range(i + 1):
+            for t_j in range(j + 1):
+                if (t_i != i or t_j != j):
+                    m.append(tensor_prev[t_i][t_j])
+    else:
+        x = len(tensor_prev)
+        y = len(tensor_prev[0])
+        for t_i in range(x):
+            for t_j in range(y):
+                if t_i < i or t_j < j:
+                    m.append(tensor_prev[t_i][t_j])
+    return torch.cat(m, dim=1)
+
+
+def return_tensor_add(tensor_prev, i, j):
+    p = (i + 1) * (j + 1) - 1
+    for a in range(i + 1):
+        for b in range(j + 1):
+            if tensor_prev[i][j].shape[1] == tensor_prev[a][b].shape[1] and (a != i or b != j):
+                tensor_prev[i][j] += (tensor_prev[a][b] / p)
+
+
 class semhash(torch.autograd.Function):
     @staticmethod
     def forward(ctx, v1, v2, training=True):
@@ -50,11 +67,12 @@ class BasicUnit(nn.Module):
 
     def forward(self, x):
         return x + self.block(x)
+
+
 class DenseLayer(nn.Sequential):
-    def __init__(self, num_input_features, growth_rate, bn_size, drop_rate , class_fusion):
+    def __init__(self, num_input_features, growth_rate, bn_size, drop_rate, class_fusion):
         super(DenseLayer, self).__init__()
-        print(class_fusion)
-        if class_fusion==0:
+        if class_fusion == 0:
             self.add_module('norm1', nn.BatchNorm2d(num_input_features)),
             self.add_module('relu1', nn.ReLU(inplace=True)),
             self.add_module('conv1',
@@ -63,8 +81,9 @@ class DenseLayer(nn.Sequential):
             self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate)),
             self.add_module('relu2', nn.ReLU(inplace=True)),
             self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
-                                               kernel_size=(2, 5), stride=(1, 1),dilation=(2,1), padding=(1, 2), bias=False))
-        elif class_fusion==1:
+                                               kernel_size=(2, 5), stride=(1, 1), dilation=(2, 1), padding=(1, 2),
+                                               bias=False))
+        elif class_fusion == 1:
             self.add_module('norm1', nn.BatchNorm2d(num_input_features)),
             self.add_module('relu1', nn.ReLU(inplace=True)),
             self.add_module('conv1',
@@ -83,9 +102,9 @@ class DenseLayer(nn.Sequential):
             self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate)),
             self.add_module('relu2', nn.ReLU(inplace=True)),
             self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
-                                               kernel_size=(5, 2), stride=(1, 1), dilation=(1, 2), padding=(2, 1),bias=False))
+                                               kernel_size=(5, 2), stride=(1, 1), dilation=(1, 2), padding=(2, 1),
+                                               bias=False))
         self.drop_rate = drop_rate
-
 
     def forward(self, x):
         new_features = super(DenseLayer, self).forward(x)
@@ -94,24 +113,26 @@ class DenseLayer(nn.Sequential):
                 new_features = F.dropout(new_features, p=self.drop_rate, training=self.training)
         return new_features
 
+
 class DenseBlock(nn.Module):
-    def __init__(self,cat_feature,eq_feature,hidden_size,cat_x,cat_y,dropout ,class_fusion,size):
+    def __init__(self, cat_feature, eq_feature, hidden_size, cat_x, cat_y, dropout, class_fusion, size):
         super(DenseBlock, self).__init__()
-        self.denselayer=DenseLayer(cat_feature,eq_feature,hidden_size,dropout ,class_fusion)
-        self.eq_feature=eq_feature
-        self.cat_x=cat_x
-        self.cat_y=cat_y
+        self.denselayer = DenseLayer(cat_feature, eq_feature, hidden_size, dropout, class_fusion)
+        self.eq_feature = eq_feature
+        self.cat_x = cat_x
+        self.cat_y = cat_y
         self._initialize()
-        self.transformer=nn.TransformerEncoderLayer(size**2,size,dim_feedforward=int(size*2),batch_first=True,layer_norm_eps=1e-6)
-        if size>32:
-            kernel_size=8
-        elif 32>=size>8:
-            kernel_size=4
-        else:
-            kernel_size=2
-        self.unfold = lambda image: F.unfold(image,(kernel_size,kernel_size),stride=(kernel_size,kernel_size), )
-        self.fold = lambda image:F.fold(image,(size,size),(kernel_size,kernel_size),stride=(kernel_size,kernel_size))
-        self.kernel_size=kernel_size
+        self.transformer = nn.TransformerEncoderLayer(size ** 2, size, dim_feedforward=int(size * 2), batch_first=True,
+                                                      layer_norm_eps=1e-6)
+        kernel_size = 2
+
+        l = (size / kernel_size) ** 2
+        self.p = torch.randperm(l, dtype=torch.long)
+        self.unfold = lambda image: F.unfold(image, (kernel_size, kernel_size), stride=(kernel_size, kernel_size), )
+        self.fold = lambda image: F.fold(image, (size, size), (kernel_size, kernel_size),
+                                         stride=(kernel_size, kernel_size))
+        self.kernel_size = kernel_size
+
     def _initialize(self):
         for layer in self.modules():
             if isinstance(layer, nn.Conv2d):
@@ -125,13 +146,17 @@ class DenseBlock(nn.Module):
                 nn.init.zeros_(layer.weight.data)
                 if layer.bias is not None:
                     nn.init.zeros_(layer.bias.data)
-    def forward(self,x):
-        x=self.denselayer(x)
-        x=self.unfold(x) # b,c*mh*mw,l
-        x=rearrange(x,"b ( c mh mw ) l -> b  c ( mh mw l )",mh=self.kernel_size,ml=self.kernel_size)
-        x=rearrange(self.transformer(x),"b  c ( mh mw l ) -> b ( c mh mw ) l",mh=self.kernel_size,ml=self.kernel_size)
-        x=self.fold(x)
+
+    def forward(self, x):
+        x = self.denselayer(x)
+        x = self.unfold(x)  # b,c*mh*mw,l
+        x = x[..., self.p] / 2 + x / 2
+        x = rearrange(x, "b ( c mh mw ) l -> b  c ( mh mw l )", mh=self.kernel_size, mw=self.kernel_size)
+        x = rearrange(self.transformer(x), "b  c ( mh mw l ) -> b ( c mh mw ) l", mh=self.kernel_size,
+                      mw=self.kernel_size)
+        x = self.fold(x)
         return x
+
 
 class block_eq(nn.Module):
     def __init__(self, eq_feature, tmp_feature, dropout):
@@ -212,8 +237,8 @@ class mixer_GRU(nn.Module):
         self.convz1 = nn.Conv2d(feature + hidden_size, feature, (3, 3), (1, 1), (1, 1))
         self.convr1 = nn.Conv2d(feature + hidden_size, feature, (3, 3), (1, 1), (1, 1))
         for layer in self.modules():
-            if isinstance(layer,nn.Conv2d):
-                nn.init.kaiming_normal_(layer.weight.data,"fan_in",nonlinearity="relu")
+            if isinstance(layer, nn.Conv2d):
+                nn.init.kaiming_normal_(layer.weight.data, "fan_in", nonlinearity="relu")
                 if layer.bias is not None:
                     nn.init.zeros_(layer.bias.data)
 
@@ -225,9 +250,11 @@ class mixer_GRU(nn.Module):
         q = torch.tanh(self.convq1(torch.cat([r * h, x], dim=1)))
         h = (1 - z) * h + z * q
         return h
+
+
 # (1-z)*[conv(xy)+(x+y)/2]+z*conv(q)+conv(xy)+(x+y)/2
 class multi_GRU(nn.Module):
-    def __init__(self, feature, hidden_size, dropout,layer):
+    def __init__(self, feature, hidden_size, dropout, layer):
         super(multi_GRU, self).__init__()
         self.feature = feature
         self.hidden_size = hidden_size
@@ -242,7 +269,8 @@ class multi_GRU(nn.Module):
         self.convq2 = nn.Conv2d(feature + hidden_size, feature, (3, 1), padding=(1, 0))
         self.convz3 = nn.Conv2d(feature + feature, feature, (1, 1), padding=(0, 0))
         self._initialize()
-        self.advance_layer=layer
+        self.advance_layer = layer
+
     def _initialize(self):
         for layer in self.modules():
             if isinstance(layer, nn.Conv2d):
@@ -258,19 +286,19 @@ class multi_GRU(nn.Module):
         nn.init.kaiming_normal_(self.convq2.weight.data, mode="fan_in", nonlinearity="tanh")
 
     def forward(self, m):
-        x, y ,_= m
-        m=torch.cat([x, y], dim=1)
+        x, y, _ = m
+        m = torch.cat([x, y], dim=1)
         h = self.convd1(m)
-        p = torch.sigmoid(F.avg_pool2d(self.convd2(m),m.shape[-1]))
+        p = torch.sigmoid(F.avg_pool2d(self.convd2(m), m.shape[-1]))
         x = (p) * x + (1 - p) * y
         hx = torch.cat([h, x], dim=1)
-        z = torch.sigmoid(F.avg_pool2d(self.convz1(hx),hx.shape[-1]))
-        r = torch.sigmoid(F.avg_pool2d(self.convr1(hx),hx.shape[-1]))
+        z = torch.sigmoid(F.avg_pool2d(self.convz1(hx), hx.shape[-1]))
+        r = torch.sigmoid(F.avg_pool2d(self.convr1(hx), hx.shape[-1]))
         q = torch.tanh(self.convq1(torch.cat([r * h, x], dim=1)))
         x = F.relu((1 + z) * x + (1 - z) * q)
         hx = torch.cat([h, x], dim=1)
-        z = torch.sigmoid(F.avg_pool2d(self.convz2(hx),hx.shape[-1]))
-        r = torch.sigmoid(F.avg_pool2d(self.convr2(hx),hx.shape[-1]))
+        z = torch.sigmoid(F.avg_pool2d(self.convz2(hx), hx.shape[-1]))
+        r = torch.sigmoid(F.avg_pool2d(self.convr2(hx), hx.shape[-1]))
         q = torch.tanh(self.convq2(torch.cat([r * h, x], dim=1)))
         x = F.relu((1 + z) * x + (1 - z) * q)
         x = self.advance_layer(x)
