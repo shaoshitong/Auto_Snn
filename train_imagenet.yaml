@@ -6,9 +6,9 @@ set_seed:
 pytorch_seed:
   2021
 data:
-  cifar10
+  imagenet
 num_classes:
-  10
+  100
 feature_list:
   - 64
   - 32
@@ -16,11 +16,11 @@ feature_list:
   - 32
   - 32
 size_list:
-  - 32
-  - 32
-  - 16
-  - 8
-  - 4
+  - 112
+  - 56
+  - 28
+  - 14
+  - 7
 hidden_size_list:
   - 4
   - 4
@@ -32,9 +32,9 @@ path_nums_list:
   - 4
   - 4
 nums_layer_list:
-  - 0
   - 4
   - 7
+  - 16
   - 16
 breadth_threshold:
   - 2
@@ -57,8 +57,8 @@ parameters:
   loss_option:
     smooth_cross
   sigma_list:
+    - 0.6
     - 0.2
-    - 0.1
   s:
     4
   push_num:
@@ -162,4 +162,4 @@ mnist_config:
   use_transform:
     True
 output:
-  ./output
+  D:\Product\up-detr\data

@@ -124,7 +124,7 @@ class block_out(nn.Module):
                 layer.weight.data.fill_(1.)
                 layer.bias.data.zero_()
             elif isinstance(layer, nn.Linear):
-                # layer.weight.data.zero_()
+                layer.weight.data.zero_()
                 layer.bias.data.zero_()
 
     def forward(self, x):
@@ -398,8 +398,8 @@ class turn_layer(nn.Module):
             self.origin_out_feature = origin_out_feature = int(in_feature)
             self.num_layer = num_layer
             self.downsample = nn.Sequential(*[])
-            self.downsample.add_module('norm', nn.BatchNorm2d(in_feature))
-            self.downsample.add_module("relu", nn.ReLU(inplace=True))
+            # self.downsample.add_module('norm', nn.BatchNorm2d(in_feature))
+            # self.downsample.add_module("relu", nn.ReLU(inplace=True))
             self.downsample.add_module("pool", nn.MaxPool2d((stride,stride),(stride,stride)))
         self.feature_different = DimixLoss_neg()
         self._initialize()
@@ -511,6 +511,8 @@ class merge_layer(nn.Module):
                 x = x.view(x.shape[0], 1, 28, 28)
                 x = F.interpolate(x, (32, 32), mode='bilinear', align_corners=True)
                 # y = y.view(y.shape[0], 1, 28, 28)
+            elif dataoption == 'imagenet':
+                pass
             elif dataoption == 'fashionmnist':
                 x = x.view(x.shape[0], 1, 28, 28)
                 x = F.interpolate(x, (32, 32), mode='bilinear', align_corners=True)
@@ -540,11 +542,14 @@ class merge_layer(nn.Module):
         """
         b, c, h, w = data.shape
         input_shape = (b, c, h, w)
-        self.inf = nn.Conv2d(c, feature_list[0], (3, 3), (1,1), (1, 1), bias=False)
+        if dataoption=="imagenet":
+            self.inf = nn.Sequential(*[nn.Conv2d(c, feature_list[0], (7, 7), (2, 2), (2, 2), bias=False),])
+        else:
+            self.inf = nn.Conv2d(c, feature_list[0], (3, 3), (1,1), (1, 1), bias=False)
         h = self.InputGenerateNet.initiate_layer(data, feature_list, size_list, hidden_size_list, path_nums_list,
                                                  nums_layer_list, drop_rate,mult_k,breadth_threshold)
         self.out_classifier = block_out(h, num_classes, size_list[-1])
-        self._initialize()
+        # self._initialize()
     def _initialize(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):

@@ -19,7 +19,7 @@ sys.path.append("/home/sst/product")
 from lib.accuracy import accuracy
 from lib.criterion import criterion
 from lib.data_loaders import MNISTDataset, get_rand_transform, load_data, EEGDateset, load_data_car, \
-    load_data_svhn, load_data_c100, load_data_stl
+    load_data_svhn, load_data_c100, load_data_stl,load_data_imagenet
 from lib.log import Log
 from lib.optimizer import get_optimizer
 from lib.scheduler import get_scheduler, SchedulerLR
@@ -133,6 +133,8 @@ def test2(model, data, yaml, criterion_loss):
                 input = input.float().to(device)
             elif yaml['data'] in ['cifar10', 'cifar100', 'svhn', 'eeg', 'car', 'stl-10']:
                 input = input.float().to(device).view(input.shape[0], -1)
+            elif yaml['data'] in ["imagenet"]:
+                input=input.to(device)
             else:
                 raise KeyError('not have this dataset')
             target = target.to(device)
@@ -145,7 +147,7 @@ def test2(model, data, yaml, criterion_loss):
             torch.cuda.synchronize()
             if yaml['data'] == 'eeg':
                 prec1, prec5 = accuracy(output.data, target, topk=(1, 2))
-            elif yaml['data'] in ['mnist', 'fashionmnist', 'cifar10', 'car', 'svhn', 'cifar100', 'stl-10']:
+            elif yaml['data'] in ['mnist', 'fashionmnist', 'cifar10', 'car', 'svhn', 'cifar100', 'stl-10',"imagenet"]:
                 prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
             log(model, loss.cpu(), prec1.cpu(), prec5.cpu())
     return log.epoch_state["top_1"] / log.epoch_state["steps"], log.epoch_state["loss"] / log.epoch_state["steps"]
@@ -167,6 +169,16 @@ def test(path, data, yaml, criterion_loss):
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'cifar10':
         the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 3, 32, 32),
+                                 num_classes=yaml["num_classes"],
+                                 feature_list=yaml["feature_list"],
+                                 size_list=yaml["size_list"],
+                                 hidden_size_list=yaml["hidden_size_list"],
+                                 path_nums_list=yaml["path_nums_list"],
+                                 nums_layer_list=yaml["nums_layer_list"],
+                                 breadth_threshold=yaml["breadth_threshold"],
+                                 mult_k=yaml["mult_k"])
+    elif yaml['data'] == 'imagenet':
+        the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 3,224, 224),
                                  num_classes=yaml["num_classes"],
                                  feature_list=yaml["feature_list"],
                                  size_list=yaml["size_list"],
@@ -248,6 +260,8 @@ def test(path, data, yaml, criterion_loss):
                 input = input.float().to(device)
             elif yaml['data'] in ['cifar10', 'cifar100', 'svhn', 'eeg', 'car', 'stl-10']:
                 input = input.float().to(device).view(input.shape[0], -1)
+            elif yaml['data'] in ["imagenet"]:
+                input=input.float().to(device)
             else:
                 raise KeyError('not have this dataset')
             target = target.to(device)
@@ -259,7 +273,7 @@ def test(path, data, yaml, criterion_loss):
             torch.cuda.synchronize()
             if yaml['data'] == 'eeg':
                 prec1, prec5 = accuracy(output.data, target, topk=(1, 2))
-            elif yaml['data'] in ['mnist', 'fashionmnist', 'cifar10', 'car', 'svhn', 'cifar100', 'stl-10']:
+            elif yaml['data'] in ['mnist', 'fashionmnist', 'cifar10', 'car', 'svhn', 'cifar100', 'stl-10',"imagenet"]:
                 prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
             log(model, loss.cpu(), prec1.cpu(), prec5.cpu())
     return log.epoch_state["top_1"] / log.epoch_state["steps"], log.epoch_state["loss"] / log.epoch_state["steps"]
@@ -275,6 +289,8 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
             input = input.float().to(device)
         elif yaml['data'] in ['cifar10', 'cifar100', 'svhn', 'eeg', 'car', 'stl-10']:
             input = input.float().to(device).view(input.shape[0], -1)
+        elif yaml['data'] in ["imagenet"]:
+            input = input.to(device)
         else:
             raise KeyError('not have this dataset')
         target = target.to(device)
@@ -304,7 +320,7 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
         #           f"{(torch.eq(torch.argmax(output, dim=-1), target).sum() / output.size()[0]).item()},",end="",flush=True)
         if yaml['data'] == 'eeg':
             prec1, prec5 = accuracy(output.data, target, topk=(1, 2))
-        elif yaml['data'] in ['mnist', 'fashionmnist', 'cifar10', 'car', 'svhn', 'cifar100', 'stl-10']:
+        elif yaml['data'] in ['mnist', 'fashionmnist', 'cifar10', 'car', 'svhn', 'cifar100', 'stl-10',"imagenet"]:
             prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
         log(model, loss.cpu(), prec1.cpu(), prec5.cpu(), scheduler.lr())
         if isinstance(scheduler, torch.optim.lr_scheduler.CyclicLR):
@@ -369,6 +385,18 @@ if __name__ == "__main__":
                                  nums_layer_list=yaml["nums_layer_list"],
                                  breadth_threshold=yaml["breadth_threshold"],
                                  mult_k=yaml["mult_k"])
+    elif yaml['data'] == 'imagenet':
+        train_dataloader, test_dataloader = load_data_imagenet(yaml['parameters']['batch_size'],
+                                                      yaml['parameters']['batch_size'], args.data_url)
+        model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 3, 224, 224),
+                             num_classes=yaml["num_classes"],
+                             feature_list=yaml["feature_list"],
+                             size_list=yaml["size_list"],
+                             hidden_size_list=yaml["hidden_size_list"],
+                             path_nums_list=yaml["path_nums_list"],
+                             nums_layer_list=yaml["nums_layer_list"],
+                             breadth_threshold=yaml["breadth_threshold"],
+                             mult_k=yaml["mult_k"])
     elif yaml['data'] == 'cifar100':
         train_dataloader, test_dataloader = load_data_c100(yaml['parameters']['batch_size'],
                                                            yaml['parameters']['batch_size'], args.data_url,

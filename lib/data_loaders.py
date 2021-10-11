@@ -170,7 +170,7 @@ def load_data_imagenet(train_batch_size,test_batch_size,data_url=None):
                              std=[0.229,0.224,0.225])
     ])
     train=datasets.ImageFolder(os.path.join(data_url,"ILSVRC2012_img_train/"),train_transform)
-    val=datasets.ImageFolder(os.path.join(data_url,"val"),test_transform)
+    val=datasets.ImageFolder(os.path.join(data_url,"val/"),test_transform)
     train_loader=DataLoader(train,batch_size=train_batch_size,shuffle=True,num_workers=8)
     val_loader=DataLoader(val,batch_size=test_batch_size,shuffle=False,num_workers=4)
     return train_loader,val_loader

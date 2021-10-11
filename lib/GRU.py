@@ -158,12 +158,14 @@ class DenseBlock(nn.Module):
 
     def forward(self, x):
         x = self.denselayer(x)
+        """
         x = self.unfold(x)  # b,c*mh*mw,l
         x = x[..., self.p]/math.e  + x
         x = rearrange(x, "b ( c mh mw ) l -> b  c ( l mh mw )", mh=self.kernel_size, mw=self.kernel_size)
         x = rearrange(self.transformer(x), "b  c ( l mh mw ) -> b ( c mh mw ) l", mh=self.kernel_size,
                       mw=self.kernel_size)
         x = self.fold(x)
+        """
         return x
 
 
