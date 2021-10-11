@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from collections import OrderedDict
 from einops import rearrange
+import math
 import numpy as np
 import os, sys
 from torch.nn.parameter import Parameter
@@ -15,23 +16,31 @@ class attnetion(nn.Module):
         super(attnetion, self).__init__()
 
 
-def cat_result_get(tensor_prev, i, j):
+def cat_result_get(tensor_prev, i, j ,b):
     m = []
     if not (i == j):
         for t_i in range(i + 1):
             for t_j in range(j + 1):
-                if (t_i != i or t_j != j):
+                if (t_i != i or t_j != j) and abs(t_i - t_j)<b:
                     m.append(tensor_prev[t_i][t_j])
     else:
         x = len(tensor_prev)
         y = len(tensor_prev[0])
         for t_i in range(x):
             for t_j in range(y):
-                if t_i < i or t_j < j:
+                if t_i < i or t_j < j and abs(t_i - t_j)<b:
                     m.append(tensor_prev[t_i][t_j])
     return torch.cat(m, dim=1)
-
-
+def numeric_get(x,y,b):
+    tensor_check=[ [0 for i in range(y)] for j in range(x)]
+    for i in range(1,x):
+        tensor_check[i][0]=tensor_check[i-1][0]+int(not (abs(i-0)<b))
+    for i in range(1,y):
+        tensor_check[0][i]=tensor_check[0][i-1]+int(not (abs(i-0)<b))
+    for i in range(1,x):
+        for j in range(1,y):
+            tensor_check[i][j]=tensor_check[i][j-1]+tensor_check[i-1][j]-tensor_check[i-1][j-1]+int(not (abs(i-j)<b))
+    return tensor_check
 def return_tensor_add(tensor_prev, i, j):
     p = (i + 1) * (j + 1) - 1
     for a in range(i + 1):
@@ -122,12 +131,12 @@ class DenseBlock(nn.Module):
         self.cat_x = cat_x
         self.cat_y = cat_y
         self._initialize()
-        self.transformer = nn.TransformerEncoderLayer(size ** 2, size, dim_feedforward=int(size * 2), batch_first=True,
-                                                      layer_norm_eps=1e-6)
-        kernel_size = 2
+        kernel_size = 4
 
-        l = (size / kernel_size) ** 2
-        self.p = torch.randperm(l, dtype=torch.long)
+        l =int( (size / kernel_size) ** 2 )
+        self.p = torch.randperm(int(l), dtype=torch.long,requires_grad=False).cuda()
+        self.transformer = nn.TransformerEncoderLayer(size ** 2, l, dim_feedforward=int(size), batch_first=True,
+                                                      layer_norm_eps=1e-6)
         self.unfold = lambda image: F.unfold(image, (kernel_size, kernel_size), stride=(kernel_size, kernel_size), )
         self.fold = lambda image: F.fold(image, (size, size), (kernel_size, kernel_size),
                                          stride=(kernel_size, kernel_size))
@@ -150,9 +159,9 @@ class DenseBlock(nn.Module):
     def forward(self, x):
         x = self.denselayer(x)
         x = self.unfold(x)  # b,c*mh*mw,l
-        x = x[..., self.p] / 2 + x / 2
-        x = rearrange(x, "b ( c mh mw ) l -> b  c ( mh mw l )", mh=self.kernel_size, mw=self.kernel_size)
-        x = rearrange(self.transformer(x), "b  c ( mh mw l ) -> b ( c mh mw ) l", mh=self.kernel_size,
+        x = x[..., self.p]/math.e  + x
+        x = rearrange(x, "b ( c mh mw ) l -> b  c ( l mh mw )", mh=self.kernel_size, mw=self.kernel_size)
+        x = rearrange(self.transformer(x), "b  c ( l mh mw ) -> b ( c mh mw ) l", mh=self.kernel_size,
                       mw=self.kernel_size)
         x = self.fold(x)
         return x
