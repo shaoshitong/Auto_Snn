@@ -57,8 +57,8 @@ parameters:
   loss_option:
     smooth_cross
   sigma_list:
-    - 0.2
-    - 0.1
+    - 0.0
+    - 0.0
   s:
     4
   push_num:
@@ -70,7 +70,7 @@ parameters:
   sigma:
     0.1
   batch_size:
-    64
+    96
   epoch:
     200
   dropout:
