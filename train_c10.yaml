@@ -27,15 +27,15 @@ hidden_size_list:
   - 4
   - 4
 path_nums_list:
-  - 2
   - 3
   - 4
-  - 4
+  - 5
+  - 5
 nums_layer_list:
   - 0
   - 4
-  - 7
-  - 16
+  - 5
+  - 5
 breadth_threshold:
   - 2
   - 3

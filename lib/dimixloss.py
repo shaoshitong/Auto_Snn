@@ -29,8 +29,19 @@ def MatmulTopkLoss(X,Y):
     C_xy=value*torch.abs(key-index)/(value_sum)
     C_xy=C_xy.mean(-1)
     return C_xy
-
-
+class Linear_adaptive_loss(nn.Module):
+    def __init__(self,channels,size,classes=None):
+        super(Linear_adaptive_loss,self).__init__()
+        if classes==None:
+            classes=int(channels//2)
+        self.clinear_a=nn.Conv2d(channels,classes,(size,size),(1,1),(0,0),bias=False)
+        self.clinear_b=nn.Conv2d(channels,classes,(size,size),(1,1),(0,0),bias=False)
+        self.kl_loss=lambda x,y:torch.kl_div(torch.nn.functional.log_softmax(x, dim=1),y ,reduction='none').sum(dim=-1).mean()
+    def forward(self,x,y):
+        x=torch.flatten(self.clinear_a(x))
+        y=torch.flatten(self.clinear_b(y))
+        m=torch.bernoulli(torch.Tensor(x.shape).uniform_(0,1)).to(x.device)
+        return self.kl_loss(x,m)+self.kl_loss(y,1-m)
 
 class DimixLoss_neg(nn.Module):
     def __init__(self,list_len=1):

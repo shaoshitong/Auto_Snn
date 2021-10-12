@@ -25,7 +25,6 @@ class DenseLayer(nn.Sequential):
         if self.drop_rate > 0:
             new_features = F.dropout(new_features, p=self.drop_rate, training=self.training)
         return torch.cat([x, new_features], 1)
-torchvision.models.DenseNet
 class DenseBlock(nn.Sequential):
     def __init__(self, num_input_features_list, bn_size, drop_rate, num_layers=None, ):
         super(DenseBlock, self).__init__()
@@ -45,7 +44,6 @@ class Transition(nn.Sequential):
         self.add_module('conv', nn.Conv2d(num_input_features, num_output_features,
                                           kernel_size=(1, 1), stride=(1, 1), bias=False))
         self.add_module('pool', nn.AvgPool2d(kernel_size=2, stride=2))
-
 
 class ForwardTurning(nn.Sequential):
     def __init__(self, num_input_features, num_output_features):

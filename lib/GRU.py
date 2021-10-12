@@ -81,6 +81,7 @@ class BasicUnit(nn.Module):
 class DenseLayer(nn.Sequential):
     def __init__(self, num_input_features, growth_rate, bn_size, drop_rate, class_fusion):
         super(DenseLayer, self).__init__()
+        self.nums_input_features=num_input_features
         if class_fusion == 0:
             self.add_module('norm1', nn.BatchNorm2d(num_input_features)),
             self.add_module('relu1', nn.ReLU(inplace=True)),
