@@ -60,7 +60,15 @@ class semhash(torch.autograd.Function):
     def backward(ctx, grad_output):
         return grad_output, None, None
 
-
+class aplha_decay(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx,x,alpha=2.):
+        ctx.alpha=alpha
+        return x
+    @staticmethod
+    def backward(ctx,grad_outputs):
+        alpha=ctx.alpha
+        return grad_outputs/alpha,None
 class BasicUnit(nn.Module):
     def __init__(self, channel: int, hidden_channel: int, dropout: float):
         super(BasicUnit, self).__init__()

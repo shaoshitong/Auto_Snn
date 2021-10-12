@@ -33,15 +33,28 @@ class Linear_adaptive_loss(nn.Module):
     def __init__(self,channels,size,classes=None):
         super(Linear_adaptive_loss,self).__init__()
         if classes==None:
-            classes=int(channels//2)
-        self.clinear_a=nn.Conv2d(channels,classes,(size,size),(1,1),(0,0),bias=False)
-        self.clinear_b=nn.Conv2d(channels,classes,(size,size),(1,1),(0,0),bias=False)
-        self.kl_loss=lambda x,y:torch.kl_div(torch.nn.functional.log_softmax(x, dim=1),y ,reduction='none').sum(dim=-1).mean()
+            classes=int(channels//4)
+        self.linear_a=nn.Sequential(nn.Flatten(),nn.Linear(channels,classes))
+        self.linear_b=nn.Sequential(nn.Flatten(),nn.Linear(channels,classes))
+        self._initialize()
+        self.clinear_a=lambda x:self.linear_a(F.avg_pool2d(x,x.shape[-1]))
+        self.clinear_b=lambda x:self.linear_b(F.avg_pool2d(x,x.shape[-1]))
+        self.kl_loss=lambda x,y:torch.nn.functional.kl_div(torch.nn.functional.log_softmax(x, dim=1),y ,reduction='none').sum(dim=-1).mean()
+    def _initialize(self,):
+        for layer in self.modules():
+            if isinstance(layer,nn.Linear):
+                nn.init.zeros_(layer.weight.data)
+                nn.init.zeros_(layer.bias.data)
     def forward(self,x,y):
-        x=torch.flatten(self.clinear_a(x))
-        y=torch.flatten(self.clinear_b(y))
-        m=torch.bernoulli(torch.Tensor(x.shape).uniform_(0,1)).to(x.device)
-        return self.kl_loss(x,m)+self.kl_loss(y,1-m)
+        b,c,h,w=x.shape
+        x,y=x.view(b,c,-1),y.view(b,c,-1)
+        x=x-x.mean(dim=-2,keepdim=True)
+        y=y-y.mean(dim=-2,keepdim=True)
+        x,y=feature_normalize(x).view(b,c,h,w),feature_normalize(y).view(b,c,h,w)
+        x=self.clinear_a(x)
+        y=self.clinear_a(y)
+        z=torch.exp(-torch.norm(x-y,p=2))
+        return z
 
 class DimixLoss_neg(nn.Module):
     def __init__(self,list_len=1):
