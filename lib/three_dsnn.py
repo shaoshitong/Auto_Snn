@@ -266,7 +266,7 @@ class point_cul_Layer(nn.Module):
         self.cat_feature = (path_len - 1) * (out_feature) + in_feature
         if cat_x==cat_y:
             fusion=1
-        elif cat_x>cat_y:
+        elif ((cat_x>cat_y)+abs(cat_y-cat_x))%2==0:
             fusion=0
         else:
             fusion=2
@@ -389,7 +389,7 @@ class turn_layer(nn.Module):
             self.downsample.add_module("conv",
                                        nn.Conv2d(in_feature,int(in_feature/decay_rate), (1, 1), (1, 1), (0, 0), bias=False))
             self.xsample = nn.Sequential(*[])
-            self.xsample.add_module('pool', nn.MaxPool2d(kernel_size=(stride, stride), stride=(stride, stride)))
+            self.xsample.add_module('pool', nn.AvgPool2d(kernel_size=(stride, stride), stride=(stride, stride)))
 
             in_feature = int(in_feature / decay_rate)
             self.dense_deep_block = DenseDeepBlock([in_feature] + [out_feature] * num_layer, bn_size, dropout,
@@ -403,7 +403,7 @@ class turn_layer(nn.Module):
             self.downsample = nn.Sequential(*[])
             self.downsample.add_module('norm', nn.BatchNorm2d(in_feature))
             self.downsample.add_module("relu", nn.ReLU(inplace=True))
-            self.downsample.add_module('pool', nn.MaxPool2d(kernel_size=(stride, stride), stride=(stride, stride)))
+            self.downsample.add_module('pool', nn.AvgPool2d(kernel_size=(stride, stride), stride=(stride, stride)))
             in_feature = in_feature + out_feature * num_layer
             self.origin_out_feature =in_feature
         self.feature_different = DimixLoss_neg()
