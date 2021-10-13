@@ -35,13 +35,16 @@ class Linear_adaptive_loss(nn.Module):
         if classes==None:
             classes=int(channels//2)
         self.clinear_a=nn.Conv2d(channels,classes,(size,size),(1,1),(0,0),bias=False)
-        self.clinear_b=nn.Conv2d(channels,classes,(size,size),(1,1),(0,0),bias=False)
-        self.kl_loss=lambda x,y:torch.kl_div(torch.nn.functional.log_softmax(x, dim=1),y ,reduction='none').sum(dim=-1).mean()
+        self.layernorm_a=nn.LayerNorm([channels,size,size])
+        self.layernorm_b=nn.LayerNorm([channels,size,size])
     def forward(self,x,y):
+        x=self.layernorm_a(x)
+        y=self.layernorm_b(y)
+        x=F.avg_pool2d(x,x.shape[-1]).view(x.shape[0],-1)
+        y=F.avg_pool2d(y,y.shape[-1]).view(y.shape[0],-1)
         x=torch.flatten(self.clinear_a(x))
-        y=torch.flatten(self.clinear_b(y))
-        m=torch.bernoulli(torch.Tensor(x.shape).uniform_(0,1)).to(x.device)
-        return self.kl_loss(x,m)+self.kl_loss(y,1-m)
+        y=torch.flatten(self.clinear_a(y))
+        return torch.exp(-torch.norm(x-y,p=2)/x.numel())
 
 class DimixLoss_neg(nn.Module):
     def __init__(self,list_len=1):

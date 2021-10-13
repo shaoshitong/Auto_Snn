@@ -266,7 +266,7 @@ class point_cul_Layer(nn.Module):
         self.cat_feature = (path_len - 1) * (out_feature) + in_feature
         if cat_x==cat_y:
             fusion=1
-        elif ((cat_x>cat_y)+abs(cat_y-cat_x))%2==0:
+        elif ((cat_x>cat_y)+abs(cat_x-cat_y))%2==0:
             fusion=0
         else:
             fusion=2
