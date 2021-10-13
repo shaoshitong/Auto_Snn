@@ -53,7 +53,7 @@ class Linear_adaptive_loss(nn.Module):
         x,y=feature_normalize(x).view(b,c,h,w),feature_normalize(y).view(b,c,h,w)
         x=self.clinear_a(x)
         y=self.clinear_a(y)
-        z=torch.exp(-torch.norm(x-y,p=2))
+        z=torch.exp(-torch.norm(x-y,p=2)/x.numel())
         return z
 
 class DimixLoss_neg(nn.Module):
