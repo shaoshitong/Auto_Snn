@@ -33,28 +33,43 @@ class Linear_adaptive_loss(nn.Module):
     def __init__(self,channels,size,classes=None):
         super(Linear_adaptive_loss,self).__init__()
         if classes==None:
-            classes=int(channels//4)
-        self.linear_a=nn.Sequential(nn.Flatten(),nn.Linear(channels,classes))
-        self.linear_b=nn.Sequential(nn.Flatten(),nn.Linear(channels,classes))
+            classes=10
+        self.mlp                    =nn.Sequential(nn.Flatten(),
+                                    nn.Linear(channels,channels),
+                                    nn.ELU(),
+                                    nn.Linear(channels,classes))
         self._initialize()
-        self.clinear_a=lambda x:self.linear_a(F.avg_pool2d(x,x.shape[-1]))
-        self.clinear_b=lambda x:self.linear_b(F.avg_pool2d(x,x.shape[-1]))
-        self.kl_loss=lambda x,y:torch.nn.functional.kl_div(torch.nn.functional.log_softmax(x, dim=1),y ,reduction='none').sum(dim=-1).mean()
     def _initialize(self,):
         for layer in self.modules():
             if isinstance(layer,nn.Linear):
                 nn.init.zeros_(layer.weight.data)
                 nn.init.zeros_(layer.bias.data)
+    def info_nec_loss(self,features,tempature=0.07):
+        labels=torch.cat([torch.arange(0,features.shape[0]//2) for i in range(2)],dim=0)
+        labels=(labels.unsqueeze(0) == labels.unsqueeze(1)).float()
+        labels=labels.to(features.device)
+        features=F.normalize(features,dim=1)
+        similarity_matrix=torch.matmul(features,features.T)
+        mask=torch.eye(labels.shape[0],dtype=torch.bool).to(features.device)
+        labels=labels[~mask].view(labels.shape[0],-1)
+        similarity_matrix=similarity_matrix[~mask].view(similarity_matrix.shape[0],-1)
+        positives=similarity_matrix[labels.bool()].view(labels.shape[0],-1)
+        negatives=similarity_matrix[~labels.bool()].view(labels.shape[0],-1)
+        negatives_left,negatives_right=torch.split(negatives,dim=1,split_size_or_sections=[negatives.shape[1]//2,negatives.shape[1]//2])
+        negatives_left_top,negatives_left_bottom=torch.split(negatives_left,dim=0,split_size_or_sections=[negatives.shape[0]//2,negatives.shape[0]//2])
+        negatives_right_top,negatives_right_bottom=torch.split(negatives_right,dim=0,split_size_or_sections=[negatives.shape[0]//2,negatives.shape[0]//2])
+
+        choose=torch.softmax(torch.cat([torch.sum(negatives_left_top-negatives_right_top,dim=1,keepdim=True),torch.sum(negatives_right_bottom-negatives_left_bottom,dim=1,keepdim=True)],dim=1),dim=1)
+        logits=torch.cat([positives,negatives],dim=1)/tempature
+        return logits,choose
     def forward(self,x,y):
-        b,c,h,w=x.shape
-        x,y=x.view(b,c,-1),y.view(b,c,-1)
-        x=x-x.mean(dim=-2,keepdim=True)
-        y=y-y.mean(dim=-2,keepdim=True)
-        x,y=feature_normalize(x).view(b,c,h,w),feature_normalize(y).view(b,c,h,w)
-        x=self.clinear_a(x)
-        y=self.clinear_a(y)
-        z=torch.exp(-torch.norm(x-y,p=2)/x.numel())
-        return z
+        x_l=F.avg_pool2d(x,x.shape[-1])
+        y_l=F.avg_pool2d(y,y.shape[-1])
+        c=torch.cat([x_l,y_l],dim=0)
+        c=self.mlp(c)
+        logits,choose=self.info_nec_loss(c)
+        result=choose[:,0].view(x.shape[0],1,1,1)*x+choose[:,1].view(x.shape[0],1,1,1)*y
+        return logits,result
 
 class DimixLoss_neg(nn.Module):
     def __init__(self,list_len=1):

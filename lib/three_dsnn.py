@@ -263,28 +263,27 @@ class point_cul_Layer(nn.Module):
         该层通过门机制后进行卷积与归一化
         """
         super(point_cul_Layer, self).__init__()
-        self.cat_feature = (path_len - 1) * (out_feature) + in_feature
-        if cat_x==cat_y:
-            fusion=1
-        elif ((cat_x>cat_y)+abs(cat_y-cat_x))%2==0:
-            fusion=0
-        else:
-            fusion=2
-        self.DoorMach = DenseBlock(self.cat_feature, out_feature, hidden_size, cat_x, cat_y,
-                                   dropout,fusion,in_size)
-        self.STuning = STuning
-        self.b=b
-        self.grad_lr = grad_lr
-        self.sigma = 1
-        self.cat_x,self.cat_y=cat_x,cat_y
-        self.norm = None
+        self.path_len=path_len
+        self.x=cat_x
+        self.y=cat_y
+        if path_len!=0:
+            self.cat_feature = (path_len - 1) * (out_feature) + in_feature
+            if cat_x==cat_y:
+                fusion=1
+            elif ((cat_x>cat_y)+abs(cat_y-cat_x))%2==0:
+                fusion=0
+            else:
+                fusion=2
+            self.DoorMach = DenseBlock(self.cat_feature, out_feature, hidden_size, cat_x, cat_y,
+                                       dropout,fusion,in_size)
+            self.STuning = STuning
+            self.b=b
+            self.grad_lr = grad_lr
+            self.sigma_nums=0
+            self.norm = None
 
     def forward(self, x):
-        tensor_prev, (i, j) = x
-
-        x = self.DoorMach(cat_result_get(tensor_prev, i, j ,self.b))
-        # if i==j:
-        #     x=aplha_decay.apply(x)
+        x = self.DoorMach(x)
         return x
 
 
@@ -298,6 +297,9 @@ class two_dim_layer(nn.Module):
         self.out_pointnum = out_size
         self.x = x
         self.y = y
+        self.len=min(self.x,self.y)
+        self.len=[i+1 for i in range(self.len)]+[i for i in range(self.len-1,0,-1)]
+        self.len=[min(i,b) for i in self.len]
         self.b=b
         assert self.x>=self.b
         assert self.x>=1 and self.y>=1
@@ -307,78 +309,76 @@ class two_dim_layer(nn.Module):
         +1 +3 +5 +7
         +1 +1 +2 +3
         """
+        self.sigmal_layer={}
         self.point_cul_layer = {}
         self.test = False
-        self.tensor_check=numeric_get(x,y,b)
-        if self.x>0 and self.y>0:
-            self.x_eq = nn.ModuleList(
-                [DenseBlock(out_feature * (_) + in_feature, out_feature, hidden_size, 0, 0, p,1,in_size) for _ in
-                 range(min(self.x - 1,self.b-1))])
-            self.y_eq = nn.ModuleList(
-                [DenseBlock(out_feature * (_) + in_feature, out_feature, hidden_size, 0, 0, p,1,in_size) for _ in
-                 range(min(self.y - 1,self.b-1))])
-            for i in range(1,self.x):
-                for j in range(1,self.y):
-                    if abs(i-j)<self.b:
-                        if not (i==j):
-                            self.point_cul_layer[str(i) + "_" + str(j)] = point_cul_Layer(
-                                in_feature,
-                                out_feature,
-                                hidden_size,
-                                in_size,
-                                out_size,
-                                (i+1)*(j+1)-1-self.tensor_check[i][j],
-                                i ,
-                                j ,
-                                b,
-                                dropout=p,
-                                mult_k=mult_k)
-                        else:
-                            self.point_cul_layer[str(i) + "_" + str(j)] = point_cul_Layer(
-                                in_feature,
-                                out_feature,
-                                hidden_size,
-                                in_size,
-                                out_size,
-                                i*(2*self.x-i)-(self.tensor_check[self.x-1][j-1]+self.tensor_check[i-1][self.y-1]-self.tensor_check[i-1][j-1]),
-                                i ,
-                                j ,
-                                b,
-                                dropout=p,
-                                mult_k=mult_k)
+        for i,l in enumerate(self.len):
+            if l==1:
+                for k in range(l):
+                    self.point_cul_layer[str(i)+"_"+str(2*k)]=point_cul_Layer(
+                                    in_feature,
+                                    out_feature,
+                                    hidden_size,
+                                    in_size,
+                                    out_size,
+                                    len(self.len[:i])+k+1,
+                                    i ,
+                                    i ,
+                                    b ,
+                                    dropout=p,
+                                    mult_k=mult_k)
+            else:
+                self.sigmal_layer[str(i)]=Linear_adaptive_loss(channels=out_feature,size=out_size)
+                for k in range(l):
+                    self.point_cul_layer[str(i) + "_" + str(2 * k)] = point_cul_Layer(
+                        in_feature,
+                        out_feature,
+                        hidden_size,
+                        in_size,
+                        out_size,
+                        len(self.len[:i])+k + 1,
+                        i,
+                        i,
+                        b,
+                        dropout=p,
+                        mult_k=mult_k)
+                    self.point_cul_layer[str(i) + "_" + str(2 * k+1)] = point_cul_Layer(
+                        in_feature,
+                        out_feature,
+                        hidden_size,
+                        in_size,
+                        out_size,
+                        len(self.len[:i])+k + 1,
+                        i,
+                        i,
+                        b,
+                        dropout=p,
+                        mult_k=mult_k)
+            self.sigmal_layer_module=nn.ModuleDict(self.sigmal_layer)
             self.point_layer_module = nn.ModuleDict(self.point_cul_layer)
-            self.np_last = (self.x) * (self.y) - 1 - self.tensor_check[self.x-1][self.y-1]
-        else:
-            self.np_last = 1
-        self.dimixloss= nn.ModuleList([Linear_adaptive_loss(out_feature,out_size) for _ in range(self.x)])
+            self.np_last = len(self.len)
+        self.cross_loss=nn.CrossEntropyLoss()
     def forward(self, z):
+        self.losses=0.
         if self.x==0 and self.y==0:
             return z
-        tensor_prev = [[z for i in range(self.x)] for j in range(self.y)]
-        for i in range(min(self.y - 1,self.b-1)):
-            tensor_prev[0][i + 1] = self.x_eq[i](cat_result_get(tensor_prev, 0, i + 1 ,self.b))
-        for i in range(min(self.x - 1,self.b-1)):
-            tensor_prev[i + 1][0] = self.y_eq[i](cat_result_get(tensor_prev, i + 1, 0, self.b))
-        self.losses = self.dimixloss[0](tensor_prev[min(self.x - 1,self.b-1)][0], tensor_prev[0][min(self.y - 1,self.b-1)])
-        for l in range(1,min(self.x,self.y)):
-            tensor_prev[l][l]= self.point_layer_module[str(l) + '_' + str(l)]((
-                        tensor_prev, (l,l)))
-            for i in range(l+1,self.y):
-                if abs(l-i)<self.b:
-                    tensor_prev[l][i] =self.point_layer_module[str(l) + '_' + str(i)]((tensor_prev,(l,i)))
-            for i in range(l+1,self.x):
-                if abs(i-l)<self.b:
-                    tensor_prev[i][l] =self.point_layer_module[str(i) + '_' + str(l)]((tensor_prev,(i,l)))
-            self.losses =self.losses+self.dimixloss[l](tensor_prev[min(self.b+l-1,self.x - 1)][l], tensor_prev[l][min(self.b+l-1,self.y - 1)])
-        result = []
-        for i in range(self.x):
-            for j in range(self.y):
-                if abs(i-j)<self.b:
-                    result.append(tensor_prev[i][j])
-        result = torch.cat(result, dim=1)
-        del tensor_prev
-        return result
-
+        for i, l in enumerate(self.len):
+            if l==1:
+                for k in range(l):
+                    z=torch.cat([z, self.point_layer_module[str(i) + "_" + str(k*2)](z)], dim=1)
+            else:
+                a = z
+                b = z
+                for k in range(l - 1):
+                    a = torch.cat([a, self.point_layer_module[str(i) + "_" + str(k * 2)](a)], dim=1)
+                    b = torch.cat([b, self.point_layer_module[str(i) + "_" + str(k * 2+1)](b)], dim=1)
+                a=self.point_layer_module[str(i) + "_" + str(2*l-2)](a)
+                b=self.point_layer_module[str(i) + "_" + str(2*l-1)](b)
+                logits,m=self.sigmal_layer_module[str(i)](a,b)
+                z=torch.cat([z,m],dim=1)
+                labels=torch.zeros(logits.shape[0],dtype=torch.long).to(logits.device)
+                self.losses=self.losses+self.cross_loss(logits,labels)
+        return z
     def settest(self, test=True):
         self.test = test
 
