@@ -39,6 +39,11 @@ class Linear_adaptive_loss(nn.Module):
                                     nn.ELU(),
                                     nn.Linear(channels,classes))
         self._initialize()
+        self.conv=nn.Sequential(*[
+            nn.BatchNorm2d(channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(channels,channels,(3,3),(1,1),(1,1),bias=False),
+        ])
     def _initialize(self,):
         for layer in self.modules():
             if isinstance(layer,nn.Linear):
@@ -63,13 +68,13 @@ class Linear_adaptive_loss(nn.Module):
         logits=torch.cat([positives,negatives],dim=1)/tempature
         return logits,choose
     def forward(self,x,y):
-        x_l=F.avg_pool2d(x,x.shape[-1])
-        y_l=F.avg_pool2d(y,y.shape[-1])
-        c=torch.cat([x_l,y_l],dim=0)
-        c=self.mlp(c)
-        logits,choose=self.info_nec_loss(c)
-        result=choose[:,0].view(x.shape[0],1,1,1)*x+choose[:,1].view(x.shape[0],1,1,1)*y
-        return logits,result
+        c=torch.cat([x,y],dim=0)
+        c=self.conv(c)+c
+        c=F.avg_pool2d(c,c.shape[-1])
+        c_l=self.mlp(c)
+        x,y=torch.split(c,dim=0,split_size_or_sections=[c.shape[0]//2,c.shape[0]//2])
+        logits,choose=self.info_nec_loss(c_l)
+        return logits,x+y
 
 class DimixLoss_neg(nn.Module):
     def __init__(self,list_len=1):

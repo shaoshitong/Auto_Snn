@@ -271,9 +271,9 @@ class point_cul_Layer(nn.Module):
             if cat_x==cat_y:
                 fusion=1
             elif ((cat_x>cat_y)+abs(cat_y-cat_x))%2==0:
-                fusion=0
+                fusion=1
             else:
-                fusion=2
+                fusion=1
             self.DoorMach = DenseBlock(self.cat_feature, out_feature, hidden_size, cat_x, cat_y,
                                        dropout,fusion,in_size)
             self.STuning = STuning
@@ -360,6 +360,8 @@ class two_dim_layer(nn.Module):
         self.cross_loss=nn.CrossEntropyLoss()
     def forward(self, z):
         self.losses=0.
+        a = z
+        b = z
         if self.x==0 and self.y==0:
             return z
         for i, l in enumerate(self.len):
@@ -367,8 +369,6 @@ class two_dim_layer(nn.Module):
                 for k in range(l):
                     z=torch.cat([z, self.point_layer_module[str(i) + "_" + str(k*2)](z)], dim=1)
             else:
-                a = z
-                b = z
                 for k in range(l - 1):
                     a = torch.cat([a, self.point_layer_module[str(i) + "_" + str(k * 2)](a)], dim=1)
                     b = torch.cat([b, self.point_layer_module[str(i) + "_" + str(k * 2+1)](b)], dim=1)
@@ -376,9 +376,12 @@ class two_dim_layer(nn.Module):
                 b=self.point_layer_module[str(i) + "_" + str(2*l-1)](b)
                 logits,m=self.sigmal_layer_module[str(i)](a,b)
                 z=torch.cat([z,m],dim=1)
+                a=torch.cat([z,a],dim=1)
+                b=torch.cat([z,b],dim=1)
                 labels=torch.zeros(logits.shape[0],dtype=torch.long).to(logits.device)
                 self.losses=self.losses+self.cross_loss(logits,labels)
         return z
+
     def settest(self, test=True):
         self.test = test
 
