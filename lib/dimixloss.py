@@ -50,7 +50,7 @@ class Linear_adaptive_loss(nn.Module):
     def _initialize(self,):
         for layer in self.modules():
             if isinstance(layer,nn.Linear):
-                nn.init.uniform_(layer.weight.data)
+                nn.init.zeros_(layer.weight.data)
                 nn.init.zeros_(layer.bias.data)
     def info_nec_loss(self,features,tempature=0.07):
         labels=torch.cat([torch.arange(0,features.shape[0]//2) for i in range(2)],dim=0)

@@ -388,6 +388,7 @@ class two_dim_layer(nn.Module):
                 for j in range(1, self.y):
                     if abs(i - j) < self.b:
                         if random.random() > random_float:
+                            print(random_float)
                             for layer in self.point_layer_module[str(i) + "_" + str(j)].modules():
                                 if isinstance(layer,nn.Conv2d):
                                     nn.init.kaiming_normal_(layer.weight.data,mode="fan_in",nonlinearity="relu")
@@ -550,8 +551,12 @@ class merge_layer(nn.Module):
                 x = x.view(x.shape[0], 3, 96, 96)
             else:
                 raise KeyError()
-        self.reset(1-self.iter)
-        self.iter+=1e-5
+        # if x.requires_grad==True:
+        #     self.reset(1-self.iter)
+        #     self.iter+=1e-7
+        #     if abs(0.99-self.iter)<=1e-7:
+        #         self.iter=0.
+        # print(self.iter)
         x = self.inf(x)
         x = self.InputGenerateNet(x)
         x = self.out_classifier(x)
