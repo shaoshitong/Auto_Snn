@@ -340,7 +340,7 @@ class two_dim_layer(nn.Module):
                                 hidden_size,
                                 in_size,
                                 out_size,
-                                i*(2*self.x-i)-(self.tensor_check[self.x-1][j-1]+self.tensor_check[i-1][self.y-1]-self.tensor_check[i-1][j-1]),
+                                i+2,
                                 i ,
                                 j ,
                                 b,
@@ -350,7 +350,8 @@ class two_dim_layer(nn.Module):
             self.np_last = (self.x) * (self.y) - 1 - self.tensor_check[self.x-1][self.y-1]
         else:
             self.np_last = 1
-        self.dimixloss= nn.ModuleList([Linear_adaptive_loss(out_feature,out_size) for _ in range(self.x)])
+        self.dimixloss= nn.ModuleList([Linear_adaptive_loss(out_feature,out_size) for _ in range(1)])
+        self.cross_loss=nn.CrossEntropyLoss()
     def forward(self, z):
         if self.x==0 and self.y==0:
             return z
@@ -359,7 +360,8 @@ class two_dim_layer(nn.Module):
             tensor_prev[0][i + 1] = self.x_eq[i](cat_result_get(tensor_prev, 0, i + 1 ,self.b))
         for i in range(min(self.x - 1,self.b-1)):
             tensor_prev[i + 1][0] = self.y_eq[i](cat_result_get(tensor_prev, i + 1, 0, self.b))
-        self.losses = self.dimixloss[0](tensor_prev[min(self.x - 1,self.b-1)][0], tensor_prev[0][min(self.y - 1,self.b-1)])
+        mm,_ = self.dimixloss[0](tensor_prev[min(self.b-1,self.x - 1)][0], tensor_prev[0][min(self.b-1,self.y - 1)])
+        self.losses=self.cross_loss(mm,torch.zeros(mm.shape[0],dtype=torch.long).to(z.device))
         for l in range(1,min(self.x,self.y)):
             tensor_prev[l][l]= self.point_layer_module[str(l) + '_' + str(l)]((
                         tensor_prev, (l,l)))
@@ -369,7 +371,6 @@ class two_dim_layer(nn.Module):
             for i in range(l+1,self.x):
                 if abs(i-l)<self.b:
                     tensor_prev[i][l] =self.point_layer_module[str(i) + '_' + str(l)]((tensor_prev,(i,l)))
-            self.losses =self.losses+self.dimixloss[l](tensor_prev[min(self.b+l-1,self.x - 1)][l], tensor_prev[l][min(self.b+l-1,self.y - 1)])
         result = []
         for i in range(self.x):
             for j in range(self.y):
@@ -381,6 +382,16 @@ class two_dim_layer(nn.Module):
 
     def settest(self, test=True):
         self.test = test
+    def reset(self,random_float):
+        with torch.no_grad():
+            for i in range(1, self.x):
+                for j in range(1, self.y):
+                    if abs(i - j) < self.b:
+                        if random.random() > random_float:
+                            for layer in self.point_layer_module[str(i) + "_" + str(j)].modules():
+                                if isinstance(layer,nn.Conv2d):
+                                    nn.init.kaiming_normal_(layer.weight.data,mode="fan_in",nonlinearity="relu")
+
 
 class turn_layer(nn.Module):
     def __init__(self, in_feature, out_feature, bn_size, num_layer, decay_rate=2, stride=1, dropout=0.1):
@@ -504,6 +515,7 @@ class merge_layer(nn.Module):
         else:
             self.shape = shape
         self.device = device
+        self.iter=0.
         self.InputGenerateNet = three_dim_Layer(self.shape, self.device, dropout).to(device)
 
     def forward(self, x):
@@ -538,6 +550,8 @@ class merge_layer(nn.Module):
                 x = x.view(x.shape[0], 3, 96, 96)
             else:
                 raise KeyError()
+        self.reset(1-self.iter)
+        self.iter+=1e-5
         x = self.inf(x)
         x = self.InputGenerateNet(x)
         x = self.out_classifier(x)
@@ -578,6 +592,10 @@ class merge_layer(nn.Module):
         for i in list:
             print(i.squeeze().item(), end=",")
         print("")
+    def reset(self,random_float=1.0):
+        for layer in self.modules():
+            if isinstance(layer,two_dim_layer):
+                layer.reset(random_float)
 
     def L2_biasoption(self, loss_list, sigma=None):
         if sigma == None:

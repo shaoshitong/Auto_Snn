@@ -33,29 +33,46 @@ class Linear_adaptive_loss(nn.Module):
     def __init__(self,channels,size,classes=None):
         super(Linear_adaptive_loss,self).__init__()
         if classes==None:
-            classes=int(channels//4)
-        self.linear_a=nn.Sequential(nn.Flatten(),nn.Linear(channels,classes))
-        self.linear_b=nn.Sequential(nn.Flatten(),nn.Linear(channels,classes))
+            classes=10
+        self.mlp=nn.Sequential\
+                                    (
+                                    nn.Flatten(),
+                                    nn.Linear(channels,channels),
+                                    nn.ELU(),
+                                    nn.Linear(channels,classes)
+                                    )
         self._initialize()
-        self.clinear_a=lambda x:self.linear_a(F.avg_pool2d(x,x.shape[-1]))
-        self.clinear_b=lambda x:self.linear_b(F.avg_pool2d(x,x.shape[-1]))
-        self.kl_loss=lambda x,y:torch.nn.functional.kl_div(torch.nn.functional.log_softmax(x, dim=1),y ,reduction='none').sum(dim=-1).mean()
+        self.conv=nn.Sequential(*[
+            nn.BatchNorm2d(channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(channels,channels,(3,3),(1,1),(1,1),bias=False),
+        ])
     def _initialize(self,):
         for layer in self.modules():
             if isinstance(layer,nn.Linear):
-                nn.init.zeros_(layer.weight.data)
+                nn.init.uniform_(layer.weight.data)
                 nn.init.zeros_(layer.bias.data)
+    def info_nec_loss(self,features,tempature=0.07):
+        labels=torch.cat([torch.arange(0,features.shape[0]//2) for i in range(2)],dim=0)
+        labels=(labels.unsqueeze(0) == labels.unsqueeze(1)).float()
+        labels=labels.to(features.device)
+        features=F.normalize(features,dim=1)
+        similarity_matrix=torch.matmul(features,features.T)
+        mask=torch.eye(labels.shape[0],dtype=torch.bool).to(features.device)
+        labels=labels[~mask].view(labels.shape[0],-1)
+        similarity_matrix=similarity_matrix[~mask].view(similarity_matrix.shape[0],-1)
+        positives=similarity_matrix[labels.bool()].view(labels.shape[0],-1)
+        negatives=similarity_matrix[~labels.bool()].view(labels.shape[0],-1)
+        logits=torch.cat([positives,negatives],dim=1)/tempature
+        return logits
     def forward(self,x,y):
-        b,c,h,w=x.shape
-        x,y=x.view(b,c,-1),y.view(b,c,-1)
-        x=x-x.mean(dim=-2,keepdim=True)
-        y=y-y.mean(dim=-2,keepdim=True)
-        x,y=feature_normalize(x).view(b,c,h,w),feature_normalize(y).view(b,c,h,w)
-        x=self.clinear_a(x)
-        y=self.clinear_a(y)
-        z=torch.exp(-torch.norm(x-y,p=2)/x.numel())
-        return z
-
+        c=torch.cat([x,y],dim=0)
+        c=self.conv(c)+c
+        c=F.avg_pool2d(c,c.shape[-1])
+        c_l=self.mlp(c)
+        x,y=torch.split(c_l,dim=0,split_size_or_sections=[c.shape[0]//2,c.shape[0]//2])
+        logits=self.info_nec_loss(c_l)
+        return logits,x+y
 class DimixLoss_neg(nn.Module):
     def __init__(self,list_len=1):
         super(DimixLoss_neg,self).__init__()
