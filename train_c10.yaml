@@ -30,7 +30,7 @@ path_nums_list:
   - 3
   - 4
   - 5
-  - 5
+  - 9
 nums_layer_list:
   - 0
   - 4
@@ -70,11 +70,11 @@ parameters:
   sigma:
     0.1
   batch_size:
-    64
+    84
   epoch:
     200
   dropout:
-    0.1
+    0.2
   filter_tau_m:
     4
   filter_tau_s:
@@ -99,8 +99,8 @@ optimizer:
     lr: 0.05
     weight_decay: 4e-5
   SGD:
-    momentum: 0.9
-    lr: 0.1
+    momentum: 0.7
+    lr: 0.2
     weight_decay: 4e-5
   ASGD:
     lr: 0.01

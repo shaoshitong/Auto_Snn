@@ -143,12 +143,12 @@ class DenseBlock(nn.Module):
         kernel_size = 4
 
         l =int( (size / kernel_size) ** 2 )
-        self.p = torch.randperm(int(l), dtype=torch.long,requires_grad=False).cuda()
-        self.transformer = nn.TransformerEncoderLayer(size ** 2, l, dim_feedforward=int(size), batch_first=True,
-                                                      layer_norm_eps=1e-6)
-        self.unfold = lambda image: F.unfold(image, (kernel_size, kernel_size), stride=(kernel_size, kernel_size), )
-        self.fold = lambda image: F.fold(image, (size, size), (kernel_size, kernel_size),
-                                         stride=(kernel_size, kernel_size))
+        # self.p = torch.randperm(int(l), dtype=torch.long,requires_grad=False).cuda()
+        # self.transformer = nn.TransformerEncoderLayer(size ** 2, l, dim_feedforward=int(size), batch_first=True,
+        #                                               layer_norm_eps=1e-6)
+        # self.unfold = lambda image: F.unfold(image, (kernel_size, kernel_size), stride=(kernel_size, kernel_size), )
+        # self.fold = lambda image: F.fold(image, (size, size), (kernel_size, kernel_size),
+        #                                  stride=(kernel_size, kernel_size))
         self.kernel_size = kernel_size
 
     def _initialize(self):

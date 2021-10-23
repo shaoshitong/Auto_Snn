@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import os
 import random
+from lib.memory import  MemTracker
+import inspect
 import numpy as np
 import torchvision.models
 from torch.nn.modules.utils import _single, _pair, _triple
@@ -25,7 +27,8 @@ from torch.nn.utils import spectral_norm
 from torch.nn.parameter import Parameter
 from omegaconf import OmegaConf
 import matplotlib.pyplot as plt
-
+# frame = inspect.currentframe()          # define a frame to track
+# gpu_tracker = MemTracker(frame)         # define a GPU tracker
 
 def yaml_config_get(yamlname):
     """
@@ -350,7 +353,7 @@ class two_dim_layer(nn.Module):
             self.np_last = (self.x) * (self.y) - 1 - self.tensor_check[self.x-1][self.y-1]
         else:
             self.np_last = 1
-        self.dimixloss= nn.ModuleList([Linear_adaptive_loss(out_feature,out_size) for _ in range(1)])
+        """self.dimixloss= nn.ModuleList([Linear_adaptive_loss(out_feature,out_size) for _ in range(1)])"""
         self.cross_loss=nn.CrossEntropyLoss()
     def forward(self, z):
         if self.x==0 and self.y==0:
@@ -360,8 +363,10 @@ class two_dim_layer(nn.Module):
             tensor_prev[0][i + 1] = self.x_eq[i](cat_result_get(tensor_prev, 0, i + 1 ,self.b))
         for i in range(min(self.x - 1,self.b-1)):
             tensor_prev[i + 1][0] = self.y_eq[i](cat_result_get(tensor_prev, i + 1, 0, self.b))
+        """
         mm,_ = self.dimixloss[0](tensor_prev[min(self.b-1,self.x - 1)][0], tensor_prev[0][min(self.b-1,self.y - 1)])
         self.losses=self.cross_loss(mm,torch.zeros(mm.shape[0],dtype=torch.long).to(z.device))
+        """
         for l in range(1,min(self.x,self.y)):
             tensor_prev[l][l]= self.point_layer_module[str(l) + '_' + str(l)]((
                         tensor_prev, (l,l)))
@@ -376,9 +381,8 @@ class two_dim_layer(nn.Module):
             for j in range(self.y):
                 if abs(i-j)<self.b:
                     result.append(tensor_prev[i][j])
-        result = torch.cat(result, dim=1)
-        del tensor_prev
-        return result
+        tensor_prev = torch.cat(result, dim=1)
+        return tensor_prev
 
     def settest(self, test=True):
         self.test = test
@@ -421,7 +425,6 @@ class turn_layer(nn.Module):
             self.downsample.add_module('pool', nn.AvgPool2d(kernel_size=(stride, stride), stride=(stride, stride)))
             in_feature = in_feature + out_feature * num_layer
             self.origin_out_feature =in_feature
-        self.feature_different = DimixLoss_neg()
         self._initialize()
 
     def _initialize(self):
@@ -440,12 +443,10 @@ class turn_layer(nn.Module):
 
     def forward(self, x):
         if self.num_layer != 0:
-            x = self.downsample(x)
-            x = self.xsample(x)
-            x = self.dense_deep_block(x)
+            return self.dense_deep_block(self.xsample(self.downsample(x)))
         else:
-            x=self.downsample(x)
-        return x
+            # gpu_tracker.track()
+            return self.downsample(x)
 
 
 class three_dim_Layer(nn.Module):
@@ -470,8 +471,10 @@ class three_dim_Layer(nn.Module):
         """
         self.losses = 0.
         for i in range(self.len):
-            z = self.turn_layer_module[str(i)](m)
-            m = self.point_layer_module[str(i)](z)
+            # gpu_tracker.track(1)
+            m = self.turn_layer_module[str(i)](m)
+            # gpu_tracker.track(0)
+            m = self.point_layer_module[str(i)](m)
         return m
 
     def initiate_layer(self, data, feature_list, size_list, hidden_size_list, path_nums_list, nums_layer, decay_rate,
@@ -521,43 +524,47 @@ class merge_layer(nn.Module):
 
     def forward(self, x):
         # x, y = self.initdata(x)
-        if hasattr(self, 'input_shape'):
-            x = x.view(self.input_shape)
-        else:
-            if dataoption in ['cifar10', 'cifar100']:
-                x = x.view(x.shape[0], 3, 32, 32)
-                # y = y.view(y.shape[0], 3, 32, 32)
-            elif dataoption == 'mnist':
-                x: torch.Tensor
-                x = x.view(x.shape[0], 1, 28, 28)
-                x = F.interpolate(x, (32, 32), mode='bilinear', align_corners=True)
-                # y = y.view(y.shape[0], 1, 28, 28)
-            elif dataoption == 'imagenet':
-                pass
-            elif dataoption == 'fashionmnist':
-                x = x.view(x.shape[0], 1, 28, 28)
-                x = F.interpolate(x, (32, 32), mode='bilinear', align_corners=True)
-                # y = y.view(y.shape[0], 1, 28, 28)
-            elif dataoption == 'eeg':
-                x = x.view(x.shape[0], 14, 32, 32)
-                # 64,16,16
-            elif dataoption == 'car':
-                x = x.view(x.shape[0], 3, 64, 64)
-                # 64,16,16
-            elif dataoption == 'svhn':
-                x = x.view(x.shape[0], 3, 32, 32)
-
-            elif dataoption == "stl-10":
-                x = x.view(x.shape[0], 3, 96, 96)
+        with torch.no_grad():
+            if hasattr(self, 'input_shape'):
+                x = x.view(self.input_shape)
             else:
-                raise KeyError()
+                if dataoption in ['cifar10', 'cifar100']:
+                    x = x.view(x.shape[0], 3, 32, 32)
+                    # y = y.view(y.shape[0], 3, 32, 32)
+                elif dataoption == 'mnist':
+                    x: torch.Tensor
+                    x = x.view(x.shape[0], 1, 28, 28)
+                    x = F.interpolate(x, (32, 32), mode='bilinear', align_corners=True)
+                    # y = y.view(y.shape[0], 1, 28, 28)
+                elif dataoption == 'imagenet':
+                    pass
+                elif dataoption == 'fashionmnist':
+                    x = x.view(x.shape[0], 1, 28, 28)
+                    x = F.interpolate(x, (32, 32), mode='bilinear', align_corners=True)
+                    # y = y.view(y.shape[0], 1, 28, 28)
+                elif dataoption == 'eeg':
+                    x = x.view(x.shape[0], 14, 32, 32)
+                    # 64,16,16
+                elif dataoption == 'car':
+                    x = x.view(x.shape[0], 3, 64, 64)
+                    # 64,16,16
+                elif dataoption == 'svhn':
+                    x = x.view(x.shape[0], 3, 32, 32)
+
+                elif dataoption == "stl-10":
+                    x = x.view(x.shape[0], 3, 96, 96)
+                else:
+                    raise KeyError()
         # if x.requires_grad==True:
         #     self.reset(1-self.iter)
         #     self.iter+=1e-7
         #     if abs(0.99-self.iter)<=1e-7:
         #         self.iter=0.
         # print(self.iter)
+
+        # gpu_tracker.track()
         x = self.inf(x)
+        # gpu_tracker.track()
         x = self.InputGenerateNet(x)
         x = self.out_classifier(x)
         return x
@@ -613,7 +620,7 @@ class merge_layer(nn.Module):
                 loss_bias.append(torch.norm(torch.abs(layer.weight.data), p=2) / layer.weight.data.numel())
             elif isinstance(layer, two_dim_layer):
                 layer: two_dim_layer
-                loss_feature += layer.losses
+                # loss_feature += layer.losses
         loss_feature = (loss_feature.squeeze(-1)) * sigma[0]
         loss_bias = torch.stack(loss_bias, dim=-1).mean() * sigma[1]
         loss_list = loss_list + [loss_bias, loss_feature]
