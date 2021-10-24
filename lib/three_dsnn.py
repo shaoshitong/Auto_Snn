@@ -521,7 +521,17 @@ class merge_layer(nn.Module):
         self.device = device
         self.iter=0.
         self.InputGenerateNet = three_dim_Layer(self.shape, self.device, dropout).to(device)
-
+        from lib.DenseNet import Old_Densenet
+        """
+             growth_rate: int = 32,
+        block_config: Tuple[int, int, int, int] = (6, 12, 24, 16),
+        num_init_features: int = 64,
+        bn_size: int = 4,
+        drop_rate: float = 0,
+        num_classes: int = 1000,
+        memory_efficient: bool = False
+        """
+        self.densenet=Old_Densenet(32,[8,16,32,32],64,4,0.0,10)
     def forward(self, x):
         # x, y = self.initdata(x)
         with torch.no_grad():
@@ -563,10 +573,13 @@ class merge_layer(nn.Module):
         # print(self.iter)
 
         # gpu_tracker.track()
+        """
         x = self.inf(x)
         # gpu_tracker.track()
         x = self.InputGenerateNet(x)
         x = self.out_classifier(x)
+        """
+        x=self.densenet(x)
         return x
 
     def initiate_layer(self, data, num_classes, feature_list, size_list, hidden_size_list, path_nums_list,
@@ -583,7 +596,7 @@ class merge_layer(nn.Module):
         h = self.InputGenerateNet.initiate_layer(data, feature_list, size_list, hidden_size_list, path_nums_list,
                                                  nums_layer_list, drop_rate,mult_k,breadth_threshold)
         self.out_classifier = block_out(h, num_classes, size_list[-1])
-        # self._initialize()
+        self._initialize()
     def _initialize(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):

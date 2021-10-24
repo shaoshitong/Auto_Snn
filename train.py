@@ -44,7 +44,7 @@ parser.add_argument('--log_each', dest='log_each', default=100, type=int,
 args = parser.parse_args()
 args.config_file = filename
 log = Log(log_each=args.log_each)
-
+scaler = torch.cuda.amp.GradScaler()
 def set_device():
     if torch.cuda.is_available():
         device = torch.device("cuda:0")
@@ -297,12 +297,13 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
             raise KeyError('not have this dataset')
         target = target.to(device)
         input.requires_grad_()
-        output= model(input)
-        # z = args.neg_mul * F.mse_loss(potg.squeeze(1), target.float(), reduction="mean")
-        loss_list = [criterion(criterion_loss, output, target)]
-        loss = model.L2_biasoption(loss_list,yaml["parameters"]['sigma_list'])
+        with torch.cuda.amp.autocast():
+            output= model(input)
+            # z = args.neg_mul * F.mse_loss(potg.squeeze(1), target.float(), reduction="mean")
+            loss_list = [criterion(criterion_loss, output, target)]
+            loss = model.L2_biasoption(loss_list,yaml["parameters"]['sigma_list'])
         if yaml['optimizer']['optimizer_choice'] == 'SAM':
-            model.zero_grad()
+            optimizer.zero_grad()
             loss.backward(retain_graph=False)
             optimizer.first_step(zero_grad=True)
             output= model(input)
@@ -312,10 +313,17 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
             loss.backward()
             optimizer.second_step(zero_grad=False)
         else:
-            model.zero_grad()
-            loss.backward(retain_graph=False)
-            optimizer.step()
-        # if i==0:
+            optimizer.zero_grad()
+            # unscale 梯度，可以不影响clip的threshol
+            scaler.scale(loss).backward(retain_graph=False)
+            scaler.unscale_(optimizer)
+
+            # clip梯度
+            torch.nn.utils.clip_grad_norm_(model.parameters(),5.)
+            scaler.step(optimizer)
+            scaler.update()
+
+
         #     print("\r",f"{(torch.eq(torch.argmax(potg_a,dim=-1),target).sum()/potg_a.size()[0]).item()},"
         #           f"{(torch.eq(torch.argmax(potg_b,dim=-1),target).sum()/potg_b.size()[0]).item()},"
         #           f"{(torch.eq(torch.argmax(potg_c,dim=-1),target).sum()/potg_c.size()[0]).item()},"
