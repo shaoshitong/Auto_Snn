@@ -583,7 +583,7 @@ class merge_layer(nn.Module):
         h = self.InputGenerateNet.initiate_layer(data, feature_list, size_list, hidden_size_list, path_nums_list,
                                                  nums_layer_list, drop_rate,mult_k,breadth_threshold)
         self.out_classifier = block_out(h, num_classes, size_list[-1])
-        # self._initialize()
+        self._initialize()
     def _initialize(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
