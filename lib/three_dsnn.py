@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import os
 import random
-from lib.memory import  MemTracker
+# from lib.memory import  MemTracker
 import inspect
 import numpy as np
 import torchvision.models
@@ -315,10 +315,10 @@ class two_dim_layer(nn.Module):
         self.tensor_check=numeric_get(x,y,b)
         if self.x>0 and self.y>0:
             self.x_eq = nn.ModuleList(
-                [DenseBlock(out_feature * (_) + in_feature, out_feature, hidden_size, 0, 0, p,1,in_size) for _ in
+                [DenseBlock(out_feature * (_) + in_feature, out_feature, hidden_size, 0, 0, p,0 if ((_+1>0)+abs(_+1))%2 else 2,in_size) for _ in
                  range(min(self.x - 1,self.b-1))])
             self.y_eq = nn.ModuleList(
-                [DenseBlock(out_feature * (_) + in_feature, out_feature, hidden_size, 0, 0, p,1,in_size) for _ in
+                [DenseBlock(out_feature * (_) + in_feature, out_feature, hidden_size, 0, 0, p,0 if ((_+1<0)+abs(_+1))%2 else 2,in_size) for _ in
                  range(min(self.y - 1,self.b-1))])
             for i in range(1,self.x):
                 for j in range(1,self.y):
