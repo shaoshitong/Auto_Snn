@@ -18,19 +18,26 @@ class attnetion(nn.Module):
 
 def cat_result_get(tensor_prev, i, j ,b):
     m = []
-    if not (i == j):
-        for t_i in range(i + 1):
-            for t_j in range(j + 1):
-                if (t_i != i or t_j != j) and abs(t_i - t_j)<b:
-                    m.append(tensor_prev[t_i][t_j])
-    else:
-        x = len(tensor_prev)
-        y = len(tensor_prev[0])
-        for t_i in range(x):
-            for t_j in range(y):
-                if (abs(t_i - t_j)<b) and (t_i < i or t_j < j) and ((t_j==i-1 and min(t_j+b-1,x-1)==t_i) or (t_i==i-1 and min(t_i+b-1,y-1)==t_j) or t_i==t_j):
-                    m.append(tensor_prev[t_i][t_j])
+    for t_i in range(i + 1):
+        for t_j in range(j + 1):
+            if (t_i != i or t_j != j) and abs(t_i - t_j)<b:
+                m.append(tensor_prev[t_i][t_j])
     return torch.cat(m, dim=1)
+def token_numeric_get(x,y,b,f,d):
+    print(x,y,b,f,d)
+    tensor_check = [[0 for i in range(y)] for j in range(x)]
+    for i in range(1,x):
+        tensor_check[i][0]=tensor_check[i-1][0]+max(1,int(f/(d**abs(i-0))))*int(abs(i-0)<b)
+    for i in range(1,y):
+        tensor_check[0][i]=tensor_check[0][i-1]+max(1,int(f/(d**abs(i-0))))*int(abs(i-0)<b)
+    for i in range(1,x):
+        for j in range(1,y):
+            tensor_check[i][j] = tensor_check[i][j - 1] + tensor_check[i - 1][j] - tensor_check[i - 1][j - 1] + max(1,int(f/(d**abs(i-j))))*int(abs(i-j)<b)
+    for i in range(0,x):
+        for j in range(0,y):
+            if i!=0 or j!=0:
+                tensor_check[i][j]-=max(1,int(f/(d**abs(i-j))))*int(abs(i-j)<b)
+    return tensor_check
 def numeric_get(x,y,b):
     tensor_check=[ [0 for i in range(y)] for j in range(x)]
     for i in range(1,x):

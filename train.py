@@ -168,6 +168,7 @@ def test(path, data, yaml, criterion_loss):
                                  path_nums_list=yaml["path_nums_list"],
                                  nums_layer_list=yaml["nums_layer_list"],
                                  breadth_threshold=yaml["breadth_threshold"],
+                                 down_rate=yaml["down_rate"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'cifar10':
         the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 3, 32, 32),
@@ -178,6 +179,7 @@ def test(path, data, yaml, criterion_loss):
                                  path_nums_list=yaml["path_nums_list"],
                                  nums_layer_list=yaml["nums_layer_list"],
                                  breadth_threshold=yaml["breadth_threshold"],
+                                 down_rate=yaml["down_rate"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'imagenet':
         the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 3,224, 224),
@@ -188,6 +190,7 @@ def test(path, data, yaml, criterion_loss):
                                  path_nums_list=yaml["path_nums_list"],
                                  nums_layer_list=yaml["nums_layer_list"],
                                  breadth_threshold=yaml["breadth_threshold"],
+                                 down_rate=yaml["down_rate"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'cifar100':
         the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 3, 32, 32),
@@ -198,6 +201,7 @@ def test(path, data, yaml, criterion_loss):
                                  path_nums_list=yaml["path_nums_list"],
                                  nums_layer_list=yaml["nums_layer_list"],
                                  breadth_threshold=yaml["breadth_threshold"],
+                                 down_rate=yaml["down_rate"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'fashionmnist':
         the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 1, 32, 32),
@@ -208,6 +212,7 @@ def test(path, data, yaml, criterion_loss):
                                  path_nums_list=yaml["path_nums_list"],
                                  nums_layer_list=yaml["nums_layer_list"],
                                  breadth_threshold=yaml["breadth_threshold"],
+                                 down_rate=yaml["down_rate"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'eeg':
         the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 14, 64, 64),
@@ -218,6 +223,7 @@ def test(path, data, yaml, criterion_loss):
                                  path_nums_list=yaml["path_nums_list"],
                                  nums_layer_list=yaml["nums_layer_list"],
                                  breadth_threshold=yaml["breadth_threshold"],
+                                 down_rate=yaml["down_rate"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'car':
         the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 3, 64, 64),
@@ -228,6 +234,7 @@ def test(path, data, yaml, criterion_loss):
                                  path_nums_list=yaml["path_nums_list"],
                                  nums_layer_list=yaml["nums_layer_list"],
                                  breadth_threshold=yaml["breadth_threshold"],
+                                 down_rate=yaml["down_rate"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'svhn':
         the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 3, 32, 32),
@@ -238,6 +245,7 @@ def test(path, data, yaml, criterion_loss):
                                  path_nums_list=yaml["path_nums_list"],
                                  nums_layer_list=yaml["nums_layer_list"],
                                  breadth_threshold=yaml["breadth_threshold"],
+                                 down_rate=yaml["down_rate"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'stl-10':
         the_model.initiate_layer(data=torch.randn(yaml['parameters']['batch_size'], 3, 96, 96),
@@ -248,6 +256,7 @@ def test(path, data, yaml, criterion_loss):
                                  path_nums_list=yaml["path_nums_list"],
                                  nums_layer_list=yaml["nums_layer_list"],
                                  breadth_threshold=yaml["breadth_threshold"],
+                                 down_rate=yaml["down_rate"],
                                  mult_k=yaml["mult_k"])
     else:
         raise KeyError('not have this dataset')
@@ -324,7 +333,8 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
             scaler.update()
 
         if i==2:
-            parametersgradCheck(model)
+            pass
+            # parametersgradCheck(model)
         #     print("\r",f"{(torch.eq(torch.argmax(potg_a,dim=-1),target).sum()/potg_a.size()[0]).item()},"
         #           f"{(torch.eq(torch.argmax(potg_b,dim=-1),target).sum()/potg_b.size()[0]).item()},"
         #           f"{(torch.eq(torch.argmax(potg_c,dim=-1),target).sum()/potg_c.size()[0]).item()},"
@@ -370,6 +380,7 @@ if __name__ == "__main__":
                                  path_nums_list=yaml["path_nums_list"],
                                  nums_layer_list=yaml["nums_layer_list"],
                                  breadth_threshold=yaml["breadth_threshold"],
+                                 down_rate=yaml["down_rate"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'svhn':
         train_dataloader, test_dataloader = load_data_svhn(yaml['parameters']['batch_size'],
@@ -382,6 +393,7 @@ if __name__ == "__main__":
                                  path_nums_list=yaml["path_nums_list"],
                                  nums_layer_list=yaml["nums_layer_list"],
                                  breadth_threshold=yaml["breadth_threshold"],
+                                 down_rate=yaml["down_rate"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'cifar10':
         train_dataloader, test_dataloader = load_data(yaml['parameters']['batch_size'],
@@ -395,6 +407,7 @@ if __name__ == "__main__":
                                  path_nums_list=yaml["path_nums_list"],
                                  nums_layer_list=yaml["nums_layer_list"],
                                  breadth_threshold=yaml["breadth_threshold"],
+                                 down_rate=yaml["down_rate"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'imagenet':
         train_dataloader, test_dataloader = load_data_imagenet(yaml['parameters']['batch_size'],
@@ -407,6 +420,7 @@ if __name__ == "__main__":
                              path_nums_list=yaml["path_nums_list"],
                              nums_layer_list=yaml["nums_layer_list"],
                              breadth_threshold=yaml["breadth_threshold"],
+                             down_rate=yaml["down_rate"],
                              mult_k=yaml["mult_k"])
     elif yaml['data'] == 'cifar100':
         train_dataloader, test_dataloader = load_data_c100(yaml['parameters']['batch_size'],
@@ -420,6 +434,7 @@ if __name__ == "__main__":
                                  path_nums_list=yaml["path_nums_list"],
                                  nums_layer_list=yaml["nums_layer_list"],
                                  breadth_threshold=yaml["breadth_threshold"],
+                                 down_rate=yaml["down_rate"],
                                  mult_k=yaml["mult_k"])
     elif yaml['data'] == 'stl-10':
         train_dataloader, test_dataloader = load_data_stl(yaml['parameters']['batch_size'],
@@ -432,6 +447,7 @@ if __name__ == "__main__":
                              path_nums_list=yaml["path_nums_list"],
                              nums_layer_list=yaml["nums_layer_list"],
                              breadth_threshold=yaml["breadth_threshold"],
+                             down_rate=yaml["down_rate"],
                              mult_k=yaml["mult_k"])
     elif yaml['data'] == 'car':
         train_dataloader, test_dataloader = load_data_car(yaml['parameters']['batch_size'],
@@ -444,6 +460,7 @@ if __name__ == "__main__":
                              path_nums_list=yaml["path_nums_list"],
                              nums_layer_list=yaml["nums_layer_list"],
                              breadth_threshold=yaml["breadth_threshold"],
+                             down_rate=yaml["down_rate"],
                              mult_k=yaml["mult_k"])
     elif yaml['data'] == 'fashionmnist':
         fashionmnist_trainset = datasets.FashionMNIST(root=args.data_url, train=True, download=True,
@@ -465,10 +482,10 @@ if __name__ == "__main__":
                              path_nums_list=yaml["path_nums_list"],
                              nums_layer_list=yaml["nums_layer_list"],
                              breadth_threshold=yaml["breadth_threshold"],
+                             down_rate=yaml["down_rate"],
                              mult_k=yaml["mult_k"])
     elif yaml['data'] == 'eeg':
         p = random.randint(0, 4)
-        print(p)
         train_data = EEGDateset(random=p, flatten=True, transform=True, training=True)
         test_data = EEGDateset(random=p, flatten=False, transform=False, training=False)
         train_dataloader = DataLoader(train_data, batch_size=yaml['parameters']['batch_size'], shuffle=True,
@@ -485,6 +502,7 @@ if __name__ == "__main__":
                                  path_nums_list=yaml["path_nums_list"],
                                  nums_layer_list=yaml["nums_layer_list"],
                                  breadth_threshold=yaml["breadth_threshold"],
+                                 down_rate=yaml["down_rate"],
                                  mult_k=yaml["mult_k"])
     else:
         raise KeyError('There is no corresponding dataset')

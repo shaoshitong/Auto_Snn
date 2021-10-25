@@ -19,7 +19,7 @@ from lib.Wideresnet import Downsampleunit
 from lib.featurefocusing_v2 import Feature_forward
 from lib.dimixloss import DimixLoss, DimixLoss_neg,Linear_adaptive_loss
 from lib.PointConv import PointConv
-from lib.GRU import multi_GRU, multi_block_eq, Cat, DenseBlock, cat_result_get,return_tensor_add,numeric_get,aplha_decay
+from lib.GRU import multi_GRU, multi_block_eq, Cat, DenseBlock, cat_result_get,return_tensor_add,numeric_get,aplha_decay,token_numeric_get
 from lib.DenseNet import DenseBlock as DenseDeepBlock
 import math
 import pandas as pd
@@ -258,22 +258,21 @@ class Trinomial_operation(object):
 
 
 class point_cul_Layer(nn.Module):
-    def __init__(self, in_feature, out_feature, hidden_size, in_size, out_size, path_len, cat_x, cat_y,b, STuning=True,
-                 grad_lr=0.1, dropout=0.3,
-                 use_gauss=True, mult_k=2):
+    def __init__(self, in_feature, out_feature, hidden_size, in_size, out_size, true_out, cat_x, cat_y,b,d, STuning=True,
+                 grad_lr=0.1, dropout=0.3,use_gauss=True, mult_k=2):
         """
         输入的张量维度为（batch_size,64,x//2,y//2）
         该层通过门机制后进行卷积与归一化
         """
         super(point_cul_Layer, self).__init__()
-        self.cat_feature = (path_len - 1) * (out_feature) + in_feature
+        self.cat_feature =  (out_feature) + in_feature
         if cat_x==cat_y:
             fusion=1
-        elif ((cat_x>cat_y)+abs(cat_y-cat_x))%2==0:
+        elif (cat_x>cat_y)==0:
             fusion=0
         else:
             fusion=2
-        self.DoorMach = DenseBlock(self.cat_feature, out_feature, hidden_size, cat_x, cat_y,
+        self.DoorMach = DenseBlock(self.cat_feature, int(true_out/(d**abs(cat_x-cat_y))), hidden_size, cat_x, cat_y,
                                    dropout,fusion,in_size)
         self.STuning = STuning
         self.b=b
@@ -284,15 +283,12 @@ class point_cul_Layer(nn.Module):
 
     def forward(self, x):
         tensor_prev, (i, j) = x
-
         x = self.DoorMach(cat_result_get(tensor_prev, i, j ,self.b))
-        # if i==j:
-        #     x=aplha_decay.apply(x)
         return x
 
 
 class two_dim_layer(nn.Module):
-    def __init__(self, in_feature, out_feature, hidden_size, in_size, out_size, x, y,b, mult_k=2, p=0.2):
+    def __init__(self, in_feature, out_feature, hidden_size, in_size, out_size, x, y,b,down_rate, mult_k=2, p=0.2):
         super(two_dim_layer, self).__init__()
         self.in_feature = in_feature
         self.out_feature = out_feature
@@ -312,64 +308,64 @@ class two_dim_layer(nn.Module):
         """
         self.point_cul_layer = {}
         self.test = False
-        self.tensor_check=numeric_get(x,y,b)
+        self.tensor_check=token_numeric_get(x,y,b,out_feature,down_rate)
+        for col in self.tensor_check:
+            print(col)
+        print("\n\n")
         if self.x>0 and self.y>0:
-            self.x_eq = nn.ModuleList(
-                [DenseBlock(out_feature * (_) + in_feature, out_feature, hidden_size, 0, 0, p,0 if ((_+1>0)+abs(_+1))%2 else 2,in_size) for _ in
-                 range(min(self.x - 1,self.b-1))])
-            self.y_eq = nn.ModuleList(
-                [DenseBlock(out_feature * (_) + in_feature, out_feature, hidden_size, 0, 0, p,0 if ((_+1<0)+abs(_+1))%2 else 2,in_size) for _ in
-                 range(min(self.y - 1,self.b-1))])
-            for i in range(1,self.x):
-                for j in range(1,self.y):
-                    if abs(i-j)<self.b:
-                        if not (i==j):
-                            self.point_cul_layer[str(i) + "_" + str(j)] = point_cul_Layer(
-                                in_feature,
-                                out_feature,
-                                hidden_size,
-                                in_size,
-                                out_size,
-                                (i+1)*(j+1)-1-self.tensor_check[i][j],
-                                i ,
-                                j ,
-                                b,
-                                dropout=p,
-                                mult_k=mult_k)
-                        else:
-                            self.point_cul_layer[str(i) + "_" + str(j)] = point_cul_Layer(
-                                in_feature,
-                                out_feature,
-                                hidden_size,
-                                in_size,
-                                out_size,
-                                i+2,
-                                i ,
-                                j ,
-                                b,
-                                dropout=p,
-                                mult_k=mult_k)
+            for i in range(0,self.x):
+                for j in range(0,self.y):
+                    if i!=0 or j!=0:
+                        if abs(i-j)<self.b:
+                            if not (i==j):
+                                """
+                                in_feature, out_feature, hidden_size, in_size, out_size, 
+                                true_out, cat_x, cat_y,b,d, STuning=True,
+                                grad_lr=0.1, dropout=0.3,use_gauss=True, mult_k=2,
+                                """
+                                self.point_cul_layer[str(i) + "_" + str(j)] = point_cul_Layer(
+                                    in_feature,
+                                    self.tensor_check[i][j],
+                                    hidden_size,
+                                    in_size,
+                                    out_size,
+                                    out_feature,
+                                    i ,
+                                    j ,
+                                    b ,
+                                    down_rate,
+                                    dropout=p,
+                                    mult_k=mult_k)
+                            else:
+                                self.point_cul_layer[str(i) + "_" + str(j)] = point_cul_Layer(
+                                    in_feature,
+                                    self.tensor_check[i][j],
+                                    hidden_size,
+                                    in_size,
+                                    out_size,
+                                    out_feature,
+                                    i ,
+                                    j ,
+                                    b ,
+                                    down_rate,
+                                    dropout=p,
+                                    mult_k=mult_k)
             self.point_layer_module = nn.ModuleDict(self.point_cul_layer)
-            self.np_last = (self.x) * (self.y) - 1 - self.tensor_check[self.x-1][self.y-1]
-        else:
-            self.np_last = 1
+            self.np_last = self.tensor_check[self.x-1][self.y-1]+out_feature+in_feature
+            self.cross_loss = nn.CrossEntropyLoss()
         """self.dimixloss= nn.ModuleList([Linear_adaptive_loss(out_feature,out_size) for _ in range(1)])"""
-        self.cross_loss=nn.CrossEntropyLoss()
     def forward(self, z):
         if self.x==0 and self.y==0:
             return z
         tensor_prev = [[z for i in range(self.x)] for j in range(self.y)]
-        for i in range(min(self.y - 1,self.b-1)):
-            tensor_prev[0][i + 1] = self.x_eq[i](cat_result_get(tensor_prev, 0, i + 1 ,self.b))
-        for i in range(min(self.x - 1,self.b-1)):
-            tensor_prev[i + 1][0] = self.y_eq[i](cat_result_get(tensor_prev, i + 1, 0, self.b))
         """
         mm,_ = self.dimixloss[0](tensor_prev[min(self.b-1,self.x - 1)][0], tensor_prev[0][min(self.b-1,self.y - 1)])
         self.losses=self.cross_loss(mm,torch.zeros(mm.shape[0],dtype=torch.long).to(z.device))
         """
-        for l in range(1,min(self.x,self.y)):
-            tensor_prev[l][l]= self.point_layer_module[str(l) + '_' + str(l)]((
-                        tensor_prev, (l,l)))
+        for l in range(0,min(self.x,self.y)):
+            if l!=0:
+                tensor_prev[l][l]= self.point_layer_module[str(l) + '_' + str(l)]((
+                            tensor_prev, (l,l)))
             for i in range(l+1,self.y):
                 if abs(l-i)<self.b:
                     tensor_prev[l][i] =self.point_layer_module[str(l) + '_' + str(i)]((tensor_prev,(l,i)))
@@ -392,7 +388,6 @@ class two_dim_layer(nn.Module):
                 for j in range(1, self.y):
                     if abs(i - j) < self.b:
                         if random.random() > random_float:
-                            print(random_float)
                             for layer in self.point_layer_module[str(i) + "_" + str(j)].modules():
                                 if isinstance(layer,nn.Conv2d):
                                     nn.init.kaiming_normal_(layer.weight.data,mode="fan_in",nonlinearity="relu")
@@ -471,14 +466,12 @@ class three_dim_Layer(nn.Module):
         """
         self.losses = 0.
         for i in range(self.len):
-            # gpu_tracker.track(1)
             m = self.turn_layer_module[str(i)](m)
-            # gpu_tracker.track(0)
             m = self.point_layer_module[str(i)](m)
         return m
 
     def initiate_layer(self, data, feature_list, size_list, hidden_size_list, path_nums_list, nums_layer, decay_rate,
-                       mult_k,breadth_threshold):
+                       mult_k,down_rate,breadth_threshold):
         """
         three-dim层初始化节点
         """
@@ -499,8 +492,8 @@ class three_dim_Layer(nn.Module):
             else:
                 self.turn_layer[str(i)] = turn_layer(h, f2, h1, n1, decay_rate, int(s1 // s2), self.dropout)
             m = self.turn_layer[str(i)].origin_out_feature
-            self.point_layer[str(i)] = two_dim_layer(m, f2, h1, s2, s2, p1, p1,b1, mult_k, self.dropout)
-            h = self.point_layer[str(i)].np_last * f2 + m
+            self.point_layer[str(i)] = two_dim_layer(m, f2, h1, s2, s2, p1, p1,b1,down_rate,mult_k, self.dropout)
+            h = self.point_layer[str(i)].np_last
         self.turn_layer_module = nn.ModuleDict(self.turn_layer)
         self.point_layer_module = nn.ModuleDict(self.point_layer)
         self.len = len(hidden_size_list)
@@ -570,7 +563,7 @@ class merge_layer(nn.Module):
         return x
 
     def initiate_layer(self, data, num_classes, feature_list, size_list, hidden_size_list, path_nums_list,
-                       nums_layer_list,breadth_threshold, mult_k=2,drop_rate=2):
+                       nums_layer_list,down_rate,breadth_threshold, mult_k=2,drop_rate=2):
         """
         配置相应的层
         """
@@ -581,7 +574,7 @@ class merge_layer(nn.Module):
         else:
             self.inf = nn.Conv2d(c, feature_list[0], (3, 3), (1,1), (1, 1), bias=False)
         h = self.InputGenerateNet.initiate_layer(data, feature_list, size_list, hidden_size_list, path_nums_list,
-                                                 nums_layer_list, drop_rate,mult_k,breadth_threshold)
+                                                 nums_layer_list, drop_rate,mult_k,down_rate,breadth_threshold)
         self.out_classifier = block_out(h, num_classes, size_list[-1])
         self._initialize()
     def _initialize(self):

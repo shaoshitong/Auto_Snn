@@ -27,10 +27,10 @@ hidden_size_list:
   - 4
   - 4
 path_nums_list:
-  - 6
-  - 12
-  - 18
-  - 18
+  - 5
+  - 7
+  - 9
+  - 9
 nums_layer_list:
   - 0
   - 4
@@ -41,6 +41,8 @@ breadth_threshold:
   - 2
   - 2
   - 2
+down_rate:
+  2
 mult_k:
   1
 use_standard:
@@ -74,7 +76,7 @@ parameters:
   epoch:
     200
   dropout:
-    0.0
+    0.1
   filter_tau_m:
     4
   filter_tau_s:
@@ -100,8 +102,8 @@ optimizer:
     weight_decay: 4e-5
   SGD:
     momentum: 0.9
-    lr: 0.01
-    weight_decay: 3e-5
+    lr: 0.1
+    weight_decay: 4e-5
   ASGD:
     lr: 0.002
     weight_decay: 4e-5
