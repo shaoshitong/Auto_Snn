@@ -28,16 +28,16 @@ hidden_size_list:
   - 4
 path_nums_list:
   - 5
-  - 7
-  - 9
-  - 9
+  - 5
+  - 5
+  - 5
 nums_layer_list:
   - 0
-  - 4
-  - 5
-  - 5
+  - 10
+  - 10
+  - 10
 breadth_threshold:
-  - 2
+  - 3
   - 2
   - 2
   - 2
@@ -46,7 +46,7 @@ down_rate:
 mult_k:
   1
 use_standard:
-  True
+  False
 densenetparameter:
   bn_size:
     2
@@ -76,7 +76,7 @@ parameters:
   epoch:
     200
   dropout:
-    0.1
+    0.2
   filter_tau_m:
     4
   filter_tau_s:
@@ -103,7 +103,7 @@ optimizer:
   SGD:
     momentum: 0.9
     lr: 0.1
-    weight_decay: 4e-5
+    weight_decay: 5e-5
   ASGD:
     lr: 0.002
     weight_decay: 4e-5
@@ -118,10 +118,12 @@ scheduler:
   SchedulerLR:
     milestones:
       - 0.4
-      - 0.7
-      - 0.9
+      - 0.6
+      - 0.8
     gamma:
-      0.2
+      - 0.2
+      - 0.2
+      - 0.05
   MultiStepLR:
     milestones:
       - 25

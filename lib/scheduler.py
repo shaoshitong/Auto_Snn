@@ -40,8 +40,7 @@ def get_scheduler(optimizer, conf):
     elif scheduler_choice == 'none':
         return None
 class SchedulerLR(object):
-    def __init__(self, optimizer, learning_rate: float, epochs: int,turnlist:list,gamma=0.2):
-        gamma:float
+    def __init__(self, optimizer, learning_rate: float, epochs: int,turnlist:list,gamma:list):
         self.optimizer = optimizer
         self.epochs = epochs
         self.base = learning_rate
@@ -49,12 +48,14 @@ class SchedulerLR(object):
         self.turnlist=[float(_) for _ in turnlist]
     def __call__(self, epoch):
         lr=self.base
+        now_gamma=1.
         for i,nums in enumerate(self.turnlist):
+            now_gamma*=self.gamma[i]
             if i==len(self.turnlist)-1 and self.epochs*self.turnlist[i]<=epoch:
-                lr=self.base*self.gamma**(i+1)
+                lr=self.base*now_gamma
                 break
             if self.epochs*self.turnlist[i]<=epoch and epoch <self.epochs*self.turnlist[i+1]:
-                lr=self.base*self.gamma**(i+1)
+                lr=self.base*now_gamma
                 break
         for param_group in self.optimizer.param_groups:
             param_group["lr"] = lr
