@@ -19,7 +19,8 @@ from lib.Wideresnet import Downsampleunit
 from lib.featurefocusing_v2 import Feature_forward
 from lib.dimixloss import DimixLoss, DimixLoss_neg,Linear_adaptive_loss
 from lib.PointConv import PointConv
-from lib.GRU import multi_GRU, multi_block_eq, Cat, DenseBlock, cat_result_get,return_tensor_add,numeric_get,aplha_decay,token_numeric_get
+from lib.GRU import multi_GRU, multi_block_eq, Cat, DenseBlock, cat_result_get,return_tensor_add,numeric_get,\
+    aplha_decay,token_numeric_get,part_token_numeric_get,part_cat_result_get
 from lib.DenseNet import DenseBlock as DenseDeepBlock
 import math
 import pandas as pd
@@ -258,33 +259,50 @@ class Trinomial_operation(object):
 
 
 class point_cul_Layer(nn.Module):
-    def __init__(self, in_feature, out_feature, hidden_size, in_size, out_size, true_out, cat_x, cat_y,b,d, STuning=True,
+    def __init__(self,is_diag, in_feature, out_feature, hidden_size, in_size, out_size, true_out, cat_x, cat_y,b,d,x,y, STuning=True,
                  grad_lr=0.1, dropout=0.3,use_gauss=True, mult_k=2):
         """
         输入的张量维度为（batch_size,64,x//2,y//2）
         该层通过门机制后进行卷积与归一化
         """
         super(point_cul_Layer, self).__init__()
-        self.cat_feature =  (out_feature) + in_feature
-        if cat_x==cat_y:
-            fusion=1
-        elif (cat_x>cat_y)==0:
-            fusion=0
+        self.is_diag=is_diag
+        if is_diag==False:
+            self.cat_feature =  (out_feature) + in_feature
+            if cat_x==cat_y:
+                fusion=1
+            elif (cat_x>cat_y)==0:
+                fusion=0
+            else:
+                fusion=2
+            self.DoorMach = DenseBlock(self.cat_feature, int(true_out/(d**abs(cat_x-cat_y))), hidden_size, cat_x, cat_y,
+                                       dropout,fusion,in_size)
+            self.STuning = STuning
+            self.b=b
+            self.grad_lr = grad_lr
+            self.sigma = 1
+            self.cat_x,self.cat_y=cat_x,cat_y
+            self.norm = None
         else:
-            fusion=2
-        self.DoorMach = DenseBlock(self.cat_feature, int(true_out/(d**abs(cat_x-cat_y))), hidden_size, cat_x, cat_y,
-                                   dropout,fusion,in_size)
-        self.STuning = STuning
-        self.b=b
-        self.grad_lr = grad_lr
-        self.sigma = 1
-        self.cat_x,self.cat_y=cat_x,cat_y
-        self.norm = None
+            self.cat_feature = (out_feature) + in_feature
+            self.part_feature=part_token_numeric_get(cat_x,cat_y,b,true_out,d)
+            self.DoorMach= DenseBlock(self.cat_feature-2*self.part_feature+int(true_out/(d**abs(cat_x-cat_y))), int(true_out/(d**abs(cat_x-cat_y))), hidden_size, cat_x, cat_y,
+                                       dropout,1,in_size)
+            self.MixMach=nn.Conv2d(self.part_feature,int(true_out/(d**abs(cat_x-cat_y))),(1,1),(1,1),(0,0),bias=False)
+            self.b = b
+            self.grad_lr = grad_lr
+            self.sigma = 1
+            self.cat_x, self.cat_y = cat_x, cat_y
+            self.norm = None
 
     def forward(self, x):
-        tensor_prev, (i, j) = x
-        x = self.DoorMach(cat_result_get(tensor_prev, i, j ,self.b))
-        return x
+        if self.is_diag==False:
+            tensor_prev, (i, j) = x
+            return self.DoorMach(cat_result_get(tensor_prev, i, j ,self.b))
+        else:
+            tensor_prev, (i, j) = x
+            left,midden,right=part_cat_result_get(tensor_prev,i,j,self.b)
+            return self.DoorMach(torch.cat(midden+[self.MixMach(torch.cat(right,dim=1))+self.MixMach(torch.cat(left,dim=1))],dim=1))
 
 
 class two_dim_layer(nn.Module):
@@ -324,6 +342,7 @@ class two_dim_layer(nn.Module):
                                 grad_lr=0.1, dropout=0.3,use_gauss=True, mult_k=2,
                                 """
                                 self.point_cul_layer[str(i) + "_" + str(j)] = point_cul_Layer(
+                                    False,
                                     in_feature,
                                     self.tensor_check[i][j],
                                     hidden_size,
@@ -334,10 +353,13 @@ class two_dim_layer(nn.Module):
                                     j ,
                                     b ,
                                     down_rate,
+                                    x,
+                                    y,
                                     dropout=p,
                                     mult_k=mult_k)
                             else:
                                 self.point_cul_layer[str(i) + "_" + str(j)] = point_cul_Layer(
+                                    True,
                                     in_feature,
                                     self.tensor_check[i][j],
                                     hidden_size,
@@ -348,6 +370,8 @@ class two_dim_layer(nn.Module):
                                     j ,
                                     b ,
                                     down_rate,
+                                    x,
+                                    y,
                                     dropout=p,
                                     mult_k=mult_k)
             self.point_layer_module = nn.ModuleDict(self.point_cul_layer)
@@ -406,9 +430,10 @@ class turn_layer(nn.Module):
             self.xsample.add_module('pool', nn.AvgPool2d(kernel_size=(stride, stride), stride=(stride, stride)))
 
             in_feature = int(in_feature / decay_rate)
-            self.dense_deep_block = DenseDeepBlock([in_feature] + [out_feature] * num_layer, bn_size, dropout,
-                                                   num_layer)
-            in_feature = in_feature + out_feature * num_layer
+            if num_layer!=1:
+                self.dense_deep_block = DenseDeepBlock([in_feature] + [out_feature] * num_layer, bn_size, dropout,
+                                                       num_layer)
+                in_feature = in_feature + out_feature * num_layer
             self.origin_out_feature =in_feature
             self.num_layer = num_layer
         else:
@@ -438,7 +463,10 @@ class turn_layer(nn.Module):
 
     def forward(self, x):
         if self.num_layer != 0:
-            return self.dense_deep_block(self.xsample(self.downsample(x)))
+            if self.num_layer!=1:
+                return self.dense_deep_block(self.xsample(self.downsample(x)))
+            else:
+                return self.xsample(self.downsample(x))
         else:
             # gpu_tracker.track()
             return self.downsample(x)
@@ -548,16 +576,7 @@ class merge_layer(nn.Module):
                     x = x.view(x.shape[0], 3, 96, 96)
                 else:
                     raise KeyError()
-        # if x.requires_grad==True:
-        #     self.reset(1-self.iter)
-        #     self.iter+=1e-7
-        #     if abs(0.99-self.iter)<=1e-7:
-        #         self.iter=0.
-        # print(self.iter)
-
-        # gpu_tracker.track()
         x = self.inf(x)
-        # gpu_tracker.track()
         x = self.InputGenerateNet(x)
         x = self.out_classifier(x)
         return x
@@ -573,10 +592,10 @@ class merge_layer(nn.Module):
             self.inf = nn.Sequential(*[nn.Conv2d(c, feature_list[0], (7, 7), (2, 2), (2, 2), bias=False),])
         else:
             self.inf = nn.Conv2d(c, feature_list[0], (3, 3), (1,1), (1, 1), bias=False)
+        self._initialize()
         h = self.InputGenerateNet.initiate_layer(data, feature_list, size_list, hidden_size_list, path_nums_list,
                                                  nums_layer_list, drop_rate,mult_k,down_rate,breadth_threshold)
         self.out_classifier = block_out(h, num_classes, size_list[-1])
-        self._initialize()
     def _initialize(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):

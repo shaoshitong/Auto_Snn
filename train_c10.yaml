@@ -27,20 +27,20 @@ hidden_size_list:
   - 4
   - 4
 path_nums_list:
-  - 5
-  - 5
-  - 5
-  - 5
+  - 8
+  - 8
+  - 8
+  - 8
 nums_layer_list:
   - 0
-  - 10
-  - 10
-  - 10
+  - 1
+  - 1
+  - 1
 breadth_threshold:
   - 3
-  - 2
-  - 2
-  - 2
+  - 3
+  - 3
+  - 3
 down_rate:
   2
 mult_k:
@@ -76,7 +76,7 @@ parameters:
   epoch:
     200
   dropout:
-    0.2
+    0.0
   filter_tau_m:
     4
   filter_tau_s:

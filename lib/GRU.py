@@ -24,7 +24,6 @@ def cat_result_get(tensor_prev, i, j ,b):
                 m.append(tensor_prev[t_i][t_j])
     return torch.cat(m, dim=1)
 def token_numeric_get(x,y,b,f,d):
-    print(x,y,b,f,d)
     tensor_check = [[0 for i in range(y)] for j in range(x)]
     for i in range(1,x):
         tensor_check[i][0]=tensor_check[i-1][0]+max(1,int(f/(d**abs(i-0))))*int(abs(i-0)<b)
@@ -38,6 +37,30 @@ def token_numeric_get(x,y,b,f,d):
             if i!=0 or j!=0:
                 tensor_check[i][j]-=max(1,int(f/(d**abs(i-j))))*int(abs(i-j)<b)
     return tensor_check
+
+def part_cat_result_get(tensor_prev,i,j,b):
+    left=[]
+    midden=[]
+    right=[]
+    for t_i in range(i+1):
+        for t_j in range(j+1):
+            if abs(t_i-t_j)<b and (t_i != i or t_j != j) :
+                if (t_i<t_j):
+                    left.append(tensor_prev[t_i][t_j])
+                elif t_i==t_j:
+                    midden.append(tensor_prev[t_i][t_j])
+                else:
+                    right.append(tensor_prev[t_i][t_j])
+    return left,midden,right
+
+def part_token_numeric_get(x,y,b,f,d):
+    feature_map_numeric=0
+    for i in range(0,x+1):
+        for j in range(0,y+1):
+            if abs(i-j)<b and i<j and (i != x or j != y) :
+                feature_map_numeric+=max(1,int(f/(d**abs(i-j))))
+    return feature_map_numeric
+
 def numeric_get(x,y,b):
     tensor_check=[ [0 for i in range(y)] for j in range(x)]
     for i in range(1,x):
