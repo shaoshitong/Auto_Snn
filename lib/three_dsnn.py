@@ -286,9 +286,14 @@ class point_cul_Layer(nn.Module):
         else:
             self.cat_feature = (out_feature) + in_feature
             self.part_feature=part_token_numeric_get(cat_x,cat_y,b,true_out,d)
-            self.DoorMach= DenseBlock(self.cat_feature-2*self.part_feature+int(true_out/(d**abs(cat_x-cat_y))), int(true_out/(d**abs(cat_x-cat_y))), hidden_size, cat_x, cat_y,
+            self.DoorMach= DenseBlock(self.cat_feature-2*self.part_feature+2*int(true_out/(d**abs(cat_x-cat_y))), int(true_out/(d**abs(cat_x-cat_y))), hidden_size, cat_x, cat_y,
                                        dropout,1,in_size)
             self.MixMach=nn.Conv2d(self.part_feature,int(true_out/(d**abs(cat_x-cat_y))),(1,1),(1,1),(0,0),bias=False)
+            self.Discriminator=nn.Sequential(*[
+                nn.AdaptiveAvgPool2d((1,1)),
+                nn.Flatten(),
+                nn.Linear(int(true_out/(d**abs(cat_x-cat_y))),1),
+            ])
             self.b = b
             self.grad_lr = grad_lr
             self.sigma = 1
@@ -302,7 +307,10 @@ class point_cul_Layer(nn.Module):
         else:
             tensor_prev, (i, j) = x
             left,midden,right=part_cat_result_get(tensor_prev,i,j,self.b)
-            return self.DoorMach(torch.cat(midden+[self.MixMach(torch.cat(right,dim=1))+self.MixMach(torch.cat(left,dim=1))],dim=1))
+            a=self.MixMach(torch.cat(right, dim=1))
+            b=self.MixMach(torch.cat(left, dim=1))
+            self.dis_loss=1./(torch.norm(self.Discriminator(a)-self.Discriminator(b),p=2)/a.shape[0])
+            return self.DoorMach(torch.cat(midden+[a]+[b],dim=1))
 
 
 class two_dim_layer(nn.Module):
@@ -630,13 +638,13 @@ class merge_layer(nn.Module):
             if isinstance(layer, nn.Conv2d) and layer.bias is not None:
                 layer: nn.Conv2d
                 loss_bias.append(torch.norm(torch.abs(layer.weight.data), p=2) / layer.weight.data.numel())
-            elif isinstance(layer, two_dim_layer):
-                layer: two_dim_layer
-                # loss_feature += layer.losses
+            elif isinstance(layer, point_cul_Layer):
+                layer: point_cul_Layer
+                if hasattr(layer,"dis_loss"):
+                    loss_feature+=layer.dis_loss
         loss_feature = (loss_feature.squeeze(-1)) * sigma[0]
         loss_bias = torch.stack(loss_bias, dim=-1).mean() * sigma[1]
         loss_list = loss_list + [loss_bias, loss_feature]
-        # self._list_print(loss_list)
         loss = torch.stack(loss_list, dim=-1).sum()
         return loss
 
