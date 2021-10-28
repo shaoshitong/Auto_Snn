@@ -42,7 +42,7 @@ breadth_threshold:
   - 4
   - 4
 down_rate:
-  4
+  2
 mult_k:
   1
 use_standard:
@@ -59,7 +59,7 @@ parameters:
   loss_option:
     cross
   sigma_list:
-    - 0.1
+    - 0.5
     - 0.1
   s:
     4
@@ -74,9 +74,9 @@ parameters:
   batch_size:
     64
   epoch:
-    200
+    300
   dropout:
-    0.15
+    0.0
   filter_tau_m:
     4
   filter_tau_s:
@@ -117,12 +117,10 @@ scheduler:
     'SchedulerLR'
   SchedulerLR:
     milestones:
-      - 0.4
-      - 0.6
+      - 0.5
       - 0.8
     gamma:
-      - 0.2
-      - 0.2
+      - 0.1
       - 0.1
   MultiStepLR:
     milestones:

@@ -286,7 +286,7 @@ class point_cul_Layer(nn.Module):
         else:
             self.cat_feature = (out_feature) + in_feature
             self.part_feature=part_token_numeric_get(cat_x,cat_y,b,true_out,d)
-            self.DoorMach= DenseBlock(self.cat_feature-2*self.part_feature+2*max(1,int(true_out/(d**abs(cat_x-cat_y)))), max(1,int(true_out/(d**abs(cat_x-cat_y)))), hidden_size, cat_x, cat_y,
+            self.DoorMach= DenseBlock(self.cat_feature, max(1,int(true_out/(d**abs(cat_x-cat_y)))), hidden_size, cat_x, cat_y,
                                        dropout,1,in_size)
             self.MixMach=nn.Conv2d(self.part_feature,max(1,int(true_out/(d**abs(cat_x-cat_y)))),(1,1),(1,1),(0,0),bias=False)
             self.Discriminator=nn.Sequential(*[
@@ -307,10 +307,15 @@ class point_cul_Layer(nn.Module):
         else:
             tensor_prev, (i, j) = x
             left,midden,right=part_cat_result_get(tensor_prev,i,j,self.b)
-            a=self.MixMach(torch.cat(right, dim=1))
-            b=self.MixMach(torch.cat(left, dim=1))
-            self.dis_loss=1./(torch.norm(self.Discriminator(a)-self.Discriminator(b),p=2)/a.shape[0])
-            return self.DoorMach(torch.cat(midden+[a]+[b],dim=1))
+            x=self.DoorMach(torch.cat([*left,*midden,*right],dim=1))
+            a=torch.cat(right, dim=1)
+            b=torch.cat(left, dim=1)
+            ba,c,h,w=a.shape
+            self.dis_loss=1.-torch.sigmoid(torch.matmul(F.avg_pool2d(a,a.shape[-1]).view(ba,1,c),F.avg_pool2d(b,b.shape[-1]).view(ba,c,1)).mean())
+            a=self.MixMach(a)
+            b=self.MixMach(b)
+            self.dis_loss=torch.log(1+(torch.norm(a-b,p=2)/a.numel()))+self.dis_loss
+            return x
 
 
 class two_dim_layer(nn.Module):
@@ -343,7 +348,7 @@ class two_dim_layer(nn.Module):
                 for j in range(0,self.y):
                     if i!=0 or j!=0:
                         if abs(i-j)<self.b:
-                            if not (i==j):
+                            if not (i==self.x-1 and j==self.y-1):
                                 """
                                 in_feature, out_feature, hidden_size, in_size, out_size, 
                                 true_out, cat_x, cat_y,b,d, STuning=True,
