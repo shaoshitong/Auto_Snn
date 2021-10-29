@@ -128,7 +128,7 @@ class block_out(nn.Module):
                 layer.weight.data.fill_(1.)
                 layer.bias.data.zero_()
             elif isinstance(layer, nn.Linear):
-                layer.weight.data.zero_()
+                # layer.weight.data.zero_()
                 layer.bias.data.zero_()
 
     def forward(self, x):
@@ -258,6 +258,7 @@ class Trinomial_operation(object):
         return self.diag_T[i][j][k]
 
 
+
 class point_cul_Layer(nn.Module):
     def __init__(self,is_diag, in_feature, out_feature, hidden_size, in_size, out_size, true_out, cat_x, cat_y,b,d,x,y, STuning=True,
                  grad_lr=0.1, dropout=0.3,use_gauss=True, mult_k=2):
@@ -289,11 +290,7 @@ class point_cul_Layer(nn.Module):
             self.DoorMach= DenseBlock(self.cat_feature, max(1,int(true_out/(d**abs(cat_x-cat_y)))), hidden_size, cat_x, cat_y,
                                        dropout,1,in_size)
             self.MixMach=nn.Conv2d(self.part_feature,max(1,int(true_out/(d**abs(cat_x-cat_y)))),(1,1),(1,1),(0,0),bias=False)
-            self.Discriminator=nn.Sequential(*[
-                nn.AdaptiveAvgPool2d((1,1)),
-                nn.Flatten(),
-                nn.Linear(max(1,int(true_out/(d**abs(cat_x-cat_y)))),1),
-            ])
+            nn.init.xavier_normal_(self.MixMach.weight.data,nn.init.calculate_gain("relu"))
             self.b = b
             self.grad_lr = grad_lr
             self.sigma = 1
@@ -314,7 +311,8 @@ class point_cul_Layer(nn.Module):
             self.dis_loss=1.-torch.sigmoid(torch.matmul(F.avg_pool2d(a,a.shape[-1]).view(ba,1,c),F.avg_pool2d(b,b.shape[-1]).view(ba,c,1)).mean())
             a=self.MixMach(a)
             b=self.MixMach(b)
-            self.dis_loss=torch.log(1+(torch.norm(a-b,p=2)/a.numel()))+self.dis_loss
+            ba,c,h,w=a.shape
+            self.dis_loss=torch.sigmoid(torch.matmul(F.avg_pool2d(a,a.shape[-1]).view(ba,1,c),F.avg_pool2d(b,b.shape[-1]).view(ba,c,1)).mean())+self.dis_loss
             return x
 
 

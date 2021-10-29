@@ -27,8 +27,8 @@ hidden_size_list:
   - 4
   - 4
 path_nums_list:
-  - 8
-  - 8
+  - 4
+  - 6
   - 8
   - 8
 nums_layer_list:
@@ -37,10 +37,10 @@ nums_layer_list:
   - 1
   - 1
 breadth_threshold:
-  - 4
-  - 4
-  - 4
-  - 4
+  - 3
+  - 3
+  - 3
+  - 3
 down_rate:
   2
 mult_k:
@@ -118,7 +118,7 @@ scheduler:
   SchedulerLR:
     milestones:
       - 0.5
-      - 0.8
+      - 0.75
     gamma:
       - 0.1
       - 0.1
