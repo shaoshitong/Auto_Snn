@@ -43,16 +43,14 @@ def part_cat_result_get(tensor_prev,i,j,b):
     midden=[]
     right=[]
     for t_i in range(i+1):
-        for t_j in range(j+1):
+        for t_j in range(t_i+1):
             if abs(t_i-t_j)<b and (t_i != i or t_j != j) :
-                if (t_i<t_j):
+                if (t_j<t_i):
                     left.append(tensor_prev[t_i][t_j])
+                    right.append(tensor_prev[t_j][t_i])
                 elif t_i==t_j:
                     midden.append(tensor_prev[t_i][t_j])
-                else:
-                    right.append(tensor_prev[t_i][t_j])
     return left,midden,right
-
 def part_token_numeric_get(x,y,b,f,d):
     feature_map_numeric=0
     for i in range(0,x+1):
@@ -127,7 +125,7 @@ class DenseLayer(nn.Sequential):
                             nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=(1, 1), stride=(1, 1),
                                       padding=(0, 0), bias=False)),
             self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate)),
-            self.add_module('relu2', nn.ReLU(inplace=True)),
+            self.add_module('relu2', nn.LeakyReLU(inplace=True)),
             self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
                                                kernel_size=(2, 5), stride=(1, 1), dilation=(2, 1), padding=(1, 2),
                                                bias=False))
@@ -148,7 +146,7 @@ class DenseLayer(nn.Sequential):
                             nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=(1, 1), stride=(1, 1),
                                       padding=(0, 0), bias=False)),
             self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate)),
-            self.add_module('relu2', nn.ReLU(inplace=True)),
+            self.add_module('relu2', nn.LeakyReLU(inplace=True)),
             self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
                                                kernel_size=(5, 2), stride=(1, 1), dilation=(1, 2), padding=(2, 1),
                                                bias=False))
