@@ -18,10 +18,9 @@ class attnetion(nn.Module):
 
 def cat_result_get(tensor_prev, i, j ,b):
     m = []
-    for t_i in range(i + 1):
-        for t_j in range(j + 1):
-            if (t_i != i or t_j != j) and abs(t_i - t_j)<b:
-                m.append(tensor_prev[t_i][t_j])
+    for t_j in range(j + 1):
+        if isinstance(tensor_prev[t_j],torch.Tensor):
+                m.append(tensor_prev[t_j])
     return torch.cat(m, dim=1)
 def token_numeric_get(x,y,b,f,d):
     tensor_check = [[0 for i in range(y)] for j in range(x)]

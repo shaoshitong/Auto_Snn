@@ -60,7 +60,6 @@ def Loss_get(name="cross"):
     class smooth_crossentropy(object):
         def __init__(self):
             pass
-
         def __call__(self, pred, gold, smoothing=0.1, *args, **kwargs):
             n_class = pred.size(1)
             gold = gold.to(pred.device)
@@ -68,7 +67,6 @@ def Loss_get(name="cross"):
             one_hot.scatter_(dim=1, index=gold.unsqueeze(1), value=1. - smoothing)  # 0.9
             log_prob = torch.nn.functional.log_softmax(pred, dim=1)
             return torch.nn.functional.kl_div(input=log_prob, target=one_hot, reduction='none').sum(dim=-1).mean()
-
         def cuda(self, ):
             return self
 

@@ -289,8 +289,6 @@ class point_cul_Layer(nn.Module):
             self.part_feature=part_token_numeric_get(cat_x,cat_y,b,true_out,d)
             self.DoorMach= DenseBlock(self.cat_feature, max(1,int(true_out/(d**abs(cat_x-cat_y)))), hidden_size, cat_x, cat_y,
                                        dropout,1,in_size)
-            self.MixMach=nn.Conv2d(self.part_feature,max(1,int(true_out/(d**abs(cat_x-cat_y)))),(1,1),(1,1),(0,0),bias=False)
-            nn.init.xavier_normal_(self.MixMach.weight.data,nn.init.calculate_gain("relu"))
             self.b = b
             self.grad_lr = grad_lr
             self.sigma = 1
@@ -303,36 +301,34 @@ class point_cul_Layer(nn.Module):
             return self.DoorMach(cat_result_get(tensor_prev, i, j ,self.b))
         else:
             tensor_prev, (i, j) = x
-            left,midden,right=part_cat_result_get(tensor_prev,i,j,self.b)
-            x=self.DoorMach(torch.cat([*left,*midden,*right],dim=1))
-            a=torch.cat(right, dim=1)
-            b=torch.cat(left, dim=1)
-            ba,c,h,w=a.shape
-            eps=1e-7
-            a_pool=F.avg_pool2d(a,a.shape[-1]).view(ba,1,c)
-            b_pool=F.avg_pool2d(b,b.shape[-1]).view(ba,c,1)
-            a_pool=a_pool-a_pool.mean(dim=2,keepdim=True)
-            b_pool=b_pool-b_pool.mean(dim=1,keepdim=True)
-            a_norm=(a_pool.norm(2,2,keepdim=True)+eps)
-            b_norm=(b_pool.norm(2,1,keepdim=True)+eps)
-            self.dis_loss=torch.abs(a_norm-b_norm).mean()
-            a_pool=a_pool/a_norm
-            b_pool=b_pool/b_norm
-            self.dis_loss=self.dis_loss-torch.matmul(a_pool,b_pool).mean()
-            a=self.MixMach(a)
-            b=self.MixMach(b)
-            ba,c,h,w=a.shape
-            a_pool = F.avg_pool2d(a, a.shape[-1]).view(ba, 1, c)
-            b_pool = F.avg_pool2d(b, b.shape[-1]).view(ba, c, 1)
-            a_pool = a_pool - a_pool.mean(dim=2, keepdim=True)
-            b_pool = b_pool - b_pool.mean(dim=1, keepdim=True)
-            a_norm = (a_pool.norm(2, 2, keepdim=True) + eps)
-            b_norm = (b_pool.norm(2, 1, keepdim=True) + eps)
-            self.dis_loss = self.dis_loss+torch.abs(a_norm - b_norm).mean()
-            a_pool = a_pool / a_norm
-            b_pool = b_pool / b_norm
-            self.dis_loss = self.dis_loss + torch.matmul(a_pool, b_pool).mean()
-            return x
+            return self.DoorMach(cat_result_get(tensor_prev, i, j, self.b))
+            # a=torch.cat(right, dim=1)
+            # b=torch.cat(left, dim=1)
+            # ba,c,h,w=a.shape
+            # eps=1e-7
+            # a_pool=F.avg_pool2d(a,a.shape[-1]).view(ba,1,c)
+            # b_pool=F.avg_pool2d(b,b.shape[-1]).view(ba,c,1)
+            # a_pool=a_pool-a_pool.mean(dim=2,keepdim=True)
+            # b_pool=b_pool-b_pool.mean(dim=1,keepdim=True)
+            # a_norm=(a_pool.norm(2,2,keepdim=True)+eps)
+            # b_norm=(b_pool.norm(2,1,keepdim=True)+eps)
+            # self.dis_loss=torch.abs(a_norm-b_norm).mean()
+            # a_pool=a_pool/a_norm
+            # b_pool=b_pool/b_norm
+            # self.dis_loss=self.dis_loss-torch.log(torch.matmul(a_pool,b_pool)).mean()
+            # a=self.MixMach(a)
+            # b=self.MixMach(b)
+            # ba,c,h,w=a.shape
+            # a_pool = F.avg_pool2d(a, a.shape[-1]).view(ba, 1, c)
+            # b_pool = F.avg_pool2d(b, b.shape[-1]).view(ba, c, 1)
+            # a_pool = a_pool - a_pool.mean(dim=2, keepdim=True)
+            # b_pool = b_pool - b_pool.mean(dim=1, keepdim=True)
+            # a_norm = (a_pool.norm(2, 2, keepdim=True) + eps)
+            # b_norm = (b_pool.norm(2, 1, keepdim=True) + eps)
+            # self.dis_loss = self.dis_loss+torch.abs(a_norm - b_norm).mean()
+            # a_pool = a_pool / a_norm
+            # b_pool = b_pool / b_norm
+            # self.dis_loss = self.dis_loss-torch.log(1-torch.matmul(a_pool, b_pool)).mean()
 
 
 class two_dim_layer(nn.Module):
@@ -411,26 +407,22 @@ class two_dim_layer(nn.Module):
     def forward(self, z):
         if self.x==0 and self.y==0:
             return z
-        tensor_prev = [[z for i in range(self.x)] for j in range(self.y)]
-        """
-        mm,_ = self.dimixloss[0](tensor_prev[min(self.b-1,self.x - 1)][0], tensor_prev[0][min(self.b-1,self.y - 1)])
-        self.losses=self.cross_loss(mm,torch.zeros(mm.shape[0],dtype=torch.long).to(z.device))
-        """
-        for l in range(0,min(self.x,self.y)):
-            if l!=0:
-                tensor_prev[l][l]= self.point_layer_module[str(l) + '_' + str(l)]((
-                            tensor_prev, (l,l)))
-            for i in range(l+1,self.y):
-                if abs(l-i)<self.b:
-                    tensor_prev[l][i] =self.point_layer_module[str(l) + '_' + str(i)]((tensor_prev,(l,i)))
-            for i in range(l+1,self.x):
-                if abs(i-l)<self.b:
-                    tensor_prev[i][l] =self.point_layer_module[str(i) + '_' + str(l)]((tensor_prev,(i,l)))
+        tensor_prev = [0. for i in range(self.x)]
+        tensor_prev[0]=z
+        for i in range(0,min(self.x,self.y)):
+            for j in range(0,min(self.x,self.y)):
+                if (i==0 and j==0):
+                    continue
+                elif abs(i-j)<self.b:
+                    if isinstance(tensor_prev[j],torch.Tensor):
+                        tensor_prev[j]=torch.cat([tensor_prev[j],self.point_layer_module[str(i)+ "_" + str(j)]((tensor_prev,(i,j)))],dim=1)
+                    else:
+                        tensor_prev[j]=self.point_layer_module[str(i)+ "_" + str(j)]((tensor_prev,(i,j)))
+
         result = []
-        for i in range(self.x):
-            for j in range(self.y):
-                if abs(i-j)<self.b:
-                    result.append(tensor_prev[i][j])
+        for j in range(self.y):
+            if isinstance(tensor_prev[j],torch.Tensor):
+                    result.append(tensor_prev[j])
         tensor_prev = torch.cat(result, dim=1)
         return tensor_prev
 
@@ -660,10 +652,10 @@ class merge_layer(nn.Module):
             if isinstance(layer, nn.Conv2d) and layer.bias is not None:
                 layer: nn.Conv2d
                 loss_bias.append(torch.norm(torch.abs(layer.weight.data), p=2) / layer.weight.data.numel())
-            elif isinstance(layer, point_cul_Layer):
-                layer: point_cul_Layer
-                if hasattr(layer,"dis_loss"):
-                    loss_feature+=layer.dis_loss
+            # elif isinstance(layer, point_cul_Layer):
+            #     layer: point_cul_Layer
+            #     if hasattr(layer,"dis_loss"):
+            #         loss_feature+=layer.dis_loss
         loss_feature = (loss_feature.squeeze(-1)) * sigma[0]
         loss_bias = torch.stack(loss_bias, dim=-1).mean() * sigma[1]
         loss_list = loss_list + [loss_bias, loss_feature]
