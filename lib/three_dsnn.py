@@ -313,19 +313,25 @@ class point_cul_Layer(nn.Module):
             b_pool=F.avg_pool2d(b,b.shape[-1]).view(ba,c,1)
             a_pool=a_pool-a_pool.mean(dim=2,keepdim=True)
             b_pool=b_pool-b_pool.mean(dim=1,keepdim=True)
-            a_pool=a_pool/(a_pool.norm(2,2,keepdim=True)+eps)
-            b_pool=b_pool/(b_pool.norm(2,1,keepdim=True)+eps)
-            self.dis_loss=-(torch.matmul(a_pool,b_pool)).mean()
+            a_norm=(a_pool.norm(2,2,keepdim=True)+eps)
+            b_norm=(b_pool.norm(2,1,keepdim=True)+eps)
+            self.dis_loss=torch.abs(a_norm-b_norm).mean()
+            a_pool=a_pool/a_norm
+            b_pool=b_pool/b_norm
+            self.dis_loss=self.dis_loss-torch.matmul(a_pool,b_pool).mean()
             a=self.MixMach(a)
             b=self.MixMach(b)
             ba,c,h,w=a.shape
-            a_pool=F.avg_pool2d(a,a.shape[-1]).view(ba,1,c)
-            b_pool=F.avg_pool2d(b,b.shape[-1]).view(ba,c,1)
-            a_pool=a_pool-a_pool.mean(dim=2,keepdim=True)
-            b_pool=b_pool-b_pool.mean(dim=1,keepdim=True)
-            a_pool=a_pool/(a_pool.norm(2,2,keepdim=True)+eps)
-            b_pool=b_pool/(b_pool.norm(2,1,keepdim=True)+eps)
-            self.dis_loss=(torch.matmul(a_pool,b_pool)).mean()+self.dis_loss
+            a_pool = F.avg_pool2d(a, a.shape[-1]).view(ba, 1, c)
+            b_pool = F.avg_pool2d(b, b.shape[-1]).view(ba, c, 1)
+            a_pool = a_pool - a_pool.mean(dim=2, keepdim=True)
+            b_pool = b_pool - b_pool.mean(dim=1, keepdim=True)
+            a_norm = (a_pool.norm(2, 2, keepdim=True) + eps)
+            b_norm = (b_pool.norm(2, 1, keepdim=True) + eps)
+            self.dis_loss = self.dis_loss+torch.abs(a_norm - b_norm).mean()
+            a_pool = a_pool / a_norm
+            b_pool = b_pool / b_norm
+            self.dis_loss = self.dis_loss + torch.matmul(a_pool, b_pool).mean()
             return x
 
 
