@@ -16,13 +16,18 @@ class attnetion(nn.Module):
         super(attnetion, self).__init__()
 
 
-def cat_result_get(tensor_prev, i, j ,b):
+def cat_result_get(tensor_prev, i, j ,b,tag,pre_i,pre_j):
     m = []
-    for t_j in range(j + 1):
-        if isinstance(tensor_prev[t_j],torch.Tensor):
-                m.append(tensor_prev[t_j])
+    for t_i in range(i+1):
+        for t_j in range(j+1):
+            if t_i!=i or t_j!=j:
+                if abs(t_i-t_j)<b:
+                    m.append(tensor_prev[t_i][t_j])
+    if tag==True:
+        m.append(tensor_prev[pre_i][pre_j])
     return torch.cat(m, dim=1)
 def token_numeric_get(x,y,b,f,d):
+    push_list=[[0,0]]
     tensor_check = [[0 for i in range(y)] for j in range(x)]
     for i in range(1,x):
         tensor_check[i][0]=tensor_check[i-1][0]+max(1,int(f/(d**abs(i-0))))*int(abs(i-0)<b)
@@ -35,7 +40,29 @@ def token_numeric_get(x,y,b,f,d):
         for j in range(0,y):
             if i!=0 or j!=0:
                 tensor_check[i][j]-=max(1,int(f/(d**abs(i-j))))*int(abs(i-j)<b)
-    return tensor_check
+    L=x+y-1
+    tag=0
+    for i in range(L):
+        if tag==0:
+            for a_t in range(0,i+1,1):
+                b_t=i-a_t
+                if abs(a_t-b_t)<b:
+                    push_list.append([a_t,b_t])
+            tag=1
+        else:
+            for a_t in range(i,-1,-1):
+                b_t=i-a_t
+                if abs(a_t-b_t)<b:
+                    push_list.append([a_t,b_t])
+            tag=0
+    for i in range(len(push_list[1:])):
+        a_2,b_2=push_list[i+1]
+        a_1,b_1=push_list[i]
+        if a_1<=a_2 and b_1<=b_2:
+            pass
+        else:
+            tensor_check[a_2][b_2]+=max(1,int(f/(d**abs(a_1-b_1))))
+    return tensor_check,push_list
 
 def part_cat_result_get(tensor_prev,i,j,b):
     left=[]
@@ -124,7 +151,8 @@ class DenseLayer(nn.Sequential):
                             nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=(1, 1), stride=(1, 1),
                                       padding=(0, 0), bias=False)),
             self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate)),
-            self.add_module('relu2', nn.LeakyReLU(inplace=True)),
+            self.add_module('relu2', nn.LeakyReLU(negative_slope=1e-1,
+                                                  inplace=True)),
             self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
                                                kernel_size=(2, 5), stride=(1, 1), dilation=(2, 1), padding=(1, 2),
                                                bias=False))
@@ -145,7 +173,8 @@ class DenseLayer(nn.Sequential):
                             nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=(1, 1), stride=(1, 1),
                                       padding=(0, 0), bias=False)),
             self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate)),
-            self.add_module('relu2', nn.LeakyReLU(inplace=True)),
+            self.add_module('relu2', nn.LeakyReLU(negative_slope=1e-1,
+                                                  inplace=True)),
             self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
                                                kernel_size=(5, 2), stride=(1, 1), dilation=(1, 2), padding=(2, 1),
                                                bias=False))
@@ -179,18 +208,32 @@ class DenseBlock(nn.Module):
         self.kernel_size = kernel_size
 
     def _initialize(self):
-        for layer in self.modules():
-            if isinstance(layer, nn.Conv2d):
-                nn.init.kaiming_normal_(layer.weight.data, mode="fan_in", nonlinearity="relu")
-                if layer.bias is not None:
+        if self.cat_x==self.cat_y:
+            for layer in self.modules():
+                if isinstance(layer, nn.Conv2d):
+                    nn.init.kaiming_normal_(layer.weight.data, mode="fan_in", nonlinearity="relu")
+                    if layer.bias is not None:
+                        nn.init.zeros_(layer.bias.data)
+                elif isinstance(layer, nn.BatchNorm2d):
+                    nn.init.ones_(layer.weight.data)
                     nn.init.zeros_(layer.bias.data)
-            elif isinstance(layer, nn.BatchNorm2d):
-                nn.init.ones_(layer.weight.data)
-                nn.init.zeros_(layer.bias.data)
-            elif isinstance(layer, nn.Linear):
-                nn.init.zeros_(layer.weight.data)
-                if layer.bias is not None:
+                elif isinstance(layer, nn.Linear):
+                    nn.init.zeros_(layer.weight.data)
+                    if layer.bias is not None:
+                        nn.init.zeros_(layer.bias.data)
+        else:
+            for layer in self.modules():
+                if isinstance(layer, nn.Conv2d):
+                    nn.init.kaiming_normal_(layer.weight.data, mode="fan_in", nonlinearity="leaky_relu")
+                    if layer.bias is not None:
+                        nn.init.zeros_(layer.bias.data)
+                elif isinstance(layer, nn.BatchNorm2d):
+                    nn.init.ones_(layer.weight.data)
                     nn.init.zeros_(layer.bias.data)
+                elif isinstance(layer, nn.Linear):
+                    nn.init.zeros_(layer.weight.data)
+                    if layer.bias is not None:
+                        nn.init.zeros_(layer.bias.data)
 
     def forward(self, x):
         x = self.denselayer(x)

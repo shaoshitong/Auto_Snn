@@ -297,40 +297,11 @@ class point_cul_Layer(nn.Module):
 
     def forward(self, x):
         if self.is_diag==False:
-            tensor_prev, (i, j) = x
-            return self.DoorMach(cat_result_get(tensor_prev, i, j ,self.b))
+            tensor_prev, (i, j),tag,(pre_i,pre_j) = x
+            return self.DoorMach(cat_result_get(tensor_prev, i, j ,self.b,tag,pre_i,pre_j))
         else:
-            tensor_prev, (i, j) = x
-            return self.DoorMach(cat_result_get(tensor_prev, i, j, self.b))
-            # a=torch.cat(right, dim=1)
-            # b=torch.cat(left, dim=1)
-            # ba,c,h,w=a.shape
-            # eps=1e-7
-            # a_pool=F.avg_pool2d(a,a.shape[-1]).view(ba,1,c)
-            # b_pool=F.avg_pool2d(b,b.shape[-1]).view(ba,c,1)
-            # a_pool=a_pool-a_pool.mean(dim=2,keepdim=True)
-            # b_pool=b_pool-b_pool.mean(dim=1,keepdim=True)
-            # a_norm=(a_pool.norm(2,2,keepdim=True)+eps)
-            # b_norm=(b_pool.norm(2,1,keepdim=True)+eps)
-            # self.dis_loss=torch.abs(a_norm-b_norm).mean()
-            # a_pool=a_pool/a_norm
-            # b_pool=b_pool/b_norm
-            # self.dis_loss=self.dis_loss-torch.log(torch.matmul(a_pool,b_pool)).mean()
-            # a=self.MixMach(a)
-            # b=self.MixMach(b)
-            # ba,c,h,w=a.shape
-            # a_pool = F.avg_pool2d(a, a.shape[-1]).view(ba, 1, c)
-            # b_pool = F.avg_pool2d(b, b.shape[-1]).view(ba, c, 1)
-            # a_pool = a_pool - a_pool.mean(dim=2, keepdim=True)
-            # b_pool = b_pool - b_pool.mean(dim=1, keepdim=True)
-            # a_norm = (a_pool.norm(2, 2, keepdim=True) + eps)
-            # b_norm = (b_pool.norm(2, 1, keepdim=True) + eps)
-            # self.dis_loss = self.dis_loss+torch.abs(a_norm - b_norm).mean()
-            # a_pool = a_pool / a_norm
-            # b_pool = b_pool / b_norm
-            # self.dis_loss = self.dis_loss-torch.log(1-torch.matmul(a_pool, b_pool)).mean()
-
-
+            tensor_prev, (i, j),tag,(pre_i,pre_j) = x
+            return self.DoorMach(cat_result_get(tensor_prev, i, j, self.b,tag,pre_i,pre_j))
 class two_dim_layer(nn.Module):
     def __init__(self, in_feature, out_feature, hidden_size, in_size, out_size, x, y,b,down_rate, mult_k=2, p=0.2):
         super(two_dim_layer, self).__init__()
@@ -352,7 +323,7 @@ class two_dim_layer(nn.Module):
         """
         self.point_cul_layer = {}
         self.test = False
-        self.tensor_check=token_numeric_get(x,y,b,out_feature,down_rate)
+        self.tensor_check,self.push_list=token_numeric_get(x,y,b,out_feature,down_rate)
         for col in self.tensor_check:
             print(col)
         print("\n\n")
@@ -407,22 +378,19 @@ class two_dim_layer(nn.Module):
     def forward(self, z):
         if self.x==0 and self.y==0:
             return z
-        tensor_prev = [0. for i in range(self.x)]
-        tensor_prev[0]=z
-        for i in range(0,min(self.x,self.y)):
-            for j in range(0,min(self.x,self.y)):
-                if (i==0 and j==0):
-                    continue
-                elif abs(i-j)<self.b:
-                    if isinstance(tensor_prev[j],torch.Tensor):
-                        tensor_prev[j]=torch.cat([tensor_prev[j],self.point_layer_module[str(i)+ "_" + str(j)]((tensor_prev,(i,j)))],dim=1)
-                    else:
-                        tensor_prev[j]=self.point_layer_module[str(i)+ "_" + str(j)]((tensor_prev,(i,j)))
-
+        tensor_prev = [[z for i in range(self.x)] for j in range(self.y)]
+        for i in range(len(self.push_list[1:])):
+            pre_a,pre_b=self.push_list[i]
+            a,b = self.push_list[i + 1]
+            if pre_a<=a and pre_b<=b:
+                tensor_prev[a][b] = self.point_layer_module[str(a) + "_" + str(b)]((tensor_prev, (a, b),True,(pre_a,pre_b)))
+            else:
+                tensor_prev[a][b] = self.point_layer_module[str(a) + "_" + str(b)]((tensor_prev, (a, b),False,(pre_a,pre_b)))
         result = []
-        for j in range(self.y):
-            if isinstance(tensor_prev[j],torch.Tensor):
-                    result.append(tensor_prev[j])
+        for i in range(self.x):
+            for j in range(self.y):
+                if abs(i-j)<self.b:
+                    result.append(tensor_prev[i][j])
         tensor_prev = torch.cat(result, dim=1)
         return tensor_prev
 
