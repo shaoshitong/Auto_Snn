@@ -16,85 +16,98 @@ class attnetion(nn.Module):
         super(attnetion, self).__init__()
 
 
-def cat_result_get(tensor_prev, i, j ,b,tag,pre_i,pre_j):
+def cat_result_get(tensor_prev, i, j, b, tag, pre_i, pre_j):
     m = []
-    for t_i in range(i+1):
-        for t_j in range(j+1):
-            if t_i!=i or t_j!=j:
-                if abs(t_i-t_j)<b:
+    for t_i in range(i + 1):
+        for t_j in range(j + 1):
+            if t_i != i or t_j != j:
+                if abs(t_i - t_j) < b:
                     m.append(tensor_prev[t_i][t_j])
-    if tag==True:
+    if tag == True:
         m.append(tensor_prev[pre_i][pre_j])
     return torch.cat(m, dim=1)
-def token_numeric_get(x,y,b,f,d):
-    push_list=[[0,0]]
-    tensor_check = [[0 for i in range(y)] for j in range(x)]
-    for i in range(1,x):
-        tensor_check[i][0]=tensor_check[i-1][0]+max(1,int(f/(d**abs(i-0))))*int(abs(i-0)<b)
-    for i in range(1,y):
-        tensor_check[0][i]=tensor_check[0][i-1]+max(1,int(f/(d**abs(i-0))))*int(abs(i-0)<b)
-    for i in range(1,x):
-        for j in range(1,y):
-            tensor_check[i][j] = tensor_check[i][j - 1] + tensor_check[i - 1][j] - tensor_check[i - 1][j - 1] + max(1,int(f/(d**abs(i-j))))*int(abs(i-j)<b)
-    for i in range(0,x):
-        for j in range(0,y):
-            if i!=0 or j!=0:
-                tensor_check[i][j]-=max(1,int(f/(d**abs(i-j))))*int(abs(i-j)<b)
-    L=x+y-1
-    tag=0
-    for i in range(L):
-        if tag==0:
-            for a_t in range(0,i+1,1):
-                b_t=i-a_t
-                if abs(a_t-b_t)<b:
-                    push_list.append([a_t,b_t])
-            tag=1
-        else:
-            for a_t in range(i,-1,-1):
-                b_t=i-a_t
-                if abs(a_t-b_t)<b:
-                    push_list.append([a_t,b_t])
-            tag=0
-    for i in range(len(push_list[1:])):
-        a_2,b_2=push_list[i+1]
-        a_1,b_1=push_list[i]
-        if a_1<=a_2 and b_1<=b_2:
-            pass
-        else:
-            tensor_check[a_2][b_2]+=max(1,int(f/(d**abs(a_1-b_1))))
-    return tensor_check,push_list
 
-def part_cat_result_get(tensor_prev,i,j,b):
-    left=[]
-    midden=[]
-    right=[]
-    for t_i in range(i+1):
-        for t_j in range(t_i+1):
-            if abs(t_i-t_j)<b and (t_i != i or t_j != j) :
-                if (t_j<t_i):
+
+def token_numeric_get(x, y, b, f, d):
+    push_list = []
+    tensor_check = [[0 for i in range(y)] for j in range(x)]
+    for i in range(1, x):
+        tensor_check[i][0] = tensor_check[i - 1][0] + max(1, int(f / (d ** abs(i - 0)))) * int(abs(i - 0) < b)
+    for i in range(1, y):
+        tensor_check[0][i] = tensor_check[0][i - 1] + max(1, int(f / (d ** abs(i - 0)))) * int(abs(i - 0) < b)
+    for i in range(1, x):
+        for j in range(1, y):
+            tensor_check[i][j] = tensor_check[i][j - 1] + tensor_check[i - 1][j] - tensor_check[i - 1][j - 1] + max(1,
+                                                                                                                    int(f / (
+                                                                                                                                d ** abs(
+                                                                                                                            i - j)))) * int(
+                abs(i - j) < b)
+    for i in range(0, x):
+        for j in range(0, y):
+            if i != 0 or j != 0:
+                tensor_check[i][j] -= max(1, int(f / (d ** abs(i - j)))) * int(abs(i - j) < b)
+    L = x + y - 1
+    tag = 0
+    for i in range(L):
+        if tag == 0:
+            for a_t in range(0, i + 1, 1):
+                b_t = i - a_t
+                if abs(a_t - b_t) < b and x > a_t >= 0 and y > b_t >= 0:
+                    push_list.append([a_t, b_t])
+            tag = 1
+        else:
+            for a_t in range(i, -1, -1):
+                b_t = i - a_t
+                if abs(a_t - b_t) < b and x > a_t >= 0 and y > b_t >= 0:
+                    push_list.append([a_t, b_t])
+            tag = 0
+    for i in range(len(push_list[1:])):
+        a_2, b_2 = push_list[i + 1]
+        a_1, b_1 = push_list[i]
+        if a_1 <= a_2 and b_1 <= b_2:
+            continue
+        else:
+            tensor_check[a_2][b_2] += max(1, int(f / (d ** abs(a_1 - b_1))))
+    return tensor_check, push_list
+
+
+def part_cat_result_get(tensor_prev, i, j, b):
+    left = []
+    midden = []
+    right = []
+    for t_i in range(i + 1):
+        for t_j in range(t_i + 1):
+            if abs(t_i - t_j) < b and (t_i != i or t_j != j):
+                if (t_j < t_i):
                     left.append(tensor_prev[t_i][t_j])
                     right.append(tensor_prev[t_j][t_i])
-                elif t_i==t_j:
+                elif t_i == t_j:
                     midden.append(tensor_prev[t_i][t_j])
-    return left,midden,right
-def part_token_numeric_get(x,y,b,f,d):
-    feature_map_numeric=0
-    for i in range(0,x+1):
-        for j in range(0,y+1):
-            if abs(i-j)<b and i<j and (i != x or j != y) :
-                feature_map_numeric+=max(1,int(f/(d**abs(i-j))))
+    return left, midden, right
+
+
+def part_token_numeric_get(x, y, b, f, d):
+    feature_map_numeric = 0
+    for i in range(0, x + 1):
+        for j in range(0, y + 1):
+            if abs(i - j) < b and i < j and (i != x or j != y):
+                feature_map_numeric += max(1, int(f / (d ** abs(i - j))))
     return feature_map_numeric
 
-def numeric_get(x,y,b):
-    tensor_check=[ [0 for i in range(y)] for j in range(x)]
-    for i in range(1,x):
-        tensor_check[i][0]=tensor_check[i-1][0]+int(not (abs(i-0)<b))
-    for i in range(1,y):
-        tensor_check[0][i]=tensor_check[0][i-1]+int(not (abs(i-0)<b))
-    for i in range(1,x):
-        for j in range(1,y):
-            tensor_check[i][j]=tensor_check[i][j-1]+tensor_check[i-1][j]-tensor_check[i-1][j-1]+int(not (abs(i-j)<b))
+
+def numeric_get(x, y, b):
+    tensor_check = [[0 for i in range(y)] for j in range(x)]
+    for i in range(1, x):
+        tensor_check[i][0] = tensor_check[i - 1][0] + int(not (abs(i - 0) < b))
+    for i in range(1, y):
+        tensor_check[0][i] = tensor_check[0][i - 1] + int(not (abs(i - 0) < b))
+    for i in range(1, x):
+        for j in range(1, y):
+            tensor_check[i][j] = tensor_check[i][j - 1] + tensor_check[i - 1][j] - tensor_check[i - 1][j - 1] + int(
+                not (abs(i - j) < b))
     return tensor_check
+
+
 def return_tensor_add(tensor_prev, i, j):
     p = (i + 1) * (j + 1) - 1
     for a in range(i + 1):
@@ -114,15 +127,19 @@ class semhash(torch.autograd.Function):
     def backward(ctx, grad_output):
         return grad_output, None, None
 
+
 class aplha_decay(torch.autograd.Function):
     @staticmethod
-    def forward(ctx,x,alpha=2.):
-        ctx.alpha=alpha
+    def forward(ctx, x, alpha=2.):
+        ctx.alpha = alpha
         return x
+
     @staticmethod
-    def backward(ctx,grad_outputs):
-        alpha=ctx.alpha
-        return grad_outputs/alpha,None
+    def backward(ctx, grad_outputs):
+        alpha = ctx.alpha
+        return grad_outputs / alpha, None
+
+
 class BasicUnit(nn.Module):
     def __init__(self, channel: int, hidden_channel: int, dropout: float):
         super(BasicUnit, self).__init__()
@@ -143,7 +160,7 @@ class BasicUnit(nn.Module):
 class DenseLayer(nn.Sequential):
     def __init__(self, num_input_features, growth_rate, bn_size, drop_rate, class_fusion):
         super(DenseLayer, self).__init__()
-        self.nums_input_features=num_input_features
+        self.nums_input_features = num_input_features
         if class_fusion == 0:
             self.add_module('norm1', nn.BatchNorm2d(num_input_features)),
             self.add_module('relu1', nn.ReLU(inplace=True)),
@@ -198,7 +215,7 @@ class DenseBlock(nn.Module):
         self._initialize()
         kernel_size = 4
 
-        l =int( (size / kernel_size) ** 2 )
+        l = int((size / kernel_size) ** 2)
         # self.p = torch.randperm(int(l), dtype=torch.long,requires_grad=False).cuda()
         # self.transformer = nn.TransformerEncoderLayer(size ** 2, l, dim_feedforward=int(size), batch_first=True,
         #                                               layer_norm_eps=1e-6)
@@ -208,7 +225,7 @@ class DenseBlock(nn.Module):
         self.kernel_size = kernel_size
 
     def _initialize(self):
-        if self.cat_x==self.cat_y:
+        if self.cat_x == self.cat_y:
             for layer in self.modules():
                 if isinstance(layer, nn.Conv2d):
                     nn.init.kaiming_normal_(layer.weight.data, mode="fan_in", nonlinearity="relu")

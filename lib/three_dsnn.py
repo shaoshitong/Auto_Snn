@@ -383,9 +383,9 @@ class two_dim_layer(nn.Module):
             pre_a,pre_b=self.push_list[i]
             a,b = self.push_list[i + 1]
             if pre_a<=a and pre_b<=b:
-                tensor_prev[a][b] = self.point_layer_module[str(a) + "_" + str(b)]((tensor_prev, (a, b),True,(pre_a,pre_b)))
-            else:
                 tensor_prev[a][b] = self.point_layer_module[str(a) + "_" + str(b)]((tensor_prev, (a, b),False,(pre_a,pre_b)))
+            else:
+                tensor_prev[a][b] = self.point_layer_module[str(a) + "_" + str(b)]((tensor_prev, (a, b),True,(pre_a,pre_b)))
         result = []
         for i in range(self.x):
             for j in range(self.y):
