@@ -105,13 +105,16 @@ class Shortcut(nn.Module):
 
 
 class block_out(nn.Module):
-    def __init__(self, feature, classes, size, use_pool='none'):
+    def __init__(self, feature, classes, size, size_list,use_pool='none'):
         super(block_out, self).__init__()
+        self.size_list=size_list[1:]
         self.classifiar = nn.Sequential(nn.Flatten(), nn.Linear(feature, classes))
-        self.transition_layer = nn.Sequential(*[
+        self.conv=nn.AdaptiveMaxPool2d((size,size))
+        self.transition_layer = nn.ModuleList([nn.Sequential(*[
             nn.BatchNorm2d(feature),
             nn.ReLU(inplace=True),
-            Lambda(F.avg_pool2d)])
+            nn.AdaptiveAvgPool2d((1,1))])
+                                               for _ in range(len(size_list))])
         self.training = False
         self.use_pool = use_pool
         self.size = size
@@ -132,6 +135,11 @@ class block_out(nn.Module):
                 layer.bias.data.zero_()
 
     def forward(self, x):
+        k=[]
+        for i in x:
+            i=self.conv(i)
+            k.append(i)
+        x=torch.cat(k,dim=1)
         x = self.transition_layer(x)
         return self.classifiar(x)
 
@@ -483,10 +491,16 @@ class three_dim_Layer(nn.Module):
         x,y=>[batchsize,64,x_pointnum//2,y_pointnum//2]
         """
         self.losses = 0.
+        output_list=[]
         for i in range(self.len):
-            m = self.turn_layer_module[str(i)](m)
-            m = self.point_layer_module[str(i)](m)
-        return m
+            if i>0:
+                v = self.turn_layer_module[str(i)](v)
+                m = torch.cat([v, F.adaptive_avg_pool2d(m, v.shape[-2])], dim=1)
+            else:
+                m = self.turn_layer_module[str(i)](m)
+            v = self.point_layer_module[str(i)](m)
+            output_list.append(v)
+        return output_list
 
     def initiate_layer(self, data, feature_list, size_list, hidden_size_list, path_nums_list, nums_layer, decay_rate,
                        mult_k,down_rate,breadth_threshold):
@@ -498,6 +512,7 @@ class three_dim_Layer(nn.Module):
         self.in_shape = data.shape
         assert len(feature_list) == len(size_list) and len(hidden_size_list) == len(path_nums_list) and len(
             path_nums_list) == len(nums_layer) and len(breadth_threshold)==len(nums_layer)
+        last = 0
         for i in range(len(hidden_size_list)):
             f1, f2 = feature_list[i], feature_list[i + 1]
             s1, s2 = size_list[i], size_list[i + 1]
@@ -507,16 +522,21 @@ class three_dim_Layer(nn.Module):
             b1 = breadth_threshold[i]
             if i == 0:
                 self.turn_layer[str(i)] = turn_layer(f1, f2, h1, n1, decay_rate, int(s1 // s2), self.dropout)
+                m = self.turn_layer[str(i)].origin_out_feature
+                self.point_layer[str(i)] = two_dim_layer(m, f2, h1, s2, s2, p1, p1, b1, down_rate, mult_k, self.dropout)
+                h = self.point_layer[str(i)].np_last
+                last+=h
             else:
                 self.turn_layer[str(i)] = turn_layer(h, f2, h1, n1, decay_rate, int(s1 // s2), self.dropout)
-            m = self.turn_layer[str(i)].origin_out_feature
-            self.point_layer[str(i)] = two_dim_layer(m, f2, h1, s2, s2, p1, p1,b1,down_rate,mult_k, self.dropout)
-            h = self.point_layer[str(i)].np_last
+                m = self.turn_layer[str(i)].origin_out_feature+m
+                self.point_layer[str(i)] = two_dim_layer(m, f2, h1, s2, s2, p1, p1,b1,down_rate,mult_k, self.dropout)
+                h = self.point_layer[str(i)].np_last
+                last+=h
         self.turn_layer_module = nn.ModuleDict(self.turn_layer)
         self.point_layer_module = nn.ModuleDict(self.point_layer)
         self.len = len(hidden_size_list)
         del self.point_layer, self.turn_layer
-        return h
+        return last
 
 
 class merge_layer(nn.Module):
@@ -585,7 +605,7 @@ class merge_layer(nn.Module):
         self._initialize()
         h = self.InputGenerateNet.initiate_layer(data, feature_list, size_list, hidden_size_list, path_nums_list,
                                                  nums_layer_list, drop_rate,mult_k,down_rate,breadth_threshold)
-        self.out_classifier = block_out(h, num_classes, size_list[-1])
+        self.out_classifier = block_out(h, num_classes, size_list[-1],size_list)
     def _initialize(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
