@@ -110,11 +110,11 @@ class block_out(nn.Module):
         self.size_list=size_list[1:]
         self.classifiar = nn.Sequential(nn.Flatten(), nn.Linear(feature, classes))
         self.conv=nn.AdaptiveMaxPool2d((size,size))
-        self.transition_layer = nn.ModuleList([nn.Sequential(*[
+        print(f"output's feature map number is {feature}")
+        self.transition_layer =nn.Sequential(*[
             nn.BatchNorm2d(feature),
             nn.ReLU(inplace=True),
             nn.AdaptiveAvgPool2d((1,1))])
-                                               for _ in range(len(size_list))])
         self.training = False
         self.use_pool = use_pool
         self.size = size
@@ -536,6 +536,7 @@ class three_dim_Layer(nn.Module):
         self.point_layer_module = nn.ModuleDict(self.point_layer)
         self.len = len(hidden_size_list)
         del self.point_layer, self.turn_layer
+        print("\n\n last is ",last,"\n\n")
         return last
 
 
