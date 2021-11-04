@@ -11,10 +11,10 @@ num_classes:
   10
 feature_list:
   - 80
-  - 32
-  - 32
-  - 32
-  - 32
+  - 36
+  - 36
+  - 36
+  - 36
 size_list:
   - 32
   - 32
@@ -118,9 +118,9 @@ scheduler:
   SchedulerLR:
     milestones:
       - 0.5
-      - 0.75
+      - 0.8
     gamma:
-      - 0.1
+      - 0.2
       - 0.1
   MultiStepLR:
     milestones:
