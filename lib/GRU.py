@@ -11,6 +11,16 @@ import os, sys
 from torch.nn.parameter import Parameter
 
 
+class Multi_Conv(nn.Module):
+    def __init__(self,in_planes,planes):
+        super(Multi_Conv, self).__init__()
+        out_planes=int(planes//2)
+        self.row_conv=nn.Conv2d(in_planes,out_planes,(5,2),(1,1),(2,1),(1,2),bias=False)
+        self.col_conv=nn.Conv2d(in_planes,out_planes,(2,5),(1,1),(1,2),(2,1),bias=False)
+    def forward(self,x):
+        a=self.row_conv(x)
+        b=self.col_conv(x)
+        return torch.cat([a,b],dim=1)
 class attnetion(nn.Module):
     def __init__(self, x_channel, y_channel):
         super(attnetion, self).__init__()
@@ -171,7 +181,7 @@ class DenseLayer(nn.Sequential):
             self.add_module('relu2', nn.LeakyReLU(negative_slope=1e-1,
                                                   inplace=True)),
             self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
-                                               kernel_size=(2, 5), stride=(1, 1), dilation=(2, 1), padding=(1, 2),
+                                               kernel_size=(3, 3), stride=(1, 1), dilation=(1, 1), padding=(1, 1),
                                                bias=False))
         elif class_fusion == 1:
             self.add_module('norm1', nn.BatchNorm2d(num_input_features)),
@@ -181,8 +191,7 @@ class DenseLayer(nn.Sequential):
                                       padding=(0, 0), bias=False)),
             self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate)),
             self.add_module('relu2', nn.ReLU(inplace=True)),
-            self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
-                                               kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False))
+            self.add_module('conv2',Multi_Conv(bn_size*growth_rate,growth_rate))
         else:
             self.add_module('norm1', nn.BatchNorm2d(num_input_features)),
             self.add_module('relu1', nn.ReLU(inplace=True)),
@@ -193,7 +202,7 @@ class DenseLayer(nn.Sequential):
             self.add_module('relu2', nn.LeakyReLU(negative_slope=1e-1,
                                                   inplace=True)),
             self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
-                                               kernel_size=(5, 2), stride=(1, 1), dilation=(1, 2), padding=(2, 1),
+                                               kernel_size=(3, 3), stride=(1, 1), dilation=(1, 1), padding=(1, 1),
                                                bias=False))
         self.drop_rate = drop_rate
 
@@ -241,7 +250,7 @@ class DenseBlock(nn.Module):
         else:
             for layer in self.modules():
                 if isinstance(layer, nn.Conv2d):
-                    nn.init.kaiming_normal_(layer.weight.data, mode="fan_in", nonlinearity="leaky_relu")
+                    nn.init.kaiming_normal_(layer.weight.data, mode="fan_in", nonlinearity="relu")
                     if layer.bias is not None:
                         nn.init.zeros_(layer.bias.data)
                 elif isinstance(layer, nn.BatchNorm2d):
