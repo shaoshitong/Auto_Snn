@@ -27,10 +27,10 @@ hidden_size_list:
   - 4
   - 4
 path_nums_list:
-  - 6
+  - 5
   - 6
   - 8
-  - 8
+  - 9
 nums_layer_list:
   - 0
   - 1
@@ -102,7 +102,7 @@ optimizer:
     weight_decay: 4e-5
   SGD:
     momentum: 0.9
-    lr: 0.072
+    lr: 0.2
     weight_decay: 1e-4
   ASGD:
     lr: 0.002

@@ -107,12 +107,20 @@ class Shortcut(nn.Module):
 class block_out(nn.Module):
     def __init__(self, feature, classes, size, size_list,use_pool='none'):
         super(block_out, self).__init__()
-        self.size_list=size_list[1:]
-        self.classifiar = nn.Sequential(nn.Flatten(), nn.Linear(feature, classes))
-        self.conv=nn.AdaptiveMaxPool2d((size,size))
-        print(f"output's feature map number is {feature}")
+        size_list=size_list[1:]
+        self.classifiar = nn.Sequential(nn.Flatten(), nn.Linear(sum(feature), classes))
+        self.conv=nn.ModuleList([
+            nn.Conv2d(feature[i],
+                      feature[i],
+                      (size_list[i]//size_list[-1],size_list[i]//size_list[-1]),
+                      (size_list[i]//size_list[-1],size_list[i]//size_list[-1]))
+
+
+            for i in range(len(feature[:-1]))
+        ])
+        print(f"output's feature map number is {sum(feature)}")
         self.transition_layer =nn.Sequential(*[
-            nn.BatchNorm2d(feature),
+            nn.BatchNorm2d(sum(feature)),
             nn.ReLU(inplace=True),
             nn.AdaptiveAvgPool2d((1,1))])
         self.training = False
@@ -131,14 +139,15 @@ class block_out(nn.Module):
                 layer.weight.data.fill_(1.)
                 layer.bias.data.zero_()
             elif isinstance(layer, nn.Linear):
-                # layer.weight.data.zero_()
+                layer.weight.data.zero_()
                 layer.bias.data.zero_()
 
     def forward(self, x):
         k=[]
-        for i in x:
-            i=self.conv(i)
-            k.append(i)
+        for i,input in enumerate(x[:-1]):
+            input=self.conv[i](input)
+            k.append(input)
+        k.append(x[-1])
         x=torch.cat(k,dim=1)
         x = self.transition_layer(x)
         return self.classifiar(x)
@@ -512,7 +521,7 @@ class three_dim_Layer(nn.Module):
         self.in_shape = data.shape
         assert len(feature_list) == len(size_list) and len(hidden_size_list) == len(path_nums_list) and len(
             path_nums_list) == len(nums_layer) and len(breadth_threshold)==len(nums_layer)
-        last = 0
+        last = []
         for i in range(len(hidden_size_list)):
             f1, f2 = feature_list[i], feature_list[i + 1]
             s1, s2 = size_list[i], size_list[i + 1]
@@ -525,13 +534,13 @@ class three_dim_Layer(nn.Module):
                 m = self.turn_layer[str(i)].origin_out_feature
                 self.point_layer[str(i)] = two_dim_layer(m, f2, h1, s2, s2, p1, p1, b1, down_rate, mult_k, self.dropout)
                 h = self.point_layer[str(i)].np_last
-                last+=h
+                last.append(h)
             else:
                 self.turn_layer[str(i)] = turn_layer(h, f2, h1, n1, decay_rate, int(s1 // s2), self.dropout)
                 m = self.turn_layer[str(i)].origin_out_feature+m
                 self.point_layer[str(i)] = two_dim_layer(m, f2, h1, s2, s2, p1, p1,b1,down_rate,mult_k, self.dropout)
                 h = self.point_layer[str(i)].np_last
-                last+=h
+                last.append(h)
         self.turn_layer_module = nn.ModuleDict(self.turn_layer)
         self.point_layer_module = nn.ModuleDict(self.point_layer)
         self.len = len(hidden_size_list)
