@@ -276,7 +276,7 @@ class point_cul_Layer(nn.Module):
                 fusion=0
             else:
                 fusion=2
-            self.DoorMach = DenseBlock(self.cat_feature, max(1,int(true_out/(d**abs(cat_x-cat_y)))), hidden_size, cat_x, cat_y,
+            self.DoorMach = DenseBlock(self.cat_feature, max(1,int(true_out/(d**min(1,abs(cat_x-cat_y))))), hidden_size, cat_x, cat_y,
                                        dropout,fusion,in_size)
             self.STuning = STuning
             self.b=b
@@ -286,8 +286,7 @@ class point_cul_Layer(nn.Module):
             self.norm = None
         else:
             self.cat_feature = (out_feature) + in_feature
-            self.part_feature=part_token_numeric_get(cat_x,cat_y,b,true_out,d)
-            self.DoorMach= DenseBlock(self.cat_feature, max(1,int(true_out/(d**abs(cat_x-cat_y)))), hidden_size, cat_x, cat_y,
+            self.DoorMach= DenseBlock(self.cat_feature, max(1,int(true_out/(d**min(1,abs(cat_x-cat_y))))), hidden_size, cat_x, cat_y,
                                        dropout,1,in_size)
             self.b = b
             self.grad_lr = grad_lr

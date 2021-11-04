@@ -66,7 +66,7 @@ def token_numeric_get(x, y, b, f, d):
         if a_1 <= a_2 and b_1 <= b_2:
             continue
         else:
-            tensor_check[a_2][b_2] += max(1, int(f / (min(1,d ** abs(a_1 - b_1)))))
+            tensor_check[a_2][b_2] += max(1, int(f / (d ** min(1,abs(a_1 - b_1)))))
     return tensor_check, push_list
 
 
