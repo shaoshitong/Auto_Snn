@@ -22,7 +22,6 @@ from lib.PointConv import PointConv
 from lib.GRU import multi_GRU, multi_block_eq, Cat, DenseBlock, cat_result_get,return_tensor_add,numeric_get,\
     aplha_decay,token_numeric_get
 from lib.DenseNet import DenseBlock as DenseDeepBlock
-from lib.utils import Multi_Fusion
 import math
 import pandas as pd
 from torch.nn.utils import spectral_norm
@@ -492,6 +491,39 @@ class three_dim_Layer(nn.Module):
         """
         self.point_layer = {}
         self.turn_layer = {}
+
+
+
+        """
+        size_list=[ 32 , 16 , 8 , 4 ]
+        feature_list=   [
+                          
+                        [32],
+                        [32,32],
+                        [32,32,32],
+                        [32,32,32,32],
+                        
+                        ]
+        
+        hidden_size_list=   [
+        
+                            [4],
+                            [4,4],
+                            [4,4,4],
+                            [4,4,4,4]
+                            
+                            ]
+        
+        path_nums_list =    [
+                            
+                            [4],
+                            [4,4],
+                            [4,4,4],
+                            [4,4,4,4],
+                            
+                            ]
+        
+        """
         self.in_shape = data.shape
         assert len(feature_list) == len(size_list) and len(hidden_size_list) == len(path_nums_list) and len(
             path_nums_list) == len(nums_layer) and len(breadth_threshold)==len(nums_layer)

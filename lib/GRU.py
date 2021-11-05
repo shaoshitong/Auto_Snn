@@ -147,7 +147,7 @@ class DenseLayer(nn.Sequential):
             self.add_module('relu2', nn.LeakyReLU(negative_slope=1e-2,
                                                   inplace=True)),
             self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
-                                               kernel_size=(1, 5), stride=(1, 1), dilation=(1, 1), padding=(0, 2),
+                                               kernel_size=(3,3), stride=(1, 1), dilation=(1, 1), padding=(1,1),
                                                bias=False))
         elif class_fusion == 1:
             self.add_module('norm1', nn.BatchNorm2d(num_input_features)),
@@ -169,7 +169,7 @@ class DenseLayer(nn.Sequential):
             self.add_module('relu2', nn.LeakyReLU(negative_slope=1e-2,
                                                   inplace=True)),
             self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
-                                               kernel_size=(5, 1), stride=(1, 1), dilation=(1, 1), padding=(2, 0),
+                                               kernel_size=(3,3), stride=(1, 1), dilation=(1, 1), padding=(1,1),
                                                bias=False))
         self.drop_rate = drop_rate
 
