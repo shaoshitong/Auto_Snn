@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-
+import copy
 class Conv2dDynamicSamePadding(nn.Conv2d):
     """2D Convolutions like TensorFlow, for a dynamic image size.
        The padding is operated in forward function by calculating dynamically.
@@ -102,7 +102,7 @@ def tensor_list_add(tensor_list):
     a=None if isinstance(a,float) else a
     return a
 class Multi_Fusion(nn.Module):
-    def __init__(self,size_list,feature_list_in,feature_list_out):
+    def __init__(self,size_list,feature_list_in,feature_list_out,index):
         super(Multi_Fusion,self).__init__()
         """
         for example:
@@ -116,37 +116,40 @@ class Multi_Fusion(nn.Module):
         assert len(size_list)==len(feature_list_out) and len(feature_list_in)==len(feature_list_out)
         self.size_list=size_list
         self.total_model=nn.ModuleList([])
+        self.feature_list_in=feature_list_in
         self.in_norm=nn.ModuleList([
             nn.Sequential(nn.BatchNorm2d(feature_list_in[i]),
-                          nn.ReLU(inplace=True)) for i in range(len(feature_list_in))
+                          nn.ReLU(inplace=False)) for i in range(len(feature_list_in))
         ])
         for i,out_size in enumerate(self.size_list):
             mode=nn.ModuleList([])
             for j,in_size in enumerate(self.size_list):
                 stride=int(out_size//in_size)
                 if stride==1:
-                    mode.append(None_Do(feature_list_in[i],feature_list_out[j]))
+                    mode.append(None_Do(feature_list_in[j],feature_list_out[i]))
                 elif stride<1:
                     stride=int(in_size//out_size)
-                    mode.append(nn.Conv2d(feature_list_in[i],feature_list_out[j],(stride,stride),(stride,stride),(0,0),bias=False))
+                    mode.append(nn.Conv2d(feature_list_in[j],feature_list_out[i],(stride,stride),(stride,stride),(0,0),bias=False))
                 elif stride>1:
-                    mode.append(Interpolate(feature_list_in[i],feature_list_out[j],stride))
+                    mode.append(Interpolate(feature_list_in[j],feature_list_out[i],stride))
             self.total_model.append(mode)
+        self.index=index
         self.np_last=feature_list_out
     def forward(self,inputs):
+        index=self.index
         assert isinstance(inputs,list) or isinstance(inputs,tuple)
         return_list=[]
-
-        for i in range(len(inputs)):
-            inputs[i]=self.in_norm[i](inputs[i])
-
+        for i,ind in enumerate(index):
+            inputs[ind] = self.in_norm[i](inputs[ind])
         for i,in_size in enumerate(self.size_list):
             out_list=[]
             for j,out_size in enumerate(self.size_list):
-                out_list.append(self.total_model[i][j](inputs[j]))
+                out_list.append(self.total_model[i][j](inputs[index[j]]))
             return_list.append(tensor_list_add(out_list))
+        for i,ind in enumerate(index):
+            inputs[ind]=return_list[i]
 
-        return return_list
+        return inputs
 
 
 class Multi_Fusion_Create(nn.Module):
@@ -162,10 +165,10 @@ class Multi_Fusion_Create(nn.Module):
             return_list.append(conv(x))
         return return_list
 
-def filling_data(_list,l):
-    while len(_list)<l:
-        _list=[None]+_list
-    return _list
+def filling_data(list_i,l):
+    while len(list_i)<l:
+        list_i.insert(0,None)
+    return list_i
 def balance_ilist(feature_list,path_nums_list,nums_layer,breadth_threshold):
     L=max(len(h) for h in feature_list)
     for i in range(len(feature_list)):
@@ -184,10 +187,12 @@ def balance_ilist(feature_list,path_nums_list,nums_layer,breadth_threshold):
         if len(breadth_threshold[i])<L:
             breadth_threshold[i]=filling_data(breadth_threshold[i],L)
     return feature_list,path_nums_list,nums_layer,breadth_threshold
-def decay_rate_list(feature_list,decay_rate):
+def decay_rate_list(feature_list,decay_rate,index):
+    _feature_list=copy.deepcopy(feature_list)
     for i in range(len(feature_list)):
-        feature_list[i]=int(feature_list[i]//decay_rate)
-    return feature_list
+        if i in index:
+            _feature_list[i]=int(feature_list[i]//decay_rate)
+    return _feature_list
 def filter_list(a,b):
     c,d,i=[],[],[]
     iter=0

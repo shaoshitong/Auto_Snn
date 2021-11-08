@@ -39,7 +39,7 @@ def batch_norm(input):
     return torch.div(torch.sub(input, mean), std)
 
 
-filename = "./train_c10.yaml"
+filename = "./train_c10_hr.yaml"
 yaml = yaml_config_get(filename)
 # yaml = yaml_config_get("./train.yaml")
 dataoption = yaml['data']
@@ -99,7 +99,7 @@ class block_out(nn.Module):
 
         self.classifiar = nn.Sequential(nn.Flatten(), nn.Linear(sum(feature), classes))
         self.avg = nn.Sequential(*[Lambda(F.avg_pool2d)])
-
+        size=size[1:]
         self.transition_layer=nn.ModuleList([
             nn.Sequential(
                 nn.BatchNorm2d(feature[i]),
@@ -328,9 +328,9 @@ class two_dim_layer(nn.Module):
         self.point_cul_layer = {}
         self.test = False
         self.tensor_check,self.push_list=token_numeric_get(x,y,b,out_feature,down_rate)
-        for col in self.tensor_check:
-            print(col)
-        print("\n\n")
+        # for col in self.tensor_check:
+        #     print(col)
+        # print("\n\n")
         if self.x>0 and self.y>0:
             for i in range(0,self.x):
                 for j in range(0,self.y):
@@ -544,6 +544,7 @@ class Iter_Layer(nn.Module):
         
         """
         self.in_shape = data.shape
+        size_list=size_list[1:]
         assert len(feature_list) == len(size_list) and len(hidden_size_list) == len(path_nums_list) and len(
             path_nums_list) == len(nums_layer) and len(breadth_threshold)==len(nums_layer)
 
@@ -559,13 +560,17 @@ class Iter_Layer(nn.Module):
                 index=[_i for _i in range(len(size_list))]
                 mm = self.turn_layer[str(i)].np_last
             else:
-                now_size_list,now_f,index=filter_list(size_list,f)
-                self.turn_layer[str(i)]=Multi_Fusion(now_size_list,now_f,decay_rate_list(now_f,decay_rate))
+                tmp_f=copy.deepcopy(f)
+                for j in range(len(size_list)):
+                    if feature_list[j][i]==None:
+                        tmp_f[j]=None
+                now_size_list,now_f,index=filter_list(size_list,tmp_f)
+                self.turn_layer[str(i)]=Multi_Fusion(now_size_list,now_f,decay_rate_list(now_f,decay_rate,index),index)
                 mm=self.turn_layer[str(i)].np_last
                 for q,k in enumerate(index):
                     f[k]=mm[q]
                 mm=f
-
+            print(mm)
             point_mode=nn.ModuleList([])
             for j in range(len(size_list)):
                 m=mm[j]
@@ -710,31 +715,3 @@ class merge_layer(nn.Module):
         loss_list = loss_list + [loss_bias, loss_feature]
         loss = torch.stack(loss_list, dim=-1).sum()
         return loss
-
-
-"""
-高斯卷积
-输出卷积核大小:output=[(input+padding*2-kernel_size)/stride]+1
-group是需要根据通道进行调整的，三通道的卷积操作如果group为1则虽然输出三通道，但其实三通道信息是相同的，当然根据group能够做到通道之间的信息交互
-如果是反卷积则output=[(input-1)*stride+kernel_size-padding*2]
-如果需要自己实现卷积操作则需要通过torch.unfold将input进行分片，对于卷积操作中的卷积核而言，其尺寸为（输出通道数，输入通道数，卷积核长，卷积核宽）
-对于输入数据而言通常为（数据批次数，特征数，点状图高，点状图宽），对于每个输出通道数维度，其（输入通道数，卷积核长，卷积核宽）和（特征数，点状图高，点状图宽）进行卷积操作，然后将输出通道数维度的结果进行拼接得到输出
-其中特别要注意group,如果group不为一，那么其实卷积核尺寸为(输出通道数，输入通道数/groups,卷积核长，卷积核宽)，这时候其实卷积操作对通道的整合性减弱，而对输入信息所具备的特征信息增强
-以下为实现卷积操作的函数：
-def conv2d(x, weight, bias, stride, pad): 
-    n, c, h_in, w_in = x.shape
-    d, c, k, j = weight.shape
-    x_pad = torch.zeros(n, c, h_in+2*pad, w_in+2*pad)   # 对输入进行补零操作
-    if pad>0:
-        x_pad[:, :, pad:-pad, pad:-pad] = x
-    else:
-        x_pad = x
-
-    x_pad = x_pad.unfold(2, k, stride)
-    x_pad = x_pad.unfold(3, j, stride)        # 按照滑动窗展开
-    out = torch.einsum(                          # 按照滑动窗相乘，
-        'nchwkj,dckj->ndhw',                    # 并将所有输入通道卷积结果累加
-        x_pad, weight)
-    out = out + bias.view(1, -1, 1, 1)          # 添加偏置值
-    return out
-"""
