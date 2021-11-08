@@ -95,8 +95,7 @@ class block_out(nn.Module):
         classes=10
         """
         super(block_out, self).__init__()
-
-
+        print(f"the linear input feature map number is {sum(feature)}")
         self.classifiar = nn.Sequential(nn.Flatten(), nn.Linear(sum(feature), classes))
         self.avg = nn.Sequential(*[Lambda(F.avg_pool2d)])
         size=size[1:]
