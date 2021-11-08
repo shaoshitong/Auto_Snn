@@ -502,6 +502,11 @@ if __name__ == "__main__":
                                  breadth_threshold=yaml["breadth_threshold"],
                                  down_rate=yaml["down_rate"],
                                  mult_k=yaml["mult_k"])
+
+        """
+        (self, data, num_classes, fn_channels,feature_list, size_list, hidden_size_list, path_nums_list,
+                       nums_layer_list,down_rate,breadth_threshold, mult_k=2,drop_rate=2):
+        """
     else:
         raise KeyError('There is no corresponding dataset')
     params4 = list(filter(lambda i: i.requires_grad, model.parameters()))

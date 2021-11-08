@@ -4,28 +4,11 @@ import torch.nn.functional as F
 import os
 import random
 # from lib.memory import  MemTracker
-import inspect
-import numpy as np
-import torchvision.models
-from torch.nn.modules.utils import _single, _pair, _triple
-from lib.data_loaders import revertNoramlImgae
-from lib.plt_analyze import vis_img
-from lib.parameters_check import pd_save, parametersgradCheck
-from lib.SNnorm import SNConv2d, SNLinear
-from lib.fractallayer import LastJoiner
-from lib.DenseNet import DenseNet
-from lib.cocoscontextloss import ContextualLoss_forward
-from lib.Wideresnet import Downsampleunit
-from lib.featurefocusing_v2 import Feature_forward
-from lib.dimixloss import DimixLoss, DimixLoss_neg,Linear_adaptive_loss
-from lib.PointConv import PointConv
 from lib.GRU import multi_GRU, multi_block_eq, Cat, DenseBlock, cat_result_get,return_tensor_add,numeric_get,\
     aplha_decay,token_numeric_get
+from lib.utils import *
 from lib.DenseNet import DenseBlock as DenseDeepBlock
 import math
-import pandas as pd
-from torch.nn.utils import spectral_norm
-from torch.nn.parameter import Parameter
 from omegaconf import OmegaConf
 import matplotlib.pyplot as plt
 # frame = inspect.currentframe()          # define a frame to track
@@ -106,12 +89,24 @@ class Shortcut(nn.Module):
 
 class block_out(nn.Module):
     def __init__(self, feature, classes, size, use_pool='none'):
+        """
+        size=[32,16,8,4]
+        feature=[a,b,c,d]
+        classes=10
+        """
         super(block_out, self).__init__()
-        self.classifiar = nn.Sequential(nn.Flatten(), nn.Linear(feature, classes))
-        self.transition_layer = nn.Sequential(*[
-            nn.BatchNorm2d(feature),
-            nn.ReLU(inplace=True),
-            Lambda(F.avg_pool2d)])
+
+
+        self.classifiar = nn.Sequential(nn.Flatten(), nn.Linear(sum(feature), classes))
+        self.avg = nn.Sequential(*[Lambda(F.avg_pool2d)])
+
+        self.transition_layer=nn.ModuleList([
+            nn.Sequential(
+                nn.BatchNorm2d(feature[i]),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(feature[i], feature[i], (1, 1), (size[i]//size[-1],size[i]//size[-1]), (0, 0), bias=False)
+            ) for i in range(len(feature[:-1]))
+        ])
         self.training = False
         self.use_pool = use_pool
         self.size = size
@@ -131,10 +126,14 @@ class block_out(nn.Module):
                 # layer.weight.data.zero_()
                 layer.bias.data.zero_()
 
-    def forward(self, x):
-        x = self.transition_layer(x)
-        return self.classifiar(x)
-
+    def forward(self, inputs):
+        res=[]
+        for i in range(len(inputs[:-1])):
+            res.append(self.transition_layer[i](inputs[i]))
+        res.append(inputs[-1])
+        res=torch.cat(res,dim=1)
+        res=self.avg(res)
+        return self.classifiar(res)
 
 # class block_eq(nn.Module):
 #     def __init__(self, eq_feature,tmp_feature,dropout):
@@ -301,6 +300,12 @@ class point_cul_Layer(nn.Module):
         else:
             tensor_prev, (i, j),tag,(pre_i,pre_j) = x
             return self.DoorMach(cat_result_get(tensor_prev, i, j, self.b,tag,pre_i,pre_j))
+class non_two_dim_layer(nn.Module):
+    def __init__(self, in_feature, out_feature, hidden_size, in_size, out_size, x, y,b,down_rate, mult_k=2, p=0.2):
+        super(non_two_dim_layer, self).__init__()
+        self.np_last=in_feature
+    def forward(self,x):
+        return x
 class two_dim_layer(nn.Module):
     def __init__(self, in_feature, out_feature, hidden_size, in_size, out_size, x, y,b,down_rate, mult_k=2, p=0.2):
         super(two_dim_layer, self).__init__()
@@ -461,9 +466,9 @@ class turn_layer(nn.Module):
             return self.downsample(x)
 
 
-class three_dim_Layer(nn.Module):
+class Iter_Layer(nn.Module):
     def __init__(self, shape, device, p=0.1):
-        super(three_dim_Layer, self).__init__()
+        super(Iter_Layer, self).__init__()
         """
         该层便是three-dim层
         x维度代表原始数据通过卷积变换至[batchsize,64,x//2,y//2]
@@ -474,25 +479,39 @@ class three_dim_Layer(nn.Module):
         self.shape = shape
         self.device = device
         self.dropout = p
-    def forward(self, m):
+    def forward(self, x):
         """
-        x,y=>[batchsize,64,x_pointnum//2,y_pointnum//2]
+        x,y=>[batchsize,64,x_pointnum,y_pointnum]
         """
-        self.losses = 0.
         for i in range(self.len):
-            m = self.turn_layer_module[str(i)](m)
-            m = self.point_layer_module[str(i)](m)
-        return m
+            x=self.turn_layer_module[str(i)](x)
+            x=[self.point_layer_module[str(i)][j](x[j]) for j in range(len(self.size_list))]
+        return x
 
-    def initiate_layer(self, data, feature_list, size_list, hidden_size_list, path_nums_list, nums_layer, decay_rate,
-                       mult_k,down_rate,breadth_threshold):
+    def initiate_layer(self,
+                       data,
+                       fn_channels,
+                       feature_list,
+                       size_list,
+                       hidden_size_list,
+                       path_nums_list,
+                       nums_layer,
+                       decay_rate,
+                       down_rate,
+                       breadth_threshold):
         """
         three-dim层初始化节点
         """
         self.point_layer = {}
         self.turn_layer = {}
 
+        self.in_channels=data.shape[1]
+        self.fn_channels=fn_channels
 
+        _Multi_Fusion_Create=Multi_Fusion_Create(    in_channels=self.in_channels,
+                                                     channnels=self.fn_channels,
+                                                     size_list=size_list[1:],
+                                                     in_size=size_list[0])
 
         """
         size_list=[ 32 , 16 , 8 , 4 ]
@@ -527,25 +546,49 @@ class three_dim_Layer(nn.Module):
         self.in_shape = data.shape
         assert len(feature_list) == len(size_list) and len(hidden_size_list) == len(path_nums_list) and len(
             path_nums_list) == len(nums_layer) and len(breadth_threshold)==len(nums_layer)
-        for i in range(len(hidden_size_list)):
-            f1, f2 = feature_list[i], feature_list[i + 1]
-            s1, s2 = size_list[i], size_list[i + 1]
-            h1 = hidden_size_list[i]
-            p1 = path_nums_list[i]
-            n1 = nums_layer[i]
-            b1 = breadth_threshold[i]
-            if i == 0:
-                self.turn_layer[str(i)] = turn_layer(f1, f2, h1, n1, decay_rate, int(s1 // s2), self.dropout)
+
+        feature_list,path_nums_list,nums_layer,breadth_threshold=balance_ilist(feature_list, path_nums_list, nums_layer, breadth_threshold)
+        self.feature_list,self.path_nums_list,self.nums_layer,self.breadth_threshold=feature_list,path_nums_list,nums_layer,breadth_threshold
+        self.size_list=size_list
+        assert len(feature_list[0])>0
+
+        for i in range(len(feature_list[0])):
+
+            if i==0:
+                self.turn_layer[str(i)]=_Multi_Fusion_Create
+                index=[_i for _i in range(len(size_list))]
+                mm = self.turn_layer[str(i)].np_last
             else:
-                self.turn_layer[str(i)] = turn_layer(h, f2, h1, n1, decay_rate, int(s1 // s2), self.dropout)
-            m = self.turn_layer[str(i)].origin_out_feature
-            self.point_layer[str(i)] = two_dim_layer(m, f2, h1, s2, s2, p1, p1,b1,down_rate,mult_k, self.dropout)
-            h = self.point_layer[str(i)].np_last
+                now_size_list,now_f,index=filter_list(size_list,f)
+                self.turn_layer[str(i)]=Multi_Fusion(now_size_list,now_f,decay_rate_list(now_f,decay_rate))
+                mm=self.turn_layer[str(i)].np_last
+                for q,k in enumerate(index):
+                    f[k]=mm[q]
+                mm=f
+
+            point_mode=nn.ModuleList([])
+            for j in range(len(size_list)):
+                m=mm[j]
+                f2=feature_list[j][i]
+                h=hidden_size_list[i]
+                s=size_list[j]
+                p=path_nums_list[j][i]
+                n=nums_layer[j][i]
+                b=breadth_threshold[j][i]
+                if f2==None:
+                    point_mode.append(
+                        non_two_dim_layer(m,f2,h,s,s,p,p,b,down_rate,0,self.dropout))
+                else:
+                    point_mode.append(
+                        two_dim_layer(m, f2, h, s, s, p, p, b, down_rate, 0, self.dropout))
+            self.point_layer[str(i)]=point_mode
+            f=[self.point_layer[str(i)][z].np_last for z in range(len(self.point_layer[str(i)]))]
+
         self.turn_layer_module = nn.ModuleDict(self.turn_layer)
         self.point_layer_module = nn.ModuleDict(self.point_layer)
-        self.len = len(hidden_size_list)
+        self.len = len(self.feature_list[0])
         del self.point_layer, self.turn_layer
-        return h
+        return f
 
 
 class merge_layer(nn.Module):
@@ -560,7 +603,7 @@ class merge_layer(nn.Module):
             self.shape = shape
         self.device = device
         self.iter=0.
-        self.InputGenerateNet = three_dim_Layer(self.shape, self.device, dropout).to(device)
+        self.InputGenerateNet = Iter_Layer(self.shape, self.device, dropout).to(device)
 
     def forward(self, x):
         # x, y = self.initdata(x)
@@ -570,18 +613,15 @@ class merge_layer(nn.Module):
             else:
                 if dataoption in ['cifar10', 'cifar100']:
                     x = x.view(x.shape[0], 3, 32, 32)
-                    # y = y.view(y.shape[0], 3, 32, 32)
                 elif dataoption == 'mnist':
                     x: torch.Tensor
                     x = x.view(x.shape[0], 1, 28, 28)
                     x = F.interpolate(x, (32, 32), mode='bilinear', align_corners=True)
-                    # y = y.view(y.shape[0], 1, 28, 28)
                 elif dataoption == 'imagenet':
                     pass
                 elif dataoption == 'fashionmnist':
                     x = x.view(x.shape[0], 1, 28, 28)
                     x = F.interpolate(x, (32, 32), mode='bilinear', align_corners=True)
-                    # y = y.view(y.shape[0], 1, 28, 28)
                 elif dataoption == 'eeg':
                     x = x.view(x.shape[0], 14, 32, 32)
                     # 64,16,16
@@ -595,26 +635,38 @@ class merge_layer(nn.Module):
                     x = x.view(x.shape[0], 3, 96, 96)
                 else:
                     raise KeyError()
-        x = self.inf(x)
         x = self.InputGenerateNet(x)
         x = self.out_classifier(x)
         return x
 
-    def initiate_layer(self, data, num_classes, feature_list, size_list, hidden_size_list, path_nums_list,
+    def initiate_layer(self, data, num_classes, fn_channels,feature_list, size_list, hidden_size_list, path_nums_list,
                        nums_layer_list,down_rate,breadth_threshold, mult_k=2,drop_rate=2):
         """
         配置相应的层
         """
         b, c, h, w = data.shape
         input_shape = (b, c, h, w)
+        """
         if dataoption=="imagenet":
             self.inf = nn.Sequential(*[nn.Conv2d(c, feature_list[0], (7, 7), (2, 2), (2, 2), bias=False),])
         else:
             self.inf = nn.Conv2d(c, feature_list[0], (3, 3), (1,1), (1, 1), bias=False)
         self._initialize()
-        h = self.InputGenerateNet.initiate_layer(data, feature_list, size_list, hidden_size_list, path_nums_list,
-                                                 nums_layer_list, drop_rate,mult_k,down_rate,breadth_threshold)
-        self.out_classifier = block_out(h, num_classes, size_list[-1])
+        
+                        data,
+                       fn_channels,
+                       feature_list,
+                       size_list,
+                       hidden_size_list,
+                       path_nums_list,
+                       nums_layer,
+                       decay_rate,
+                       down_rate,
+                       breadth_threshold):
+        """
+        h = self.InputGenerateNet.initiate_layer(data,fn_channels, feature_list, size_list, hidden_size_list, path_nums_list,
+                                                 nums_layer_list, drop_rate,down_rate,breadth_threshold)
+        self.out_classifier = block_out(h, num_classes, size_list)
     def _initialize(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
