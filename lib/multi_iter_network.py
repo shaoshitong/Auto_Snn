@@ -561,7 +561,7 @@ class Iter_Layer(nn.Module):
             else:
                 tmp_f=copy.deepcopy(f)
                 for j in range(len(size_list)):
-                    if feature_list[j][i]==None:
+                    if feature_list[j][i]==None and feature_list[j][i-1]==None:
                         tmp_f[j]=None
                 now_size_list,now_f,index=filter_list(size_list,tmp_f)
                 self.turn_layer[str(i)]=Multi_Fusion(now_size_list,now_f,decay_rate_list(now_f,decay_rate,index),index)
@@ -569,7 +569,6 @@ class Iter_Layer(nn.Module):
                 for q,k in enumerate(index):
                     f[k]=mm[q]
                 mm=f
-            print(mm)
             point_mode=nn.ModuleList([])
             for j in range(len(size_list)):
                 m=mm[j]

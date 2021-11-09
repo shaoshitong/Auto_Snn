@@ -117,10 +117,6 @@ class Multi_Fusion(nn.Module):
         self.size_list=size_list
         self.total_model=nn.ModuleList([])
         self.feature_list_in=feature_list_in
-        self.in_norm=nn.ModuleList([
-            nn.Sequential(nn.BatchNorm2d(feature_list_in[i]),
-                          nn.ReLU(inplace=False)) for i in range(len(feature_list_in))
-        ])
         for i,out_size in enumerate(self.size_list):
             mode=nn.ModuleList([])
             for j,in_size in enumerate(self.size_list):
@@ -129,9 +125,18 @@ class Multi_Fusion(nn.Module):
                     mode.append(None_Do(feature_list_in[j],feature_list_out[i]))
                 elif stride<1:
                     stride=int(in_size//out_size)
-                    mode.append(nn.Conv2d(feature_list_in[j],feature_list_out[i],(stride,stride),(stride,stride),(0,0),bias=False))
+                    mode.append(
+                        nn.Sequential(nn.BatchNorm2d(feature_list_in[j]),
+                                      nn.ReLU(inplace=True),
+                                      nn.Conv2d(feature_list_in[j], feature_list_out[i], (stride, stride),
+                                                (stride, stride), (0, 0), bias=False)))
                 elif stride>1:
-                    mode.append(Interpolate(feature_list_in[j],feature_list_out[i],stride))
+                    mode.append(
+                        nn.Sequential(
+                            nn.BatchNorm2d(feature_list_in[j]),
+                            nn.ReLU(inplace=True),
+                            Interpolate(feature_list_in[j], feature_list_out[i], stride)
+                        ))
             self.total_model.append(mode)
         self.index=index
         self.np_last=feature_list_out
@@ -139,8 +144,6 @@ class Multi_Fusion(nn.Module):
         index=self.index
         assert isinstance(inputs,list) or isinstance(inputs,tuple)
         return_list=[]
-        for i,ind in enumerate(index):
-            inputs[ind] = self.in_norm[i](inputs[ind])
         for i,in_size in enumerate(self.size_list):
             out_list=[]
             for j,out_size in enumerate(self.size_list):
