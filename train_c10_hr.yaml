@@ -14,9 +14,6 @@ fn_channels:
 feature_list:
   -
     - 32
-    - 32
-    - 32
-    - 32
   -
     - 32
     - 32
@@ -24,7 +21,10 @@ feature_list:
   -
     - 32
     - 32
+    - 32
+    - 32
   -
+    - 32
     - 32
 size_list:
   - 32
@@ -39,10 +39,7 @@ hidden_size_list:
   - 4
 path_nums_list:
   -
-    - 3
-    - 3
-    - 3
-    - 3
+    - 4
   -
     - 3
     - 3
@@ -50,14 +47,14 @@ path_nums_list:
   -
     - 3
     - 3
+    - 3
+    - 3
   -
+    - 3
     - 3
 nums_layer_list:
   -
     - 1
-    - 1
-    - 1
-    - 1
   -
     - 1
     - 1
@@ -65,14 +62,14 @@ nums_layer_list:
   -
     - 1
     - 1
+    - 1
+    - 1
   -
+    - 1
     - 1
 breadth_threshold:
   -
-    - 3
-    - 3
-    - 3
-    - 3
+    - 4
   -
     - 3
     - 3
@@ -80,7 +77,10 @@ breadth_threshold:
   -
     - 3
     - 3
+    - 3
+    - 3
   -
+    - 3
     - 3
 down_rate:
   1
