@@ -129,7 +129,7 @@ class block_out(nn.Module):
                 layer.weight.data.fill_(1.)
                 layer.bias.data.zero_()
             elif isinstance(layer, nn.Linear):
-                # layer.weight.data.zero_()
+                nn.init.normal_(layer.weight.data,0.001,0.001)
                 layer.bias.data.zero_()
 
     def forward(self, x):
@@ -412,8 +412,8 @@ class turn_layer(nn.Module):
         super(turn_layer, self).__init__()
         if num_layer != 0:
             self.downsample = nn.Sequential(*[])
-            self.downsample.add_module('norm', nn.BatchNorm2d(in_feature))
-            self.downsample.add_module("relu", nn.ReLU(inplace=True))
+            self.downsample.add_module('norm', nn.BatchNorm2d(in_feature,eps=1e-6))
+            self.downsample.add_module("relu", nn.SiLU(inplace=True))
             self.downsample.add_module("conv",
                                        nn.Conv2d(in_feature,int(in_feature/decay_rate), (1, 1), (1, 1), (0, 0), bias=False))
             self.xsample = nn.Sequential(*[])
@@ -430,8 +430,8 @@ class turn_layer(nn.Module):
             self.origin_out_feature =  int(in_feature)
             self.num_layer = num_layer
             self.downsample = nn.Sequential(*[])
-            self.downsample.add_module('norm', nn.BatchNorm2d(in_feature))
-            self.downsample.add_module("relu", nn.ReLU(inplace=True))
+            self.downsample.add_module('norm', nn.BatchNorm2d(in_feature,eps=1e-6))
+            self.downsample.add_module("relu", nn.SiLU(inplace=True))
             self.downsample.add_module('pool', nn.AvgPool2d(kernel_size=(stride, stride), stride=(stride, stride)))
             in_feature = in_feature + out_feature * num_layer
             self.origin_out_feature =in_feature

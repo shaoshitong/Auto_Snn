@@ -32,19 +32,21 @@ def token_numeric_get(x, y, b, f, d):
     push_list = []
     tensor_check = [[0 for i in range(y)] for j in range(x)]
     for i in range(1, x):
-        tensor_check[i][0] = tensor_check[i - 1][0] + max(1, int(f / (d ** min(1,abs(i - 0))))) * int(abs(i - 0) < b)
+        tensor_check[i][0] = tensor_check[i - 1][0] + max(1, int(f / (d ** min(1, abs(i - 0))))) * int(abs(i - 0) < b)
     for i in range(1, y):
-        tensor_check[0][i] = tensor_check[0][i - 1] + max(1, int(f / (d ** min(1,abs(i - 0))))) * int(abs(i - 0) < b)
+        tensor_check[0][i] = tensor_check[0][i - 1] + max(1, int(f / (d ** min(1, abs(i - 0))))) * int(abs(i - 0) < b)
     for i in range(1, x):
         for j in range(1, y):
             tensor_check[i][j] = tensor_check[i][j - 1] + tensor_check[i - 1][j] - tensor_check[i - 1][j - 1] + max(1,
                                                                                                                     int(f / (
-                                                                                                                                d ** min(1,abs(i - j))))) * int(
+                                                                                                                            d ** min(
+                                                                                                                        1,
+                                                                                                                        abs(i - j))))) * int(
                 abs(i - j) < b)
     for i in range(0, x):
         for j in range(0, y):
             if i != 0 or j != 0:
-                tensor_check[i][j] -= max(1, int(f / (d ** min(1,abs(i - j))))) * int(abs(i - j) < b)
+                tensor_check[i][j] -= max(1, int(f / (d ** min(1, abs(i - j))))) * int(abs(i - j) < b)
     L = x + y - 1
     tag = 0
     for i in range(L):
@@ -66,9 +68,8 @@ def token_numeric_get(x, y, b, f, d):
         if a_1 <= a_2 and b_1 <= b_2:
             continue
         else:
-            tensor_check[a_2][b_2] += max(1, int(f / (d ** min(1,abs(a_1 - b_1)))))
+            tensor_check[a_2][b_2] += max(1, int(f / (d ** min(1, abs(a_1 - b_1)))))
     return tensor_check, push_list
-
 
 
 def numeric_get(x, y, b):
@@ -134,42 +135,40 @@ class BasicUnit(nn.Module):
 
 
 class DenseLayer(nn.Sequential):
-    def __init__(self, num_input_features, growth_rate, bn_size, drop_rate, class_fusion,cat_x,cat_y):
+    def __init__(self, num_input_features, growth_rate, bn_size, drop_rate, class_fusion, cat_x, cat_y):
         super(DenseLayer, self).__init__()
         self.nums_input_features = num_input_features
         if class_fusion == 0:
-            self.add_module('norm1', nn.BatchNorm2d(num_input_features)),
-            self.add_module('relu1', nn.ReLU(inplace=True)),
+            self.add_module('norm1', nn.BatchNorm2d(num_input_features,eps=1e-6)),
+            self.add_module('relu1', nn.SiLU(inplace=True)),
             self.add_module('conv1',
                             nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=(1, 1), stride=(1, 1),
                                       padding=(0, 0), bias=False)),
-            self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate)),
-            self.add_module('relu2', nn.LeakyReLU(negative_slope=1e-2,
-                                                  inplace=True)),
+            self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate,eps=1e-6)),
+            self.add_module('relu2', nn.SiLU(inplace=True)),
             self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
-                                               kernel_size=(5,2), stride=(1, 1), dilation=(1, 2), padding=(2,1),
+                                               kernel_size=(5, 2), stride=(1, 1), dilation=(1, 2), padding=(2, 1),
                                                bias=False))
         elif class_fusion == 1:
-            self.add_module('norm1', nn.BatchNorm2d(num_input_features)),
-            self.add_module('relu1', nn.ReLU(inplace=True)),
+            self.add_module('norm1', nn.BatchNorm2d(num_input_features,eps=1e-6)),
+            self.add_module('relu1', nn.SiLU(inplace=True)),
             self.add_module('conv1',
                             nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=(1, 1), stride=(1, 1),
                                       padding=(0, 0), bias=False)),
-            self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate)),
-            self.add_module('relu2', nn.ReLU(inplace=True)),
+            self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate,eps=1e-6)),
+            self.add_module('relu2', nn.SiLU(inplace=True)),
             self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
                                                kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False))
         else:
-            self.add_module('norm1', nn.BatchNorm2d(num_input_features)),
-            self.add_module('relu1', nn.ReLU(inplace=True)),
+            self.add_module('norm1', nn.BatchNorm2d(num_input_features,eps=1e-6)),
+            self.add_module('relu1', nn.SiLU(inplace=True)),
             self.add_module('conv1',
                             nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=(1, 1), stride=(1, 1),
                                       padding=(0, 0), bias=False)),
-            self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate)),
-            self.add_module('relu2', nn.LeakyReLU(negative_slope=1e-2,
-                                                  inplace=True)),
+            self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate,eps=1e-6)),
+            self.add_module('relu2', nn.SiLU(inplace=True)),
             self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
-                                               kernel_size=(2,5), stride=(1, 1), dilation=(2,1), padding=(1,2),
+                                               kernel_size=(2, 5), stride=(1, 1), dilation=(2, 1), padding=(1, 2),
                                                bias=False))
         self.drop_rate = drop_rate
 
@@ -184,7 +183,7 @@ class DenseLayer(nn.Sequential):
 class DenseBlock(nn.Module):
     def __init__(self, cat_feature, eq_feature, hidden_size, cat_x, cat_y, dropout, class_fusion, size):
         super(DenseBlock, self).__init__()
-        self.denselayer = DenseLayer(cat_feature, eq_feature, hidden_size, dropout, class_fusion,cat_x,cat_y)
+        self.denselayer = DenseLayer(cat_feature, eq_feature, hidden_size, dropout, class_fusion, cat_x, cat_y)
         self.eq_feature = eq_feature
         self.cat_x = cat_x
         self.cat_y = cat_y
@@ -217,7 +216,7 @@ class DenseBlock(nn.Module):
         else:
             for layer in self.modules():
                 if isinstance(layer, nn.Conv2d):
-                    nn.init.kaiming_normal_(layer.weight.data, mode="fan_in", nonlinearity="leaky_relu")
+                    nn.init.kaiming_normal_(layer.weight.data, mode="fan_in", nonlinearity="relu")
                     if layer.bias is not None:
                         nn.init.zeros_(layer.bias.data)
                 elif isinstance(layer, nn.BatchNorm2d):

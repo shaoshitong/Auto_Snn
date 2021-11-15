@@ -326,7 +326,7 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
             scaler.unscale_(optimizer)
 
             # clip梯度
-            torch.nn.utils.clip_grad_norm_(model.parameters(),5.)
+            torch.nn.utils.clip_grad_norm_(model.parameters(),20.)
             scaler.step(optimizer)
             scaler.update()
 
