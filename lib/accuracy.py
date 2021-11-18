@@ -11,10 +11,12 @@ def accuracy(output, target, topk=(1,)):
     """
     maxk = max(topk)
     batch_size = target.size(0)
-
     _, pred = output.topk(maxk, 1, True, True)
     pred = pred.t()
-    correct = pred.eq(target.view(1, -1).expand_as(pred))
+    if target.shape!=output.shape:
+        correct = pred.eq(target.view(1, -1).expand_as(pred))
+    else:
+        correct = pred.eq(target.argmax(1).view(1, -1).expand_as(pred))
 
     res = []
     for k in topk:

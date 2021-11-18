@@ -15,6 +15,7 @@ import torch.utils.data
 from data.car.cardataprocess import CarDateset
 from data.stl.stl10_matlab.stlprocess import STLdataprocess
 from torch.utils.data import DataLoader
+from lib.ProgressiveLearning import CIFAR10Dataset
 import random
 import openpyxl
 
@@ -131,7 +132,7 @@ def load_data(train_batch_size, test_batch_size, data_url=None ,use_standard=Tru
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)) if use_standard == True else
         transforms.Normalize(mean, std),
     ])
-    train_set = torchvision.datasets.CIFAR10(root=data_url, train=True,
+    train_set = CIFAR10Dataset(root=data_url, train=True,
                                              download=True, transform=train_transform)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=train_batch_size,
                                                shuffle=True, num_workers=4, drop_last=False)

@@ -57,7 +57,7 @@ densenetparameter:
 parameters:
   # default parameters
   loss_option:
-    cross
+    noonehot_cross
   sigma_list:
     - 0.0
     - 0.1
