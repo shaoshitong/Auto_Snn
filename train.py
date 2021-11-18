@@ -22,6 +22,7 @@ from lib.accuracy import accuracy
 from lib.criterion import criterion
 from lib.data_loaders import MNISTDataset, get_rand_transform, load_data, EEGDateset, load_data_car, \
     load_data_svhn, load_data_c100, load_data_stl,load_data_imagenet
+from lib.config import config
 from lib.log import Log
 from lib.optimizer import get_optimizer
 from lib.scheduler import get_scheduler, SchedulerLR
@@ -35,7 +36,7 @@ parser.add_argument('--train', dest='train', default=True, type=bool,
                     help='train model')
 parser.add_argument('--test', dest='test', default=True, type=bool,
                     help='test model')
-parser.add_argument('--data_url', dest='data_url', default='./data', type=str,
+parser.add_argument('--data_url', dest='data_url', default='/data/data', type=str,
                     help='test model')
 parser.add_argument('--neg_mul', dest='neg_mul', default=0.1, type=float,
                     help='neg_learning')
@@ -368,6 +369,7 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
 
 if __name__ == "__main__":
     torch.cuda.empty_cache()
+    config_=config()
     yaml = yaml_config_get(args)
     if yaml['set_seed'] is True:
         set_random_seed(yaml)
@@ -540,6 +542,14 @@ if __name__ == "__main__":
             model.train()
             epoch_time_stamp = time.strftime("%Y%m%d-%H%M%S")
             prec1, loss = train(model, optimizer, scheduler, train_dataloader, yaml, j, criterion_loss)
+
+            """======================"""
+            for i,e in enumerate(config_.iter_epoch):
+                if e==j:
+                    model.set_dropout(config_.iter_drop[i])
+                    train_dataloader.dataset.reset_beta(config_.iter_beta[i],config_.iter_size[i])
+            """======================"""
+
             # params1.assert_buffer_is_valid()
             # params2.assert_buffer_is_valid()
             if args.test == True:

@@ -5,6 +5,7 @@ import numpy as np
 import torchvision.datasets
 import random
 from PIL import Image
+from torchvision.transforms import ToTensor,Normalize
 from torch.utils.data import DataLoader,Dataset
 # def criterion(batch_x, batch_y, alpha=1.0, use_cuda=True):
 #     '''
@@ -32,9 +33,12 @@ class CIFAR10Dataset(torchvision.datasets.CIFAR10):
         super(CIFAR10Dataset, self).__init__(root=root,train=train,download=download,transform=transform)
         self.nums=5
         self.beta=0.2
-    def reset_beta(self,beta,nums):
+        self.trans=self.nums
+        self.size_rate=1
+    def reset_beta(self,beta,size_rate):
         self.beta=beta
-        self.nums=nums
+        self.trans=beta
+        self.size_rate=size_rate
     def __getitem__(self, idx):
         image, target = self.data[idx], self.targets[idx]
 
@@ -45,7 +49,8 @@ class CIFAR10Dataset(torchvision.datasets.CIFAR10):
         label=torch.zeros(10)
         label[self.targets[idx]]=1
         if self.transform:
-            image=self.transform(image)
+            transform=Change_Compose(self.transforms,self.trans,self.size_rate)
+            image=transform(image)
         if self.train and idx>0 and idx%self.nums==0:
             mixup_idx=random.randint(0,len(self.data)-1)
             mixup_image, mixup_target = self.data[mixup_idx], self.targets[mixup_idx]
@@ -54,12 +59,27 @@ class CIFAR10Dataset(torchvision.datasets.CIFAR10):
             mixup_label=torch.zeros(10)
             mixup_label[self.targets[mixup_idx]]=1
             if self.transform:
-                mixup_image=self.transform(mixup_image)
+                transform = Change_Compose(self.transforms, self.trans,self.size_rate)
+                mixup_image=transform(mixup_image)
             beta=self.beta
             lam=np.random.beta(beta,beta)
             image=lam*image+(1-lam)*mixup_image
             label=lam*label+(1-lam)*mixup_label
         return image,label
+
+def Change_Compose(compose:torchvision.transforms.Compose,p,size_rate):
+    z=torchvision.transforms.Compose([])
+    for i in range(len(compose.transforms)):
+        if not isinstance(compose.transforms[i],ToTensor) and not isinstance(compose.transforms[i],Normalize):
+            z.transforms.append(torchvision.transforms.RandomApply(compose.transforms[i],p))
+        elif isinstance(compose.transforms[i],torchvision.transforms.Resize):
+            z.transforms.append(torchvision.transforms.Resize(32*size_rate))
+        else:
+            z.transforms.append(compose.transforms[i])
+    return z
+
+
+
 
 
 

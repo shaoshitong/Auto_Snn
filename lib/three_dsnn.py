@@ -19,8 +19,7 @@ from lib.Wideresnet import Downsampleunit
 from lib.featurefocusing_v2 import Feature_forward
 from lib.dimixloss import DimixLoss, DimixLoss_neg,Linear_adaptive_loss
 from lib.PointConv import PointConv
-from lib.GRU import multi_GRU, multi_block_eq, Cat, DenseBlock, cat_result_get,return_tensor_add,numeric_get,\
-    aplha_decay,token_numeric_get
+from lib.GRU import *
 from lib.DenseNet import DenseBlock as DenseDeepBlock
 from lib.utils import Multi_Fusion
 import math
@@ -536,33 +535,34 @@ class merge_layer(nn.Module):
             if hasattr(self, 'input_shape'):
                 x = x.view(self.input_shape)
             else:
-                if dataoption in ['cifar10', 'cifar100']:
-                    x = x.view(x.shape[0], 3, 32, 32)
-                    # y = y.view(y.shape[0], 3, 32, 32)
-                elif dataoption == 'mnist':
-                    x: torch.Tensor
-                    x = x.view(x.shape[0], 1, 28, 28)
-                    x = F.interpolate(x, (32, 32), mode='bilinear', align_corners=True)
-                    # y = y.view(y.shape[0], 1, 28, 28)
-                elif dataoption == 'imagenet':
-                    pass
-                elif dataoption == 'fashionmnist':
-                    x = x.view(x.shape[0], 1, 28, 28)
-                    x = F.interpolate(x, (32, 32), mode='bilinear', align_corners=True)
-                    # y = y.view(y.shape[0], 1, 28, 28)
-                elif dataoption == 'eeg':
-                    x = x.view(x.shape[0], 14, 32, 32)
-                    # 64,16,16
-                elif dataoption == 'car':
-                    x = x.view(x.shape[0], 3, 64, 64)
-                    # 64,16,16
-                elif dataoption == 'svhn':
-                    x = x.view(x.shape[0], 3, 32, 32)
-
-                elif dataoption == "stl-10":
-                    x = x.view(x.shape[0], 3, 96, 96)
-                else:
-                    raise KeyError()
+                pass
+                # if dataoption in ['cifar10', 'cifar100']:
+                #     x = x.view(x.shape[0], 3, 32, 32)
+                #     # y = y.view(y.shape[0], 3, 32, 32)
+                # elif dataoption == 'mnist':
+                #     x: torch.Tensor
+                #     x = x.view(x.shape[0], 1, 28, 28)
+                #     x = F.interpolate(x, (32, 32), mode='bilinear', align_corners=True)
+                #     # y = y.view(y.shape[0], 1, 28, 28)
+                # elif dataoption == 'imagenet':
+                #     pass
+                # elif dataoption == 'fashionmnist':
+                #     x = x.view(x.shape[0], 1, 28, 28)
+                #     x = F.interpolate(x, (32, 32), mode='bilinear', align_corners=True)
+                #     # y = y.view(y.shape[0], 1, 28, 28)
+                # elif dataoption == 'eeg':
+                #     x = x.view(x.shape[0], 14, 32, 32)
+                #     # 64,16,16
+                # elif dataoption == 'car':
+                #     x = x.view(x.shape[0], 3, 64, 64)
+                #     # 64,16,16
+                # elif dataoption == 'svhn':
+                #     x = x.view(x.shape[0], 3, 32, 32)
+                #
+                # elif dataoption == "stl-10":
+                #     x = x.view(x.shape[0], 3, 96, 96)
+                # else:
+                #     raise KeyError()
         x = self.inf(x)
         x = self.InputGenerateNet(x)
         x = self.out_classifier(x)
@@ -607,7 +607,10 @@ class merge_layer(nn.Module):
         for layer in self.modules():
             if isinstance(layer,two_dim_layer):
                 layer.reset(random_float)
-
+    def set_dropout(self,p):
+        for layer in self.modules():
+            if isinstance(layer,DenseLayer):
+                layer.drop_rate=p
     def L2_biasoption(self, loss_list, sigma=None):
         if sigma == None:
             sigma = self._list_build()

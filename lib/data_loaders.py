@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 
 """
@@ -12,10 +13,10 @@ import torch
 import torchvision.datasets as datasets
 import torchvision
 import torch.utils.data
-from data.car.cardataprocess import CarDateset
-from data.stl.stl10_matlab.stlprocess import STLdataprocess
+from lib.dataprocess import CarDateset
+from lib.dataprocess import STLdataprocess
 from torch.utils.data import DataLoader
-from lib.ProgressiveLearning import CIFAR10Dataset
+from lib.ProgressiveLearning import CIFAR10Dataset,Change_Compose
 import random
 import openpyxl
 
@@ -187,6 +188,7 @@ def load_data_c100(train_batch_size, test_batch_size, data_url=None ,use_standar
     train_transform = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
+        transforms.Resize(32),
         transforms.ToTensor(),
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)) if use_standard==True else
         transforms.Normalize(mean, std) ,
