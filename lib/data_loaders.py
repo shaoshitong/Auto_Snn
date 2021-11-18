@@ -123,6 +123,7 @@ def load_data(train_batch_size, test_batch_size, data_url=None ,use_standard=Tru
     train_transform = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
+        transforms.Resize(32),
         transforms.ToTensor(),
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)) if use_standard==True else
         transforms.Normalize(mean, std) ,
@@ -160,6 +161,7 @@ def load_data_imagenet(train_batch_size,test_batch_size,data_url=None):
     train_transform = transforms.Compose([
         transforms.RandomSizedCrop(224),
         transforms.RandomHorizontalFlip(),
+        transforms.Resize(32),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485,0.456,0.406],
                              std=[0.229,0.224,0.225])

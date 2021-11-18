@@ -148,7 +148,7 @@ def test2(model, data, yaml, criterion_loss):
             if yaml['data'] in ['mnist', 'fashionmnist']:
                 input = input.float().to(device)
             elif yaml['data'] in ['cifar10', 'cifar100', 'svhn', 'eeg', 'car', 'stl-10']:
-                input = input.float().to(device).view(input.shape[0], -1)
+                input = input.float().to(device)
             elif yaml['data'] in ["imagenet"]:
                 input=input.to(device)
             else:
@@ -313,7 +313,9 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
         if yaml['data'] in ['mnist', 'fashionmnist']:
             input = input.float().to(device)
         elif yaml['data'] in ['cifar10', 'cifar100', 'svhn', 'eeg', 'car', 'stl-10']:
-            input = input.float().to(device).view(input.shape[0], -1)
+            input = input.float().to(device)
+            if i==0:
+                print(input.shape)
         elif yaml['data'] in ["imagenet"]:
             input = input.to(device)
         else:
@@ -540,14 +542,14 @@ if __name__ == "__main__":
         best_acc = .0
         for j in range(yaml['parameters']['epoch']):
             model.train()
+            for i, e in enumerate(config_.iter_epoch):
+                if e == j:
+                    model.set_dropout(config_.iter_drop[i])
+                    train_dataloader.dataset.reset_beta(config_.iter_beta[i], config_.iter_size[i])
             epoch_time_stamp = time.strftime("%Y%m%d-%H%M%S")
             prec1, loss = train(model, optimizer, scheduler, train_dataloader, yaml, j, criterion_loss)
 
             """======================"""
-            for i,e in enumerate(config_.iter_epoch):
-                if e==j:
-                    model.set_dropout(config_.iter_drop[i])
-                    train_dataloader.dataset.reset_beta(config_.iter_beta[i],config_.iter_size[i])
             """======================"""
 
             # params1.assert_buffer_is_valid()
