@@ -140,33 +140,33 @@ class DenseLayer(nn.Sequential):
         self.nums_input_features = num_input_features
         if class_fusion == 0:
             self.add_module('norm1', nn.BatchNorm2d(num_input_features,eps=1e-6)),
-            self.add_module('relu1', nn.SiLU(inplace=True)),
+            self.add_module('relu1', nn.ReLU(inplace=True)),
             self.add_module('conv1',
                             nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=(1, 1), stride=(1, 1),
                                       padding=(0, 0), bias=False)),
             self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate,eps=1e-6)),
-            self.add_module('relu2', nn.SiLU(inplace=True)),
+            self.add_module('relu2', nn.ReLU(inplace=True)),
             self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
                                                kernel_size=(5, 2), stride=(1, 1), dilation=(1, 2), padding=(2, 1),
                                                bias=False))
         elif class_fusion == 1:
             self.add_module('norm1', nn.BatchNorm2d(num_input_features,eps=1e-6)),
-            self.add_module('relu1', nn.SiLU(inplace=True)),
+            self.add_module('relu1', nn.ReLU(inplace=True)),
             self.add_module('conv1',
                             nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=(1, 1), stride=(1, 1),
                                       padding=(0, 0), bias=False)),
             self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate,eps=1e-6)),
-            self.add_module('relu2', nn.SiLU(inplace=True)),
+            self.add_module('relu2', nn.ReLU(inplace=True)),
             self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
                                                kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False))
         else:
             self.add_module('norm1', nn.BatchNorm2d(num_input_features,eps=1e-6)),
-            self.add_module('relu1', nn.SiLU(inplace=True)),
+            self.add_module('relu1', nn.ReLU(inplace=True)),
             self.add_module('conv1',
                             nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=(1, 1), stride=(1, 1),
                                       padding=(0, 0), bias=False)),
             self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate,eps=1e-6)),
-            self.add_module('relu2', nn.SiLU(inplace=True)),
+            self.add_module('relu2', nn.ReLU(inplace=True)),
             self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
                                                kernel_size=(2, 5), stride=(1, 1), dilation=(2, 1), padding=(1, 2),
                                                bias=False))

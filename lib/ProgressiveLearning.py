@@ -5,7 +5,7 @@ import numpy as np
 import torchvision.datasets
 import random
 from PIL import Image
-from torchvision.transforms import ToTensor,Normalize
+from torchvision.transforms import *
 from torch.utils.data import DataLoader,Dataset
 # def criterion(batch_x, batch_y, alpha=1.0, use_cuda=True):
 #     '''
@@ -72,8 +72,10 @@ def Change_Compose(compose:torchvision.transforms.Compose,p,size_rate):
     for i in range(len(compose.transforms)):
         if isinstance(compose.transforms[i], torchvision.transforms.Resize):
             z.transforms.append(torchvision.transforms.Resize(int(32 * size_rate)))
-        elif not isinstance(compose.transforms[i],ToTensor) and not isinstance(compose.transforms[i],Normalize):
-            z.transforms.append(torchvision.transforms.RandomApply(compose.transforms[i],p))
+        elif isinstance(compose.transforms[i],AutoAugment):
+            z.transforms.append(torchvision.transforms.RandomApply([compose.transforms[i]],p))
+        elif isinstance(compose.transforms[i],ToTensor) or isinstance(compose.transforms[i],Normalize):
+            continue
         else:
             z.transforms.append(compose.transforms[i])
     return z

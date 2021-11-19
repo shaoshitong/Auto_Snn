@@ -131,7 +131,7 @@ def set_random_seed(conf):
     torch.manual_seed(conf['pytorch_seed'])
     torch.cuda.manual_seed(conf['pytorch_seed'])
     torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.benchmark = True
     import numpy as np
     import random
     np.random.seed(conf['pytorch_seed'])
@@ -314,8 +314,6 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
             input = input.float().to(device)
         elif yaml['data'] in ['cifar10', 'cifar100', 'svhn', 'eeg', 'car', 'stl-10']:
             input = input.float().to(device)
-            if i==0:
-                print(input.shape)
         elif yaml['data'] in ["imagenet"]:
             input = input.to(device)
         else:
@@ -371,6 +369,8 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
 
 if __name__ == "__main__":
     torch.cuda.empty_cache()
+    torch.backends.cudnn.benchmark = True
+    torch.backends.cudnn.fastest = True
     config_=config()
     yaml = yaml_config_get(args)
     if yaml['set_seed'] is True:
@@ -543,9 +543,14 @@ if __name__ == "__main__":
         for j in range(yaml['parameters']['epoch']):
             model.train()
             for i, e in enumerate(config_.iter_epoch):
-                if e == j:
-                    model.set_dropout(config_.iter_drop[i])
-                    train_dataloader.dataset.reset_beta(config_.iter_beta[i], config_.iter_size[i])
+                if e<=j and i!=len(config_.iter_epoch)-1 and j<=config_.iter_epoch[i+1]:
+                    a1,b1,c1,d1=config_.iter_beta[i],config_.iter_size[i],config_.iter_drop[i],config_.iter_epoch[i]
+                    a2,b2,c2,d2=config_.iter_beta[i+1],config_.iter_size[i+1],config_.iter_drop[i+1],config_.iter_epoch[i+1]
+                    p=(j-config_.iter_epoch[i])/(config_.iter_epoch[i+1]-config_.iter_epoch[i])
+                    a,b,c=(a2-a1)*p+a1,(b2-b1)*p+b1,(c2-c1)*p+c1
+                    model.set_dropout(c)
+                    train_dataloader.dataset.reset_beta(a,b)
+                    break
             epoch_time_stamp = time.strftime("%Y%m%d-%H%M%S")
             prec1, loss = train(model, optimizer, scheduler, train_dataloader, yaml, j, criterion_loss)
 
