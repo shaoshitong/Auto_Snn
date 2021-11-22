@@ -1,0 +1,134 @@
+
+experiment_name:
+  Auto_config
+set_seed:
+  False
+pytorch_seed:
+  2021
+data:
+  cuhk03
+num_classes:
+  10
+feature_list:
+  - 80
+  - 32
+  - 32
+  - 32
+  - 32
+size_list:
+  - 32
+  - 32
+  - 16
+  - 8
+  - 4
+hidden_size_list:
+  - 4
+  - 4
+  - 4
+  - 4
+path_nums_list:
+  - 3
+  - 4
+  - 5
+  - 6
+nums_layer_list:
+  - 0
+  - 1
+  - 1
+  - 1
+breadth_threshold:
+  - 3
+  - 4
+  - 5
+  - 6
+down_rate:
+  1
+mult_k:
+  1
+use_standard:
+  False
+drop_rate:
+  2
+parameters:
+  # default parameters
+  sigma_list:
+    - 0.0
+    - 0.1
+  s:
+    4
+  push_num:
+    2
+  length:
+    25
+  tmp_feature:
+    8
+  sigma:
+    0.1
+  batch_size:
+    64
+  epoch:
+    300
+  dropout:
+    0.0
+  filter_tau_m:
+    4
+  filter_tau_s:
+    1
+  train_coefficients:
+    True
+  train_bias:
+    True
+  membrane_filer:
+    False
+shape: [2,2,2]
+
+scheduler:
+  scheduler_choice:
+    "WarmupMultiStepLR"
+  WarmupMultiStepLR:
+    steps:
+      - 30
+      - 55
+    gamma:
+      0.1
+    warmup_factor:
+      0.3
+    warmup_iters:
+      500
+    warmup_method:
+      "linear"
+optimizer:
+  optimizer_choice:
+    'AdamW'
+  Adam:
+    lr: 0.001
+    weight_decay: 0
+  AdamW:
+    lr: 0.0001
+    momentum: 0.937
+    weight_decay: 0.0005
+    center_lr: 0.5
+    weight_decay_bias: 0.
+    bias_lr_factor: 2
+  SAM:
+    lr: 0.005
+    weight_decay: 1e-4
+  SGD:
+    momentum: 0.9
+    lr: 0.05
+    weight_decay: 0
+  ASGD:
+    lr: 0.0001
+    weight_decay: 1e-4
+  Rprop:
+    lr: 0.0001
+    betas: (0.5,1.5)
+
+
+# LOSS
+label_smooth: "on"
+margin: 0.3
+center_loss_weight: 0.0005
+loss_type: "triplet" # triplet, center, triplet_center
+sampler: "softmax"
+# LOSS

@@ -48,8 +48,3 @@ def get_dataset_and_dataloader(config):
     )
 
     return train_loader, val_loader, len(dataset.query), num_classes
-#
-# c=Config("./config/efficientnetv2_market.yaml")
-# a,b,c,d=get_dataset_and_dataloader(c)
-# for i in a:
-#     print(a)

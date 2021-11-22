@@ -29,7 +29,6 @@ class CUHK03(BaseImageDataset):
 
         self.imgs_detected_dir = osp.join(self.dataset_dir, 'images_detected')
         self.imgs_labeled_dir = osp.join(self.dataset_dir, 'images_labeled')
-
         self.split_classic_det_json_path = osp.join(
             self.dataset_dir, 'splits_classic_detected.json')
         self.split_classic_lab_json_path = osp.join(
@@ -54,7 +53,6 @@ class CUHK03(BaseImageDataset):
         else:
             image_type = 'detected'
             split_path = self.split_classic_det_json_path if cuhk03_classic_split else self.split_new_det_json_path
-
         splits = read_json(split_path)
         assert split_id < len(splits), "Condition split_id ({}) < len(splits) ({}) is false".format(split_id,
                                                                                                     len(splits))

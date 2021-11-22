@@ -4,6 +4,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-def criterion(criterion_loss, output, label):
-    loss = criterion_loss(output, label)
+def criterion(criterion_loss, *args):
+    loss = criterion_loss(*args)
     return loss

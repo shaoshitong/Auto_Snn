@@ -2,6 +2,39 @@ import torch
 
 
 def get_optimizer(params, conf, model):
+    """
+    def get_lr_policy(opt_config, model):
+    optimizer_params = []
+
+    if opt_config["name"] == 'sgd':
+        optimizer_name = SGD
+    elif opt_config["name"] == 'adam':
+        optimizer_name = AdamW
+
+    for key, value in model.named_parameters():
+        if not value.requires_grad:
+            continue
+        weight_decay = opt_config['weight_decay']
+        lr = opt_config['lr']
+        if "bias" in key:
+            lr = opt_config['lr'] * opt_config['bias_lr_factor']
+            weight_decay = opt_config['weight_decay_bias']
+
+        if opt_config["name"] == 'sgd':
+            optimizer_params += [{"params": [value], "lr": lr,
+                                  "weight_decay": weight_decay,
+                                  "momentum": opt_config['momentum'],
+                                  "nesterov": True}]
+
+        elif opt_config["name"] == 'adam':
+            optimizer_params += [{"params": [value], "lr": lr,
+                                  "weight_decay": weight_decay,
+                                  'betas': (opt_config['momentum'], 0.999)}]
+
+    optimizer = optimizer_name(optimizer_params)
+
+    return optimizer
+    """
     optimizer_conf = conf['optimizer']
     optimizer_choice = optimizer_conf['optimizer_choice']
 
@@ -11,9 +44,27 @@ def get_optimizer(params, conf, model):
         print('optimizer:', optimizer_conf['optimizer_choice'], 'lr:', lr)
         return torch.optim.Adam(params, lr,weight_decay=weight_decay)
     elif optimizer_choice == 'AdamW':
+        weight_decay=optimizer_conf['AdamW']['weight_decay']
         lr = optimizer_conf['AdamW']['lr']
+        betas=(optimizer_conf['AdamW']['momentum'],0.999)
         print('optimizer:', optimizer_conf['optimizer_choice'], 'lr:', lr)
-        return torch.optim.AdamW(params=params, lr=lr,weight_decay=optimizer_conf['AdamW']['weight_decay'])
+        optimizer_params = []
+        for key,value in model.named_parameters():
+            if not value.requires_grad:
+                continue
+            if "bias" in key:
+                lr_bias = lr*optimizer_conf['AdamW']['bias_lr_factor']
+                weight_decay_bias = optimizer_conf['AdamW']['weight_decay_bias']
+                optimizer_params += [{"params": [value], "lr": lr_bias,
+                                      "weight_decay": weight_decay_bias,
+                                      'betas': betas}]
+            else:
+                optimizer_params += [{"params": [value], "lr": lr,
+                                      "weight_decay": weight_decay,
+                                      'betas': betas}]
+
+
+        return torch.optim.AdamW(optimizer_params)
     elif optimizer_choice == 'SGD':
         lr = optimizer_conf['SGD']['lr']
         momentum = optimizer_conf['SGD']['momentum']

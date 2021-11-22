@@ -1,6 +1,4 @@
 import yaml
-
-
 class Config():
     def __init__(self, yaml_path):
         yaml_file = open(yaml_path)

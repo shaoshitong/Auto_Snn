@@ -31,6 +31,7 @@ class ImageDataset(Dataset):
 
     def __getitem__(self, index):
         img_path, pid, camid = self.dataset[index]
+
         img = read_image(img_path)
 
         if self.transform is not None:

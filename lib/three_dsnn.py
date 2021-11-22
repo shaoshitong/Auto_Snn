@@ -56,11 +56,6 @@ def batch_norm(input):
     return torch.div(torch.sub(input, mean), std)
 
 
-filename = "./train_c10.yaml"
-yaml = yaml_config_get(filename)
-# yaml = yaml_config_get("./train.yaml")
-dataoption = yaml['data']
-
 def size_change(f, s):
     def change(xx):
         xx: torch.Tensor
@@ -536,39 +531,13 @@ class merge_layer(nn.Module):
                 x = x.view(self.input_shape)
             else:
                 pass
-                # if dataoption in ['cifar10', 'cifar100']:
-                #     x = x.view(x.shape[0], 3, 32, 32)
-                #     # y = y.view(y.shape[0], 3, 32, 32)
-                # elif dataoption == 'mnist':
-                #     x: torch.Tensor
-                #     x = x.view(x.shape[0], 1, 28, 28)
-                #     x = F.interpolate(x, (32, 32), mode='bilinear', align_corners=True)
-                #     # y = y.view(y.shape[0], 1, 28, 28)
-                # elif dataoption == 'imagenet':
-                #     pass
-                # elif dataoption == 'fashionmnist':
-                #     x = x.view(x.shape[0], 1, 28, 28)
-                #     x = F.interpolate(x, (32, 32), mode='bilinear', align_corners=True)
-                #     # y = y.view(y.shape[0], 1, 28, 28)
-                # elif dataoption == 'eeg':
-                #     x = x.view(x.shape[0], 14, 32, 32)
-                #     # 64,16,16
-                # elif dataoption == 'car':
-                #     x = x.view(x.shape[0], 3, 64, 64)
-                #     # 64,16,16
-                # elif dataoption == 'svhn':
-                #     x = x.view(x.shape[0], 3, 32, 32)
-                #
-                # elif dataoption == "stl-10":
-                #     x = x.view(x.shape[0], 3, 96, 96)
-                # else:
-                #     raise KeyError()
+
         x = self.inf(x)
         x = self.InputGenerateNet(x)
         x = self.out_classifier(x)
         return x
 
-    def initiate_layer(self, data, num_classes, feature_list, size_list, hidden_size_list, path_nums_list,
+    def initiate_layer(self, data, dataoption,num_classes, feature_list, size_list, hidden_size_list, path_nums_list,
                        nums_layer_list,down_rate,breadth_threshold, mult_k=2,drop_rate=2):
         """
         配置相应的层
@@ -582,6 +551,7 @@ class merge_layer(nn.Module):
         self._initialize()
         h = self.InputGenerateNet.initiate_layer(data, feature_list, size_list, hidden_size_list, path_nums_list,
                                                  nums_layer_list, drop_rate,mult_k,down_rate,breadth_threshold)
+        self.num_classes=num_classes
         self.out_classifier = block_out(h, num_classes, size_list[-1])
     def _initialize(self):
         for m in self.modules():

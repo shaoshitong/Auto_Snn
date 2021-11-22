@@ -40,8 +40,8 @@ densenetparameter:
     False
 parameters:
   # default parameters
-  loss_option:
-    smooth_cross
+  loss_type:
+    noonehot_cross
   sigma_list:
     - 0.1
     - 0.01
