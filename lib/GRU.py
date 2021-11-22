@@ -170,6 +170,7 @@ class DenseLayer(nn.Sequential):
             self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
                                                kernel_size=(2, 5), stride=(1, 1), dilation=(2, 1), padding=(1, 2),
                                                bias=False))
+        # self.embedding=nn.Embedding()
         self.drop_rate = drop_rate
 
     def forward(self, x):

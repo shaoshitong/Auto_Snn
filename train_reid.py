@@ -105,6 +105,7 @@ def test2(model, data, yaml, criterion_loss,mAP):
     return cmc[0].item(),cmc[4].item()
 
 def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss,mAP):
+    model.train()
     total_prec1=0.
     total_prec5=0.
     total_loss=0.
@@ -126,15 +127,14 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss,mAP):
             loss_list = [criterion(criterion_loss,score,feat,target)]
             loss = model.L2_biasoption(loss_list, yaml["parameters"]['sigma_list'])
             loss.backward()
-            total_loss+=loss.cpu().item()
+            total_loss+=loss.detach().cpu().item()
             optimizer.second_step(zero_grad=False)
         else:
             optimizer.zero_grad()
-            # unscale 梯度，可以不影响clip的threshol
             scaler.scale(loss).backward(retain_graph=False)
-            total_loss+=loss.cpu().item()
+            print(loss)
+            total_loss+=loss.detach().cpu().item()
             scaler.unscale_(optimizer)
-            # clip梯度
             torch.nn.utils.clip_grad_norm_(model.parameters(),20.)
             scaler.step(optimizer)
             scaler.update()
@@ -193,7 +193,6 @@ if __name__ == "__main__":
         best_acc = .0
         for j in range(yaml['parameters']['epoch']):
             print(f"Epoch {j} Stated:")
-            model.train()
             prec1, loss = train(model, optimizer, scheduler, train_loader, yaml, j, criterion_loss,mAP)
             if args.test == True:
                 cmc,amp = test2(model, test_loader, yaml, criterion_loss,mAP)
