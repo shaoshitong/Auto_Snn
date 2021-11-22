@@ -1,5 +1,22 @@
 from reid_utils.config import *
 from reid_utils.augmentions import *
+from reid_utils.datasets import *
+from reid_utils.sampler import *
+from torch.utils.data import Dataset,DataLoader
+import torch
+
+
+def train_collate_fn(batch):
+    imgs, pids, _, _, = zip(*batch)
+    pids = torch.tensor(pids, dtype=torch.int64)
+    return torch.stack(imgs, dim=0), pids
+
+
+def val_collate_fn(batch):
+    imgs, pids, camids, img_paths = zip(*batch)
+    return torch.stack(imgs, dim=0), pids, camids, img_paths
+
+
 def get_dataset_and_dataloader(config):
     config:Config
 
@@ -31,3 +48,8 @@ def get_dataset_and_dataloader(config):
     )
 
     return train_loader, val_loader, len(dataset.query), num_classes
+#
+# c=Config("./config/efficientnetv2_market.yaml")
+# a,b,c,d=get_dataset_and_dataloader(c)
+# for i in a:
+#     print(a)

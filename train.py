@@ -542,6 +542,7 @@ if __name__ == "__main__":
         best_acc = .0
         for j in range(yaml['parameters']['epoch']):
             model.train()
+            """======================"""
             for i, e in enumerate(config_.iter_epoch):
                 if e<=j and i!=len(config_.iter_epoch)-1 and j<=config_.iter_epoch[i+1]:
                     a1,b1,c1,d1=config_.iter_beta[i],config_.iter_size[i],config_.iter_drop[i],config_.iter_epoch[i]
@@ -549,12 +550,11 @@ if __name__ == "__main__":
                     p=(j-config_.iter_epoch[i])/(config_.iter_epoch[i+1]-config_.iter_epoch[i])
                     a,b,c=(a2-a1)*p+a1,(b2-b1)*p+b1,(c2-c1)*p+c1
                     model.set_dropout(c)
+                    print(i,a,b ,end="")
                     train_dataloader.dataset.reset_beta(a,b)
                     break
             epoch_time_stamp = time.strftime("%Y%m%d-%H%M%S")
             prec1, loss = train(model, optimizer, scheduler, train_dataloader, yaml, j, criterion_loss)
-
-            """======================"""
             """======================"""
 
             # params1.assert_buffer_is_valid()

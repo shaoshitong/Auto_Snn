@@ -75,7 +75,7 @@ def Change_Compose(compose:torchvision.transforms.Compose,p,size_rate):
         elif isinstance(compose.transforms[i],AutoAugment):
             z.transforms.append(torchvision.transforms.RandomApply([compose.transforms[i]],p))
         elif isinstance(compose.transforms[i],ToTensor) or isinstance(compose.transforms[i],Normalize):
-            continue
+            z.transforms.append(compose.transforms[i])
         else:
             z.transforms.append(compose.transforms[i])
     return z

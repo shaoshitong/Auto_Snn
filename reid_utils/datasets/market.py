@@ -12,7 +12,7 @@ class Market1501(BaseImageDataset):
     # images: 12936 (train) + 3368 (query) + 15913 (gallery)
     """
 
-    def __init__(self, root='market1501', verbose=True, **kwargs):
+    def __init__(self, root='/data/market1501', verbose=True, **kwargs):
         super(Market1501, self).__init__()
         self.dataset_dir = root
         self.train_dir = osp.join(self.dataset_dir, 'bounding_box_train')
