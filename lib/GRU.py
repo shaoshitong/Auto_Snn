@@ -10,10 +10,17 @@ import numpy as np
 import os, sys
 from torch.nn.parameter import Parameter
 
-
-class attnetion(nn.Module):
-    def __init__(self, x_channel, y_channel):
-        super(attnetion, self).__init__()
+class LearnedPositionEmbedding(nn.Embedding):
+    def __init__(self,embedding_dim,cat_x,cat_y):
+        super(LearnedPositionEmbedding, self).__init__(cat_x*cat_y+1,embedding_dim)
+        self.cat_x=cat_x
+        self.cat_y=cat_y
+        self.embedding_dim=embedding_dim
+    def forward(self, input,id_x,id_y):
+        id=id_x+id_y*self.cat_x
+        weight=self.weight[id].view(1,self.embedding_dim,1,1)
+        input=input+weight
+        return input
 
 
 def cat_result_get(tensor_prev, i, j, b, tag, pre_i, pre_j):

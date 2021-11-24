@@ -368,6 +368,7 @@ class two_dim_layer(nn.Module):
             self.point_layer_module = nn.ModuleDict(self.point_cul_layer)
             self.np_last = self.tensor_check[self.x-1][self.y-1]+out_feature+in_feature
             self.cross_loss = nn.CrossEntropyLoss()
+            self.embedding=LearnedPositionEmbedding(1,self.x,self.y)
         """self.dimixloss= nn.ModuleList([Linear_adaptive_loss(out_feature,out_size) for _ in range(1)])"""
     def forward(self, z):
         if self.x==0 and self.y==0:
@@ -380,6 +381,7 @@ class two_dim_layer(nn.Module):
                 tensor_prev[a][b] = self.point_layer_module[str(a) + "_" + str(b)]((tensor_prev, (a, b),False,(pre_a,pre_b)))
             else:
                 tensor_prev[a][b] = self.point_layer_module[str(a) + "_" + str(b)]((tensor_prev, (a, b),True,(pre_a,pre_b)))
+                tensor_prev[a][b] = self.embedding(tensor_prev[a][b],a,b)
         result = []
         for i in range(self.x):
             for j in range(self.y):
