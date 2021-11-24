@@ -26,9 +26,8 @@ from lib.loss_utils import *
 from reid_utils import *
 from lib.config import *
 from utils.getmemcpu import getMemCpu
-
 from lib.parameters_check import parametersgradCheck, parametersNameCheck
-
+# torch.autograd.set_detect_anomaly(True)
 parser = argparse.ArgumentParser(description='SNN AUTO MASTER')
 parser.add_argument('--config_file', type=str, default='./config/train_cuhk.yaml',
                     help='path to configuration file')
@@ -92,11 +91,9 @@ def test2(model, data, yaml, criterion_loss,mAP):
     with torch.no_grad():
         for i, (data, pids, camids, _) in enumerate(data):
             data =data.float().to(device)
-            torch.cuda.synchronize()
             feat=model(data)
             batch=(feat, pids, camids)
             mAP.update(batch)
-            torch.cuda.synchronize()
     cmc,map,_,_,_,_,_=mAP.compute()
     log_print="CMC curve, "
     for r in [1, 5, 10]:
@@ -131,13 +128,14 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss,mAP):
             optimizer.second_step(zero_grad=False)
         else:
             optimizer.zero_grad()
-            scaler.scale(loss).backward(retain_graph=False)
-            print(loss)
+            loss.backward()
+            #scaler.scale(loss).backward(retain_graph=False)
             total_loss+=loss.detach().cpu().item()
-            scaler.unscale_(optimizer)
+            #scaler.unscale_(optimizer)
+            optimizer.step()
             torch.nn.utils.clip_grad_norm_(model.parameters(),20.)
-            scaler.step(optimizer)
-            scaler.update()
+            #scaler.step(optimizer)
+            #scaler.update()
         prec1, prec5 = accuracy(score.data, target, topk=(1, 5))
         len+=1
         total_prec1+=prec1.cpu().item()
@@ -185,7 +183,7 @@ if __name__ == "__main__":
         raise NotImplementedError("Not Import Dataset market1501")
     else:
         raise KeyError('There is no corresponding dataset')
-    model.to(set_device())
+    model.to(device)
     get_params_numeric(model)  # 5.261376
     if torch.cuda.is_available():
         criterion_loss = criterion_loss.cuda()

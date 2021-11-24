@@ -11,7 +11,7 @@ settings:
   model_name: "efficientnet_v2" # efficientnet_v2, resnet18, resnet34, resnet50, resnet101, resnet152
 
   gpu_devices: "0" # supports multi-gpus
-  batch_size: 16
+  batch_size: 32
   num_workers: 2
   num_instance: 2
 

@@ -584,8 +584,8 @@ class merge_layer(nn.Module):
     def L2_biasoption(self, loss_list, sigma=None):
         if sigma == None:
             sigma = self._list_build()
-        loss_bias = [torch.tensor(0.).float().cuda()]
-        loss_feature = torch.tensor([0.]).float().cuda()
+        loss_bias = [torch.tensor([0.]).float().to(loss_list[0].device)]
+        loss_feature = torch.tensor([0.]).float().to(loss_list[0].device)
         for layer in self.modules():
             if isinstance(layer, nn.Conv2d) and layer.bias is not None:
                 layer: nn.Conv2d
