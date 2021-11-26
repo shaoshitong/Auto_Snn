@@ -10,6 +10,13 @@ import numpy as np
 import os, sys
 from torch.nn.parameter import Parameter
 
+
+def func_div(a:int,d:int,div_number:int):
+    p=int(a//d)
+    if p%div_number!=0:
+        return int(p/div_number)*div_number
+    else:
+        return p
 class LearnedPositionEmbedding(nn.Embedding):
     def __init__(self,embedding_dim,cat_x,cat_y):
         super(LearnedPositionEmbedding, self).__init__(cat_x*cat_y+1,embedding_dim)
@@ -21,6 +28,27 @@ class LearnedPositionEmbedding(nn.Embedding):
         weight=self.weight[id].view(1,self.embedding_dim,1,1)
         input=input+weight
         return input
+class MultiAttention(nn.Module):
+    def __init__(self,n_model,embed_dim,embed_kv,n_head,bn_size , growth_rate,use_att):
+        super(MultiAttention, self).__init__()
+        self.embed_dim=embed_dim
+        self.embed_kv=embed_kv
+        self.n_head=n_head
+        self.norm=nn.BatchNorm2d(n_model)
+        self.relu=nn.ReLU(inplace=False)
+        self.conv=nn.Conv2d(n_model,bn_size*growth_rate,(1,1),(1,1),(0,0),bias=False)
+        self.use_att=use_att
+        self.qlinear=nn.Linear(embed_dim,embed_kv)
+        self.vlinear=nn.Linear(embed_dim,embed_kv)
+    def forward(self,x):
+        x=self.conv(self.relu(self.norm(x)))
+        b, c, h, w = x.shape
+        if self.use_att==True:
+            x=x.view(b,c,-1)
+            q,k,v=x.view(b,c,self.n_head,-1).permute(0,2,1,3),self.qlinear(x).view(b,c,self.n_head,-1).permute(0,2,1,3),self.vlinear(x).view(b,c,self.n_head,-1).permute(0,2,1,3)
+            att=torch.softmax(torch.matmul(k,v.permute(0,1,3,2))/math.sqrt(k.shape[-1]),dim=1)
+            x=torch.matmul(att,q).permute(0,2,1,3).contiguous().view(b,c,h,w)
+        return x
 
 
 def cat_result_get(tensor_prev, i, j, b, tag, pre_i, pre_j):
@@ -140,44 +168,31 @@ class BasicUnit(nn.Module):
     def forward(self, x):
         return x + self.block(x)
 
-
 class DenseLayer(nn.Sequential):
-    def __init__(self, num_input_features, growth_rate, bn_size, drop_rate, class_fusion, cat_x, cat_y):
+    def __init__(self, num_input_features, growth_rate, bn_size, drop_rate, class_fusion, width,height, cat_x, cat_y,x,y):
         super(DenseLayer, self).__init__()
         self.nums_input_features = num_input_features
+        use_att=(cat_x==cat_y)
         if class_fusion == 0:
-            self.add_module('norm1', nn.BatchNorm2d(num_input_features,eps=1e-6)),
-            self.add_module('relu1', nn.ReLU(inplace=True)),
-            self.add_module('conv1',
-                            nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=(1, 1), stride=(1, 1),
-                                      padding=(0, 0), bias=False)),
+            self.add_module("attn",MultiAttention(num_input_features,width*height,func_div(width*height,4,4),4,bn_size,growth_rate,use_att))
             self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate,eps=1e-6)),
             self.add_module('relu2', nn.ReLU(inplace=True)),
             self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
                                                kernel_size=(5, 2), stride=(1, 1), dilation=(1, 2), padding=(2, 1),
                                                bias=False))
         elif class_fusion == 1:
-            self.add_module('norm1', nn.BatchNorm2d(num_input_features,eps=1e-6)),
-            self.add_module('relu1', nn.ReLU(inplace=True)),
-            self.add_module('conv1',
-                            nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=(1, 1), stride=(1, 1),
-                                      padding=(0, 0), bias=False)),
+            self.add_module("attn",MultiAttention(num_input_features,width*height,func_div(width*height,4,4),4,bn_size,growth_rate,use_att))
             self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate,eps=1e-6)),
             self.add_module('relu2', nn.ReLU(inplace=True)),
             self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
                                                kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False))
         else:
-            self.add_module('norm1', nn.BatchNorm2d(num_input_features,eps=1e-6)),
-            self.add_module('relu1', nn.ReLU(inplace=True)),
-            self.add_module('conv1',
-                            nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=(1, 1), stride=(1, 1),
-                                      padding=(0, 0), bias=False)),
+            self.add_module("attn",MultiAttention(num_input_features,width*height,func_div(width*height,4,4),4,bn_size,growth_rate,use_att))
             self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate,eps=1e-6)),
             self.add_module('relu2', nn.ReLU(inplace=True)),
             self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
                                                kernel_size=(2, 5), stride=(1, 1), dilation=(2, 1), padding=(1, 2),
                                                bias=False))
-        # self.embedding=nn.Embedding()
         self.drop_rate = drop_rate
 
     def forward(self, x):
@@ -186,25 +201,68 @@ class DenseLayer(nn.Sequential):
             if x.requires_grad:
                 new_features = F.dropout(new_features, p=self.drop_rate, training=self.training)
         return new_features
+#
+# class DenseLayer(nn.Sequential):
+#     def __init__(self, num_input_features, growth_rate, bn_size, drop_rate, class_fusion, cat_x, cat_y):
+#         super(DenseLayer, self).__init__()
+#         self.nums_input_features = num_input_features
+#         if class_fusion == 0:
+#             self.add_module('norm1', nn.BatchNorm2d(num_input_features,eps=1e-6)),
+#             self.add_module('relu1', nn.ReLU(inplace=True)),
+#             self.add_module('conv1',
+#                             nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=(1, 1), stride=(1, 1),
+#                                       padding=(0, 0), bias=False)),
+#             self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate,eps=1e-6)),
+#             self.add_module('relu2', nn.ReLU(inplace=True)),
+#             self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
+#                                                kernel_size=(5, 2), stride=(1, 1), dilation=(1, 2), padding=(2, 1),
+#                                                bias=False))
+#         elif class_fusion == 1:
+#             self.add_module('norm1', nn.BatchNorm2d(num_input_features,eps=1e-6)),
+#             self.add_module('relu1', nn.ReLU(inplace=True)),
+#             self.add_module('conv1',
+#                             nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=(1, 1), stride=(1, 1),
+#                                       padding=(0, 0), bias=False)),
+#             self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate,eps=1e-6)),
+#             self.add_module('relu2', nn.ReLU(inplace=True)),
+#             self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
+#                                                kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False))
+#         else:
+#             self.add_module('norm1', nn.BatchNorm2d(num_input_features,eps=1e-6)),
+#             self.add_module('relu1', nn.ReLU(inplace=True)),
+#             self.add_module('conv1',
+#                             nn.Conv2d(num_input_features, bn_size * growth_rate, kernel_size=(1, 1), stride=(1, 1),
+#                                       padding=(0, 0), bias=False)),
+#             self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate,eps=1e-6)),
+#             self.add_module('relu2', nn.ReLU(inplace=True)),
+#             self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
+#                                                kernel_size=(2, 5), stride=(1, 1), dilation=(2, 1), padding=(1, 2),
+#                                                bias=False))
+#         # self.embedding=nn.Embedding()
+#         self.drop_rate = drop_rate
+#
+#     def forward(self, x):
+#         new_features = super(DenseLayer, self).forward(x)
+#         if self.drop_rate > 0:
+#             if x.requires_grad:
+#                 new_features = F.dropout(new_features, p=self.drop_rate, training=self.training)
+#         return new_features
 
 
 class DenseBlock(nn.Module):
-    def __init__(self, cat_feature, eq_feature, hidden_size, cat_x, cat_y, dropout, class_fusion, size):
+    def __init__(self, cat_feature, eq_feature, hidden_size, cat_x, cat_y,x,y, dropout, class_fusion, size):
         super(DenseBlock, self).__init__()
-        self.denselayer = DenseLayer(cat_feature, eq_feature, hidden_size, dropout, class_fusion, cat_x, cat_y)
+        from omegaconf.listconfig import ListConfig
+        if isinstance(size,tuple) or isinstance(size,list) or isinstance(size, ListConfig):
+            h,w=size
+        else:
+            h,w=size,size
+        self.denselayer = DenseLayer(cat_feature, eq_feature, hidden_size, dropout, class_fusion,h,w,cat_x, cat_y,x,y)
         self.eq_feature = eq_feature
         self.cat_x = cat_x
         self.cat_y = cat_y
         self._initialize()
         kernel_size = 4
-
-        l = int((size / kernel_size) ** 2)
-        # self.p = torch.randperm(int(l), dtype=torch.long,requires_grad=False).cuda()
-        # self.transformer = nn.TransformerEncoderLayer(size ** 2, l, dim_feedforward=int(size), batch_first=True,
-        #                                               layer_norm_eps=1e-6)
-        # self.unfold = lambda image: F.unfold(image, (kernel_size, kernel_size), stride=(kernel_size, kernel_size), )
-        # self.fold = lambda image: F.fold(image, (size, size), (kernel_size, kernel_size),
-        #                                  stride=(kernel_size, kernel_size))
         self.kernel_size = kernel_size
 
     def _initialize(self):
@@ -230,10 +288,6 @@ class DenseBlock(nn.Module):
                 elif isinstance(layer, nn.BatchNorm2d):
                     nn.init.ones_(layer.weight.data)
                     nn.init.zeros_(layer.bias.data)
-                elif isinstance(layer, nn.Linear):
-                    nn.init.zeros_(layer.weight.data)
-                    if layer.bias is not None:
-                        nn.init.zeros_(layer.bias.data)
 
     def forward(self, x):
         x = self.denselayer(x)

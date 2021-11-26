@@ -16,11 +16,16 @@ feature_list:
   - 36
   - 36
 size_list:
-  - 32
-  - 32
-  - 16
-  - 8
-  - 4
+  - - 32
+    - 32
+  - - 32
+    - 32
+  - - 16
+    - 16
+  - - 8
+    - 8
+  - - 4
+    - 4
 hidden_size_list:
   - 4
   - 4
@@ -30,7 +35,7 @@ path_nums_list:
   - 3
   - 4
   - 5
-  - 7
+  - 6
 nums_layer_list:
   - 0
   - 1
@@ -60,7 +65,7 @@ parameters:
     noonehot_cross
   sigma_list:
     - 0.0
-    - 0.1
+    - 0.0
   s:
     4
   push_num:

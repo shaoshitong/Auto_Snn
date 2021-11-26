@@ -271,7 +271,7 @@ class point_cul_Layer(nn.Module):
                 fusion=0
             else:
                 fusion=2
-            self.DoorMach = DenseBlock(self.cat_feature, max(1,int(true_out/(d**min(1,abs(cat_x-cat_y))))), hidden_size, cat_x, cat_y,
+            self.DoorMach = DenseBlock(self.cat_feature, max(1,int(true_out/(d**min(1,abs(cat_x-cat_y))))), hidden_size, cat_x, cat_y,x,y,
                                        dropout,fusion,in_size)
             self.STuning = STuning
             self.b=b
@@ -281,7 +281,7 @@ class point_cul_Layer(nn.Module):
             self.norm = None
         else:
             self.cat_feature = (out_feature) + in_feature
-            self.DoorMach= DenseBlock(self.cat_feature, max(1,int(true_out/(d**min(1,abs(cat_x-cat_y))))), hidden_size, cat_x, cat_y,
+            self.DoorMach= DenseBlock(self.cat_feature, max(1,int(true_out/(d**min(1,abs(cat_x-cat_y))))), hidden_size, cat_x, cat_y,x,y,
                                        dropout,1,in_size)
             self.b = b
             self.grad_lr = grad_lr
@@ -368,7 +368,7 @@ class two_dim_layer(nn.Module):
             self.point_layer_module = nn.ModuleDict(self.point_cul_layer)
             self.np_last = self.tensor_check[self.x-1][self.y-1]+out_feature+in_feature
             self.cross_loss = nn.CrossEntropyLoss()
-            self.embedding=LearnedPositionEmbedding(out_feature,self.x,self.y)
+            #self.embedding=LearnedPositionEmbedding(out_feature,self.x,self.y)
         """self.dimixloss= nn.ModuleList([Linear_adaptive_loss(out_feature,out_size) for _ in range(1)])"""
     def forward(self, z):
         if self.x==0 and self.y==0:
@@ -381,7 +381,7 @@ class two_dim_layer(nn.Module):
                 tensor_prev[a][b] = self.point_layer_module[str(a) + "_" + str(b)]((tensor_prev, (a, b),False,(pre_a,pre_b)))
             else:
                 tensor_prev[a][b] = self.point_layer_module[str(a) + "_" + str(b)]((tensor_prev, (a, b),True,(pre_a,pre_b)))
-                tensor_prev[a][b] = self.embedding(tensor_prev[a][b],a,b)
+                #tensor_prev[a][b] = self.embedding(tensor_prev[a][b],a,b)
         result = []
         for i in range(self.x):
             for j in range(self.y):
@@ -498,10 +498,19 @@ class three_dim_Layer(nn.Module):
             p1 = path_nums_list[i]
             n1 = nums_layer[i]
             b1 = breadth_threshold[i]
-            if i == 0:
-                self.turn_layer[str(i)] = turn_layer(f1, f2, h1, n1, decay_rate, int(s1 // s2), self.dropout)
+            from omegaconf.listconfig import ListConfig
+            if isinstance(s1,tuple) or isinstance(s1,list) or isinstance(s1,ListConfig):
+                r_s1=s1[0]
             else:
-                self.turn_layer[str(i)] = turn_layer(h, f2, h1, n1, decay_rate, int(s1 // s2), self.dropout)
+                r_s1=s1
+            if isinstance(s2, tuple) or isinstance(s2, list) or isinstance(s1,ListConfig):
+                r_s2 = s2[0]
+            else:
+                r_s2 = s2
+            if i == 0:
+                self.turn_layer[str(i)] = turn_layer(f1, f2, h1, n1, decay_rate, int(r_s1 // r_s2), self.dropout)
+            else:
+                self.turn_layer[str(i)] = turn_layer(h, f2, h1, n1, decay_rate, int(r_s1 // r_s2), self.dropout)
             m = self.turn_layer[str(i)].origin_out_feature
             self.point_layer[str(i)] = two_dim_layer(m, f2, h1, s2, s2, p1, p1,b1,down_rate,mult_k, self.dropout)
             h = self.point_layer[str(i)].np_last

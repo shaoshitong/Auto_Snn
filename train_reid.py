@@ -98,6 +98,7 @@ def test2(model, data, yaml, criterion_loss,mAP):
     log_print="CMC curve, "
     for r in [1, 5, 10]:
                     log_print+="ank-{:<3}:{:.1%} |".format(r, cmc[r - 1].item())
+    log_print+="mAP--{:.1%} |".format(map)
     print(f"The test "+log_print)
     return cmc[0].item(),cmc[4].item()
 
@@ -124,13 +125,13 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss,mAP):
             loss_list = [criterion(criterion_loss,score,feat,target)]
             loss = model.L2_biasoption(loss_list, yaml["parameters"]['sigma_list'])
             loss.backward()
-            total_loss+=loss.detach().cpu().item()
+            total_loss+=loss.clone().detach().cpu().item()
             optimizer.second_step(zero_grad=False)
         else:
             optimizer.zero_grad()
             loss.backward()
             #scaler.scale(loss).backward(retain_graph=False)
-            total_loss+=loss.detach().cpu().item()
+            total_loss+=loss.clone().detach().cpu().item()
             #scaler.unscale_(optimizer)
             optimizer.step()
             torch.nn.utils.clip_grad_norm_(model.parameters(),20.)
