@@ -13,6 +13,7 @@ from omegaconf import OmegaConf
 from torch.utils.tensorboard import SummaryWriter
 import torch.nn.functional as F
 sys.path.append("D:\Product")
+sys.path.append("D:\Product\Snn_Auto_master")
 sys.path.append("F:\Snn_Auto")
 sys.path.append("F:\sst")
 sys.path.append("/home/sst/product")
@@ -29,13 +30,13 @@ from lib.config import *
 from lib.parameters_check import parametersgradCheck, parametersNameCheck
 
 parser = argparse.ArgumentParser(description='SNN AUTO MASTER')
-parser.add_argument('--config_file', type=str, default='./config/train_c10.yaml',
+parser.add_argument('--config_file', type=str, default='./config/train_imagenet.yaml',
                     help='path to configuration file')
 parser.add_argument('--train', dest='train', default=True, type=bool,
                     help='train model')
 parser.add_argument('--test', dest='test', default=True, type=bool,
                     help='test model')
-parser.add_argument('--data_url', dest='data_url', default='/data/data', type=str,
+parser.add_argument('--data_url', dest='data_url', default='D:\\Product\\up-detr\\data', type=str,
                     help='test model')
 parser.add_argument('--neg_mul', dest='neg_mul', default=0.1, type=float,
                     help='neg_learning')
@@ -280,6 +281,7 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
     if yaml['data'] == "stl-10":
         res = 0.
     for i, (input, target) in enumerate(data):
+        iter=epoch*(len(data))+i
         if yaml['data'] in ['mnist', 'fashionmnist']:
             input = input.float().to(device)
         elif yaml['data'] in ['cifar10', 'cifar100', 'svhn', 'eeg', 'car', 'stl-10']:
@@ -296,7 +298,6 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
             loss_list = [criterion(criterion_loss, output, target)]
             loss = model.L2_biasoption(loss_list,yaml["parameters"]['sigma_list'])
         if yaml['optimizer']['optimizer_choice'] == 'SAM':
-            optimizer.zero_grad()
             loss.backward(retain_graph=False)
             optimizer.first_step(zero_grad=True)
             output= model(input)
@@ -306,15 +307,15 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
             loss.backward()
             optimizer.second_step(zero_grad=False)
         else:
-            optimizer.zero_grad()
+            if iter%2==0:
+                optimizer.zero_grad()
             # unscale 梯度，可以不影响clip的threshol
             scaler.scale(loss).backward(retain_graph=False)
-            scaler.unscale_(optimizer)
-
-            # clip梯度
-            torch.nn.utils.clip_grad_norm_(model.parameters(),20.)
-            scaler.step(optimizer)
-            scaler.update()
+            if iter%2==1:
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 20.)
+                scaler.step(optimizer)
+                scaler.update()
         if yaml['data'] == 'eeg':
             prec1, prec5 = accuracy(output.data, target, topk=(1, 2))
         elif yaml['data'] in ['mnist', 'fashionmnist', 'cifar10', 'car', 'svhn', 'cifar100', 'stl-10',"imagenet"]:
@@ -503,7 +504,7 @@ if __name__ == "__main__":
     dict_list4 = dict(params=params4,weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay'])
     optimizer = get_optimizer([dict_list4], yaml, model)
     scheduler = get_scheduler(optimizer, yaml)
-    criterion_loss = make_loss(yaml['parameters'],yaml['num_classes'])
+    criterion_loss = make_loss(yaml['parameters'],yaml['num_classes'],None)
     model.to(set_device())
 
     get_params_numeric(model)  # 5.261376
@@ -514,15 +515,15 @@ if __name__ == "__main__":
         for j in range(yaml['parameters']['epoch']):
             model.train()
             """======================"""
-            for i, e in enumerate(config_.iter_epoch):
-                if e<=j and i!=len(config_.iter_epoch)-1 and j<=config_.iter_epoch[i+1]:
-                    a1,b1,c1,d1=config_.iter_beta[i],config_.iter_size[i],config_.iter_drop[i],config_.iter_epoch[i]
-                    a2,b2,c2,d2=config_.iter_beta[i+1],config_.iter_size[i+1],config_.iter_drop[i+1],config_.iter_epoch[i+1]
-                    p=(j-config_.iter_epoch[i])/(config_.iter_epoch[i+1]-config_.iter_epoch[i])
-                    a,b,c=(a2-a1)*p+a1,(b2-b1)*p+b1,(c2-c1)*p+c1
-                    model.set_dropout(c)
-                    train_dataloader.dataset.reset_beta(a,b)
-                    break
+            # for i, e in enumerate(config_.iter_epoch):
+            #     if e<=j and i!=len(config_.iter_epoch)-1 and j<=config_.iter_epoch[i+1]:
+            #         a1,b1,c1,d1=config_.iter_beta[i],config_.iter_size[i],config_.iter_drop[i],config_.iter_epoch[i]
+            #         a2,b2,c2,d2=config_.iter_beta[i+1],config_.iter_size[i+1],config_.iter_drop[i+1],config_.iter_epoch[i+1]
+            #         p=(j-config_.iter_epoch[i])/(config_.iter_epoch[i+1]-config_.iter_epoch[i])
+            #         a,b,c=(a2-a1)*p+a1,(b2-b1)*p+b1,(c2-c1)*p+c1
+            #         model.set_dropout(c)
+            #         train_dataloader.dataset.reset_beta(a,b)
+            #         break
             epoch_time_stamp = time.strftime("%Y%m%d-%H%M%S")
             prec1, loss = train(model, optimizer, scheduler, train_dataloader, yaml, j, criterion_loss)
             """======================"""
@@ -530,17 +531,16 @@ if __name__ == "__main__":
             # params1.assert_buffer_is_valid()
             # params2.assert_buffer_is_valid()
             if args.test == True:
-                checkpoint_path = os.path.join(yaml['output'], str(j) + '_' + epoch_time_stamp + str(best_acc))
                 prec1, loss = test2(model, test_dataloader, yaml, criterion_loss)
                 if best_acc < prec1:
                     best_acc = prec1
-                #     torch.save({
-                #         'epoch': j,
-                #         'snn_state_dict': model.state_dict(),
-                #         'optimizer_state_dict': optimizer.state_dict(),
-                #         'loss': loss,
-                #     }, checkpoint_path + 'best')
-                #     path = checkpoint_path + 'best'
+                    torch.save({
+                        'epoch': j,
+                        'snn_state_dict': model.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        'loss': loss,
+                    }, "./output/imagenet 3_4_5_6 best")
+                    path = "./output/imagenet 3_4_5_6 best"
                 # else:
                 #     torch.save({
                 #         'epoch': j,

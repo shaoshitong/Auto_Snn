@@ -13,14 +13,12 @@ from lib.plt_analyze import vis_img
 from lib.parameters_check import pd_save, parametersgradCheck
 from lib.SNnorm import SNConv2d, SNLinear
 from lib.fractallayer import LastJoiner
-from lib.DenseNet import DenseNet
 from lib.cocoscontextloss import ContextualLoss_forward
 from lib.Wideresnet import Downsampleunit
 from lib.featurefocusing_v2 import Feature_forward
 from lib.dimixloss import DimixLoss, DimixLoss_neg,Linear_adaptive_loss
 from lib.PointConv import PointConv
 from lib.GRU import *
-from lib.DenseNet import DenseBlock as DenseDeepBlock
 from lib.utils import Multi_Fusion
 import math
 import pandas as pd
@@ -550,6 +548,7 @@ class merge_layer(nn.Module):
                 pass
 
         x = self.inf(x)
+        print(x.shape)
         x = self.InputGenerateNet(x)
         x = self.out_classifier(x)
         return x
