@@ -29,7 +29,7 @@ from lib.config import *
 from lib.parameters_check import parametersgradCheck, parametersNameCheck
 
 parser = argparse.ArgumentParser(description='SNN AUTO MASTER')
-parser.add_argument('--config_file', type=str, default='./config/train_c10.yaml',
+parser.add_argument('--config_file', type=str, default='./config/train_imagenet.yaml',
                     help='path to configuration file')
 parser.add_argument('--train', dest='train', default=True, type=bool,
                     help='train model')
@@ -503,7 +503,7 @@ if __name__ == "__main__":
     dict_list4 = dict(params=params4,weight_decay=yaml['optimizer'][yaml['optimizer']['optimizer_choice']]['weight_decay'])
     optimizer = get_optimizer([dict_list4], yaml, model)
     scheduler = get_scheduler(optimizer, yaml)
-    criterion_loss = make_loss(yaml['parameters'],yaml['num_classes'])
+    criterion_loss = make_loss(yaml['parameters'],yaml['num_classes'],None)
     model.to(set_device())
 
     get_params_numeric(model)  # 5.261376
@@ -514,15 +514,15 @@ if __name__ == "__main__":
         for j in range(yaml['parameters']['epoch']):
             model.train()
             """======================"""
-            for i, e in enumerate(config_.iter_epoch):
-                if e<=j and i!=len(config_.iter_epoch)-1 and j<=config_.iter_epoch[i+1]:
-                    a1,b1,c1,d1=config_.iter_beta[i],config_.iter_size[i],config_.iter_drop[i],config_.iter_epoch[i]
-                    a2,b2,c2,d2=config_.iter_beta[i+1],config_.iter_size[i+1],config_.iter_drop[i+1],config_.iter_epoch[i+1]
-                    p=(j-config_.iter_epoch[i])/(config_.iter_epoch[i+1]-config_.iter_epoch[i])
-                    a,b,c=(a2-a1)*p+a1,(b2-b1)*p+b1,(c2-c1)*p+c1
-                    model.set_dropout(c)
-                    train_dataloader.dataset.reset_beta(a,b)
-                    break
+            # for i, e in enumerate(config_.iter_epoch):
+            #     if e<=j and i!=len(config_.iter_epoch)-1 and j<=config_.iter_epoch[i+1]:
+            #         a1,b1,c1,d1=config_.iter_beta[i],config_.iter_size[i],config_.iter_drop[i],config_.iter_epoch[i]
+            #         a2,b2,c2,d2=config_.iter_beta[i+1],config_.iter_size[i+1],config_.iter_drop[i+1],config_.iter_epoch[i+1]
+            #         p=(j-config_.iter_epoch[i])/(config_.iter_epoch[i+1]-config_.iter_epoch[i])
+            #         a,b,c=(a2-a1)*p+a1,(b2-b1)*p+b1,(c2-c1)*p+c1
+            #         model.set_dropout(c)
+            #         train_dataloader.dataset.reset_beta(a,b)
+            #         break
             epoch_time_stamp = time.strftime("%Y%m%d-%H%M%S")
             prec1, loss = train(model, optimizer, scheduler, train_dataloader, yaml, j, criterion_loss)
             """======================"""
@@ -530,17 +530,16 @@ if __name__ == "__main__":
             # params1.assert_buffer_is_valid()
             # params2.assert_buffer_is_valid()
             if args.test == True:
-                checkpoint_path = os.path.join(yaml['output'], str(j) + '_' + epoch_time_stamp + str(best_acc))
                 prec1, loss = test2(model, test_dataloader, yaml, criterion_loss)
                 if best_acc < prec1:
                     best_acc = prec1
-                #     torch.save({
-                #         'epoch': j,
-                #         'snn_state_dict': model.state_dict(),
-                #         'optimizer_state_dict': optimizer.state_dict(),
-                #         'loss': loss,
-                #     }, checkpoint_path + 'best')
-                #     path = checkpoint_path + 'best'
+                    torch.save({
+                        'epoch': j,
+                        'snn_state_dict': model.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        'loss': loss,
+                    }, "imagenet 3_4_5_6 best")
+                    path = "imagenet 3_4_5_6 best"
                 # else:
                 #     torch.save({
                 #         'epoch': j,

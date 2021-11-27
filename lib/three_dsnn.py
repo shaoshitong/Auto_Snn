@@ -402,7 +402,7 @@ class two_dim_layer(nn.Module):
 
 
 class turn_layer(nn.Module):
-    def __init__(self, in_feature, out_feature, bn_size, num_layer, decay_rate=2, stride=1, dropout=0.1):
+    def __init__(self, in_feature, out_feature, bn_size, num_layer, decay_rate=2, stride=1, dropout=0.1,dataoption="imagenet"):
         super(turn_layer, self).__init__()
         if num_layer != 0:
             self.downsample = nn.Sequential(*[])
@@ -421,14 +421,22 @@ class turn_layer(nn.Module):
             self.origin_out_feature =in_feature
             self.num_layer = num_layer
         else:
-            self.origin_out_feature =  int(in_feature)
-            self.num_layer = num_layer
-            self.downsample = nn.Sequential(*[])
-            self.downsample.add_module('norm', nn.BatchNorm2d(in_feature,eps=1e-6))
-            self.downsample.add_module("relu", nn.SiLU(inplace=True))
-            self.downsample.add_module('pool', nn.AvgPool2d(kernel_size=(stride, stride), stride=(stride, stride)))
-            in_feature = in_feature + out_feature * num_layer
-            self.origin_out_feature =in_feature
+            if dataoption=="imagenet":
+                self.origin_out_feature = int(in_feature)
+                self.num_layer = num_layer
+                self.downsample = nn.Sequential(*[])
+                self.downsample.add_module("none",nn.Identity())
+                in_feature = in_feature + out_feature * num_layer
+                self.origin_out_feature = in_feature
+            else:
+                self.origin_out_feature =  int(in_feature)
+                self.num_layer = num_layer
+                self.downsample = nn.Sequential(*[])
+                self.downsample.add_module('norm', nn.BatchNorm2d(in_feature,eps=1e-6))
+                self.downsample.add_module("relu", nn.SiLU(inplace=True))
+                self.downsample.add_module('pool', nn.AvgPool2d(kernel_size=(stride, stride), stride=(stride, stride)))
+                in_feature = in_feature + out_feature * num_layer
+                self.origin_out_feature =in_feature
         self._initialize()
 
     def _initialize(self):
@@ -479,7 +487,7 @@ class three_dim_Layer(nn.Module):
             m = self.point_layer_module[str(i)](m)
         return m
 
-    def initiate_layer(self, data, feature_list, size_list, hidden_size_list, path_nums_list, nums_layer, decay_rate,
+    def initiate_layer(self, data,dataoption,feature_list, size_list, hidden_size_list, path_nums_list, nums_layer, decay_rate,
                        mult_k,down_rate,breadth_threshold):
         """
         three-dim层初始化节点
@@ -506,9 +514,9 @@ class three_dim_Layer(nn.Module):
             else:
                 r_s2 = s2
             if i == 0:
-                self.turn_layer[str(i)] = turn_layer(f1, f2, h1, n1, decay_rate, int(r_s1 // r_s2), self.dropout)
+                self.turn_layer[str(i)] = turn_layer(f1, f2, h1, n1, decay_rate, int(r_s1 // r_s2), self.dropout,dataoption)
             else:
-                self.turn_layer[str(i)] = turn_layer(h, f2, h1, n1, decay_rate, int(r_s1 // r_s2), self.dropout)
+                self.turn_layer[str(i)] = turn_layer(h, f2, h1, n1, decay_rate, int(r_s1 // r_s2), self.dropout,dataoption)
             m = self.turn_layer[str(i)].origin_out_feature
             self.point_layer[str(i)] = two_dim_layer(m, f2, h1, s2, s2, p1, p1,b1,down_rate,mult_k, self.dropout)
             h = self.point_layer[str(i)].np_last
@@ -554,11 +562,17 @@ class merge_layer(nn.Module):
         b, c, h, w = data.shape
         input_shape = (b, c, h, w)
         if dataoption=="imagenet":
-            self.inf = nn.Sequential(*[nn.Conv2d(c, feature_list[0], (7, 7), (2, 2), (2, 2), bias=False),])
+            self.inf =  nn.Sequential(OrderedDict([
+            ('conv0', nn.Conv2d(3,feature_list[0], kernel_size=(7,7), stride=(2,2),
+                                padding=(3,3), bias=False)),
+            ('norm0', nn.BatchNorm2d(feature_list[0])),
+            ('relu0', nn.SiLU(inplace=True)),
+            ('pool0', nn.MaxPool2d(kernel_size=(3,3), stride=(2,2), padding=(1,1))),
+            ]))
         else:
             self.inf = nn.Conv2d(c, feature_list[0], (3, 3), (1,1), (1, 1), bias=False)
         self._initialize()
-        h = self.InputGenerateNet.initiate_layer(data, feature_list, size_list, hidden_size_list, path_nums_list,
+        h = self.InputGenerateNet.initiate_layer(data, dataoption,feature_list, size_list, hidden_size_list, path_nums_list,
                                                  nums_layer_list, drop_rate,mult_k,down_rate,breadth_threshold)
         self.num_classes=num_classes
         self.out_classifier = block_out(h, num_classes, size_list[-1])

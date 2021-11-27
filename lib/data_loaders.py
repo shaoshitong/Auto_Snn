@@ -162,7 +162,7 @@ def load_data_imagenet(train_batch_size,test_batch_size,data_url=None):
     train_transform = transforms.Compose([
         transforms.RandomSizedCrop(224),
         transforms.RandomHorizontalFlip(),
-        transforms.Resize(32),
+        transforms.AutoAugment(),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485,0.456,0.406],
                              std=[0.229,0.224,0.225])
