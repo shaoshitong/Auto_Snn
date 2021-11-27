@@ -30,6 +30,7 @@ class Backone(merge_layer):
         self.gap=nn.AdaptiveAvgPool2d((1,1))
         self.bottleneck.apply(self.weights_init_kaiming)
         self.classifier.apply(self.weights_init_classifier)
+        self.h=h
     def weights_init_kaiming(self,m):
         classname = m.__class__.__name__
         if classname.find('Linear') != -1:
@@ -56,8 +57,10 @@ class Backone(merge_layer):
                 x = x.view(self.input_shape)
             else:
                 pass
-        x = self.inf(x)
-        x = self.InputGenerateNet(x)
+        with torch.cuda.amp.autocast():
+            x = self.inf(x)
+            x = self.InputGenerateNet(x)
+        x=x.float()
         x = self.gap(x)
         x = x.view(x.shape[0],x.shape[1])
         if self.neck=='no':

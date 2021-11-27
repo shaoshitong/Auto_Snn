@@ -46,7 +46,6 @@ class TripletLoss(object):
 
     def __call__(self, global_feat, labels, normalize_feature=False):
         n = global_feat.size(0)
-
         # Compute pairwise distance, replace by the official when merged
         dist = torch.pow(global_feat, 2).sum(dim=1, keepdim=True).expand(n, n)
         dist = dist + dist.t()
