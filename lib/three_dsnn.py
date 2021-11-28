@@ -548,7 +548,6 @@ class merge_layer(nn.Module):
                 pass
 
         x = self.inf(x)
-        print(x.shape)
         x = self.InputGenerateNet(x)
         x = self.out_classifier(x)
         return x

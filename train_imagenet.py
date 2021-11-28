@@ -505,8 +505,9 @@ if __name__ == "__main__":
     optimizer = get_optimizer([dict_list4], yaml, model)
     scheduler = get_scheduler(optimizer, yaml)
     criterion_loss = make_loss(yaml['parameters'],yaml['num_classes'],None)
+    model.load_state_dict(torch.load("./output/imagenet 3_4_5_6 best")['snn_state_dict'])
     model.to(set_device())
-
+    optimizer.load_state_dict(torch.load("./output/imragenet 3_4_5_6 best")["optimizer_state_dict"])
     get_params_numeric(model)  # 5.261376
     if torch.cuda.is_available():
         criterion_loss = criterion_loss.cuda()
@@ -540,7 +541,7 @@ if __name__ == "__main__":
                         'optimizer_state_dict': optimizer.state_dict(),
                         'loss': loss,
                     }, "./output/imagenet 3_4_5_6 best")
-                    path = "./output/imagenet 3_4_5_6 best"
+                    path = "./output/imagenet 3_4_5_6 best 2"
                 # else:
                 #     torch.save({
                 #         'epoch': j,

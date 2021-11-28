@@ -43,7 +43,6 @@ class MultiAttention(nn.Module):
     def forward(self,x):
         x=self.conv(self.relu(self.norm(x)))
         b, c, h, w = x.shape
-        print(x.shape)
         if self.use_att==True:
             x=x.view(b,c,-1)
             q,k,v=x.view(b,c,self.n_head,-1).permute(0,2,1,3),self.qlinear(x).view(b,c,self.n_head,-1).permute(0,2,1,3),self.vlinear(x).view(b,c,self.n_head,-1).permute(0,2,1,3)
