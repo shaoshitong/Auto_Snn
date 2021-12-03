@@ -307,13 +307,16 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
             loss.backward()
             optimizer.second_step(zero_grad=False)
         else:
-            if iter%2==0:
+            if iter%8==0:
                 optimizer.zero_grad()
             # unscale 梯度，可以不影响clip的threshol
             scaler.scale(loss).backward(retain_graph=False)
-            if iter%2==1:
+            if iter%8==1:
                 scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(model.parameters(), 20.)
+                for parameter in model.parameters():
+                    if type(parameter.grad) != type(None):
+                        parameter.grad/=8
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 2.)
                 scaler.step(optimizer)
                 scaler.update()
         if yaml['data'] == 'eeg':
@@ -516,15 +519,15 @@ if __name__ == "__main__":
         for j in range(yaml['parameters']['epoch']):
             model.train()
             """======================"""
-            # for i, e in enumerate(config_.iter_epoch):
-            #     if e<=j and i!=len(config_.iter_epoch)-1 and j<=config_.iter_epoch[i+1]:
-            #         a1,b1,c1,d1=config_.iter_beta[i],config_.iter_size[i],config_.iter_drop[i],config_.iter_epoch[i]
-            #         a2,b2,c2,d2=config_.iter_beta[i+1],config_.iter_size[i+1],config_.iter_drop[i+1],config_.iter_epoch[i+1]
-            #         p=(j-config_.iter_epoch[i])/(config_.iter_epoch[i+1]-config_.iter_epoch[i])
-            #         a,b,c=(a2-a1)*p+a1,(b2-b1)*p+b1,(c2-c1)*p+c1
-            #         model.set_dropout(c)
-            #         train_dataloader.dataset.reset_beta(a,b)
-            #         break
+            for i, e in enumerate(config_.iter_epoch):
+                if e<=j and i!=len(config_.iter_epoch)-1 and j<=config_.iter_epoch[i+1]:
+                    a1,b1,c1,d1=config_.iter_beta[i],config_.iter_size[i],config_.iter_drop[i],config_.iter_epoch[i]
+                    a2,b2,c2,d2=config_.iter_beta[i+1],config_.iter_size[i+1],config_.iter_drop[i+1],config_.iter_epoch[i+1]
+                    p=(j-config_.iter_epoch[i])/(config_.iter_epoch[i+1]-config_.iter_epoch[i])
+                    a,b,c=(a2-a1)*p+a1,(b2-b1)*p+b1,(c2-c1)*p+c1
+                    model.set_dropout(c)
+                    train_dataloader.dataset.reset_beta(a,b)
+                    break
             epoch_time_stamp = time.strftime("%Y%m%d-%H%M%S")
             prec1, loss = train(model, optimizer, scheduler, train_dataloader, yaml, j, criterion_loss)
             """======================"""

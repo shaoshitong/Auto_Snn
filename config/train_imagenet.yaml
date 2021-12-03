@@ -62,7 +62,7 @@ densenetparameter:
 parameters:
   # default parameters
   loss_type:
-    smooth_cross
+    noonehot_cross
   sigma_list:
     - 0.0
     - 0.0
@@ -79,9 +79,9 @@ parameters:
   batch_size:
     56
   epoch:
-    90
+    250
   dropout:
-    0.1
+    0.0
   filter_tau_m:
     4
   filter_tau_s:
