@@ -532,8 +532,8 @@ if __name__ == "__main__":
             """======================"""
             if args.test == True:
                 prec1, loss = test2(model, test_dataloader, yaml, criterion_loss)
-                # if best_acc < prec1:
-                #     best_acc = prec1
+                if best_acc < prec1:
+                    best_acc = prec1
                 #     torch.save({
                 #         'epoch': j,
                 #         'snn_state_dict': model.state_dict(),

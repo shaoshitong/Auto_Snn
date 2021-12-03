@@ -16,7 +16,7 @@ import torch.utils.data
 from lib.dataprocess import CarDateset
 from lib.dataprocess import STLdataprocess
 from torch.utils.data import DataLoader
-from lib.ProgressiveLearning import CIFAR10Dataset,Change_Compose
+from lib.ProgressiveLearning import CIFAR10Dataset,ImageNetDataset,CIFAR100Dataset,RandomErasing
 import random
 import openpyxl
 
@@ -174,7 +174,7 @@ def load_data_imagenet(train_batch_size,test_batch_size,data_url=None):
         transforms.Normalize(mean=[0.485,0.456,0.406],
                              std=[0.229,0.224,0.225])
     ])
-    train=datasets.ImageFolder(os.path.join(data_url,"ILSVRC2012_img_train/"),train_transform)
+    train=ImageNetDataset(os.path.join(data_url,"ILSVRC2012_img_train/"),train_transform)
     val=datasets.ImageFolder(os.path.join(data_url,"val/"),test_transform)
     train_loader=DataLoader(train,batch_size=train_batch_size,shuffle=True,num_workers=8)
     val_loader=DataLoader(val,batch_size=test_batch_size,shuffle=False,num_workers=4)
@@ -183,7 +183,7 @@ def load_data_c100(train_batch_size, test_batch_size, data_url=None ,use_standar
     if data_url == None:
         data_url = './data'
     def get_statistics():
-        train_set=torchvision.datasets.CIFAR10(root=data_url,train=True,download=True,transform=transforms.ToTensor())
+        train_set=torchvision.datasets.CIFAR100(root=data_url,train=True,download=True,transform=transforms.ToTensor())
         data=torch.cat([d[0] for d in DataLoader(train_set)])
         return data.mean(dim=[0,2,3]),data.std(dim=[0,2,3])
     if use_standard==False:
@@ -191,7 +191,8 @@ def load_data_c100(train_batch_size, test_batch_size, data_url=None ,use_standar
     train_transform = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
-        transforms.Resize(32),
+        transforms.AutoAugment(transforms.AutoAugmentPolicy.CIFAR10),
+        RandomErasing(mean=(0.4914, 0.4822, 0.4465) if use_standard==True else mean),
         transforms.ToTensor(),
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)) if use_standard==True else
         transforms.Normalize(mean, std) ,
@@ -202,13 +203,10 @@ def load_data_c100(train_batch_size, test_batch_size, data_url=None ,use_standar
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)) if use_standard == True else
         transforms.Normalize(mean, std),
     ])
-    train_set = torchvision.datasets.CIFAR100(root=data_url, train=True,
-                                             download=True, transform=train_transform)
+    train_set = CIFAR100Dataset(root=data_url,train=True,download=True,transform=train_transform)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=train_batch_size,
                                                shuffle=True, num_workers=4, drop_last=False)
-
-    test_set = torchvision.datasets.CIFAR100(root=data_url, train=False,
-                                            download=True, transform=test_trainsform)
+    test_set = torchvision.datasets.CIFAR100(root=data_url,train=False,download=True,transform=test_trainsform)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=test_batch_size,
                                               shuffle=False, num_workers=4, drop_last=False)
 

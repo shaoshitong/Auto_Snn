@@ -10,27 +10,48 @@ data:
 num_classes:
   100
 feature_list:
-  - 16
-  - 128
-  - 256
-  - 512
+  - 80
+  - 36
+  - 36
+  - 36
+  - 36
 size_list:
-  - 32
-  - 32
-  - 16
-  - 8
+  - - 32
+    - 32
+  - - 32
+    - 32
+  - - 16
+    - 16
+  - - 8
+    - 8
+  - - 4
+    - 4
 hidden_size_list:
-  - 128
-  - 128
-  - 128
+  - 4
+  - 4
+  - 4
+  - 4
 path_nums_list:
-  - 2
-  - 2
-  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+nums_layer_list:
+  - 0
+  - 1
+  - 1
+  - 1
+breadth_threshold:
+  - 3
+  - 4
+  - 5
+  - 6
+down_rate:
+  1
 mult_k:
   1
 use_standard:
-  True
+  False
 densenetparameter:
   bn_size:
     2
@@ -41,10 +62,10 @@ densenetparameter:
 parameters:
   # default parameters
   loss_type:
-    noonehot_cross
+    smooth_cross
   sigma_list:
-    - 0.1
-    - 0.01
+    - 0.0
+    - 0.0
   s:
     4
   push_num:
@@ -56,11 +77,11 @@ parameters:
   sigma:
     0.1
   batch_size:
-    112
+    96
   epoch:
-    200
+    500
   dropout:
-    0.1
+    0.0
   filter_tau_m:
     4
   filter_tau_s:
@@ -76,11 +97,15 @@ optimizer:
   optimizer_choice:
     'SGD'
   Adam:
-    lr: 0.005
-    weight_decay: 0
+    lr: 0.001
+    weight_decay: 5e-5
   AdamW:
-    lr: 0.005
-    weight_decay: 1e-4
+    lr: 0.0001
+    momentum: 0.937
+    weight_decay: 0.0005
+    center_lr: 0.5
+    weight_decay_bias: 0.
+    bias_lr_factor: 2
   SAM:
     lr: 0.05
     weight_decay: 4e-5
@@ -89,8 +114,8 @@ optimizer:
     lr: 0.1
     weight_decay: 1e-4
   ASGD:
-    lr: 0.0001
-    weight_decay: 1e-4
+    lr: 0.002
+    weight_decay: 4e-5
   Rprop:
     lr: 0.0001
     etas: (0.5,1.5)
@@ -101,11 +126,11 @@ scheduler:
     'SchedulerLR'
   SchedulerLR:
     milestones:
-      - 0.3
-      - 0.6
-      - 0.8
+      - 0.5
+      - 0.77
     gamma:
-      0.2
+      - 0.1
+      - 0.1
   MultiStepLR:
     milestones:
       - 25
