@@ -43,7 +43,7 @@ parser.add_argument('--neg_mul', dest='neg_mul', default=0.1, type=float,
                     help='neg_learning')
 parser.add_argument('--log_each', dest='log_each', default=100, type=int,
                     help='how many step log once')
-parser.add_argument("--load_model",dest="load_model",default=False,type=bool,help="if load model")
+parser.add_argument("--load_model",dest="load_model",default=True,type=bool,help="if load model")
 args = parser.parse_args()
 log = Log(log_each=args.log_each)
 scaler = torch.cuda.amp.GradScaler()

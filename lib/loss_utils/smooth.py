@@ -7,7 +7,7 @@ class smooth_crossentropy(object):
         n_class = pred.size(1)
         gold = gold.to(pred.device)
         one_hot = torch.full_like(pred, fill_value=smoothing / (n_class - 1)).to(pred.device)  # 0.0111111
-        one_hot.scatter_(dim=1, index=gold.unsqueeze(1), value=1. - smoothing)  # 0.9
+        one_hot.scatter_(dim=1, index=gold.unsqueeze(1).long(), value=1. - smoothing)  # 0.9
         log_prob = torch.nn.functional.log_softmax(pred, dim=1)
         return torch.nn.functional.kl_div(input=log_prob, target=one_hot, reduction='none').sum(dim=-1).mean()
 

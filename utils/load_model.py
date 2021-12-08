@@ -10,6 +10,8 @@ def load_model(path,model):
     for k,v in pretrained_dict.items():
         if "norm" in k and "num_batches_tracked" not  in k:
             pretrained_dict[k].requires_grad=True
+        elif "turn_layer" in k and "conv" in k:
+            pretrained_dict[k].requires_grad=True
         else:
             pretrained_dict[k].requires_grad=False
     model_state_dict.update(pretrained_dict)
