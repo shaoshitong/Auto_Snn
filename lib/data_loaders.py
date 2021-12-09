@@ -164,6 +164,7 @@ def load_data_imagenet(train_batch_size,test_batch_size,data_url=None):
         transforms.RandomHorizontalFlip(),
         transforms.AutoAugment(),
         transforms.ToTensor(),
+        RandomErasing(mean=[0.485,0.456,0.406]),
         transforms.Normalize(mean=[0.485,0.456,0.406],
                              std=[0.229,0.224,0.225])
     ])
@@ -175,7 +176,7 @@ def load_data_imagenet(train_batch_size,test_batch_size,data_url=None):
                              std=[0.229,0.224,0.225])
     ])
     train=ImageNetDataset(os.path.join(data_url,"ILSVRC2012_img_train/"),train_transform)
-    val=datasets.ImageFolder(os.path.join(data_url,"val/"),test_transform)
+    val=datasets.ImageFolder(os.path.join(data_url,"val/val"),test_transform)
     train_loader=DataLoader(train,batch_size=train_batch_size,shuffle=True,num_workers=8)
     val_loader=DataLoader(val,batch_size=test_batch_size,shuffle=False,num_workers=4)
     return train_loader,val_loader
@@ -192,8 +193,8 @@ def load_data_c100(train_batch_size, test_batch_size, data_url=None ,use_standar
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
         transforms.AutoAugment(transforms.AutoAugmentPolicy.CIFAR10),
-        RandomErasing(mean=(0.4914, 0.4822, 0.4465) if use_standard==True else mean),
         transforms.ToTensor(),
+        RandomErasing(mean=(0.4914, 0.4822, 0.4465) if use_standard==True else mean),
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)) if use_standard==True else
         transforms.Normalize(mean, std) ,
     ])

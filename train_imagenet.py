@@ -16,7 +16,7 @@ sys.path.append("D:\Product")
 sys.path.append("D:\Product\Snn_Auto_master")
 sys.path.append("F:\Snn_Auto")
 sys.path.append("F:\sst")
-sys.path.append("/home/sst/product")
+sys.path.append("/home/qiuziming/product")
 from lib.accuracy import *
 from lib.criterion import *
 from lib.data_loaders import *
@@ -36,14 +36,14 @@ parser.add_argument('--train', dest='train', default=True, type=bool,
                     help='train model')
 parser.add_argument('--test', dest='test', default=True, type=bool,
                     help='test model')
-parser.add_argument('--data_url', dest='data_url', default='D:\\Product\\up-detr\\data', type=str,
+parser.add_argument('--data_url', dest='data_url', default='/home/qiuziming/data/Imagenet', type=str,
                     help='test model')
 parser.add_argument('--neg_mul', dest='neg_mul', default=0.1, type=float,
                     help='neg_learning')
 parser.add_argument('--log_each', dest='log_each', default=100, type=int,
                     help='how many step log once')
 args = parser.parse_args()
-log = Log(log_each=args.log_each)
+log = Log(log_each=args.log_each,initial_epoch=-1)
 scaler = torch.cuda.amp.GradScaler()
 def set_device():
     if torch.cuda.is_available():
@@ -508,15 +508,15 @@ if __name__ == "__main__":
     optimizer = get_optimizer([dict_list4], yaml, model)
     scheduler = get_scheduler(optimizer, yaml)
     criterion_loss = make_loss(yaml['parameters'],yaml['num_classes'],None)
-    model.load_state_dict(torch.load("./output/imagenet 3_4_5_6 best")['snn_state_dict'])
+    model.load_state_dict(torch.load("./output/imagenet 3_4_5_6 best epoch63")['snn_state_dict'])
     model.to(set_device())
-    optimizer.load_state_dict(torch.load("./output/imragenet 3_4_5_6 best")["optimizer_state_dict"])
+    optimizer.load_state_dict(torch.load("./output/imagenet 3_4_5_6 best epoch63")["optimizer_state_dict"])
     get_params_numeric(model)  # 5.261376
     if torch.cuda.is_available():
         criterion_loss = criterion_loss.cuda()
     if args.train == True:
         best_acc = .0
-        for j in range(yaml['parameters']['epoch']):
+        for j in range(101,yaml['parameters']['epoch']):
             model.train()
             """======================"""
             for i, e in enumerate(config_.iter_epoch):
@@ -543,7 +543,7 @@ if __name__ == "__main__":
                         'snn_state_dict': model.state_dict(),
                         'optimizer_state_dict': optimizer.state_dict(),
                         'loss': loss,
-                    }, "./output/imagenet 3_4_5_6 best")
+                    }, f"./output/imagenet 3_4_5_6 best epoch{j}")
                     path = "./output/imagenet 3_4_5_6 best 2"
                 # else:
                 #     torch.save({
