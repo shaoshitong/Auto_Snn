@@ -13,7 +13,8 @@ def load_model(path,model):
         elif "turn_layer" in k and "conv" in k:
             pretrained_dict[k].requires_grad=True
         else:
-            pretrained_dict[k].requires_grad=False
+            continue
+            # pretrained_dict[k].requires_grad=False
     model_state_dict.update(pretrained_dict)
     model.load_state_dict(model_state_dict)
     return model

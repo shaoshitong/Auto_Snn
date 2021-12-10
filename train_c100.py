@@ -309,15 +309,18 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
             loss.backward()
             optimizer.second_step(zero_grad=False)
         else:
-            optimizer.zero_grad()
+            if i%8==0:
+                optimizer.zero_grad()
             # unscale 梯度，可以不影响clip的threshol
             scaler.scale(loss).backward(retain_graph=False)
-            scaler.unscale_(optimizer)
-
-            # clip梯度
-            torch.nn.utils.clip_grad_norm_(model.parameters(),20.)
-            scaler.step(optimizer)
-            scaler.update()
+            if i%8!=0:
+                scaler.unscale_(optimizer)
+                for parameter in model.parameters():
+                    if type(parameter.grad) != type(None):
+                        parameter.grad/=8
+                torch.nn.utils.clip_grad_norm_(model.parameters(),20.)
+                scaler.step(optimizer)
+                scaler.update()
         if yaml['data'] == 'eeg':
             prec1, prec5 = accuracy(output.data, target, topk=(1, 2))
         elif yaml['data'] in ['mnist', 'fashionmnist', 'cifar10', 'car', 'svhn', 'cifar100', 'stl-10',"imagenet"]:

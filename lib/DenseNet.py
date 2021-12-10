@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models
-from lib.SNnorm import SNConv2d
 import torch.nn.utils as utils
 import numpy as np
 import os, sys
