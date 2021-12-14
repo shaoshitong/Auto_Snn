@@ -53,7 +53,7 @@ class MultiAttention(nn.Module):
             # att=att+torch.eye(att.shape[-1]).to(att.device).unsqueeze(0).unsqueeze(0)*torch.sigmoid(self.v)
             x=torch.matmul(att,q).permute(0,2,1,3).contiguous().view(b,c,h,w)
         return x
-
+Tem=1.03
 
 def cat_result_get(tensor_prev, i, j, b, tag, pre_i, pre_j):
     m = []
@@ -62,8 +62,10 @@ def cat_result_get(tensor_prev, i, j, b, tag, pre_i, pre_j):
             if t_i != i or t_j != j:
                 if abs(t_i - t_j) < b:
                     m.append(tensor_prev[t_i][t_j])
+            if t_i == pre_i and t_j == pre_j:
+                m[-1]=m[-1]*Tem
     if tag == True:
-        m.append(tensor_prev[pre_i][pre_j])
+        m.append(tensor_prev[pre_i][pre_j]*Tem)
     return torch.cat(m, dim=1)
 
 

@@ -79,7 +79,7 @@ parameters:
   batch_size:
     128
   epoch:
-    200
+    1200
   dropout:
     0.0
   filter_tau_m:
@@ -112,7 +112,7 @@ optimizer:
   SGD:
     momentum: 0.9
     lr: 0.1
-    weight_decay: 5e-5
+    weight_decay: 1e-4
   ASGD:
     lr: 0.002
     weight_decay: 4e-5
@@ -127,7 +127,7 @@ scheduler:
   SchedulerLR:
     milestones:
       - 0.5
-      - 0.77
+      - 0.73
     gamma:
       - 0.1
       - 0.1
