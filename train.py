@@ -31,7 +31,7 @@ from utils import *
 from lib.parameters_check import parametersgradCheck, parametersNameCheck
 
 parser = argparse.ArgumentParser(description='SNN AUTO MASTER')
-parser.add_argument('--config_file', type=str, default='./config/train_c100.yaml',
+parser.add_argument('--config_file', type=str, default='./config/train_c10.yaml',
                     help='path to configuration file')
 parser.add_argument('--train', dest='train', default=True, type=bool,
                     help='train model')
@@ -274,6 +274,8 @@ def test(path, data, yaml, criterion_loss):
             elif yaml['data'] in ['mnist', 'fashionmnist', 'cifar10', 'car', 'svhn', 'cifar100', 'stl-10',"imagenet"]:
                 prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
             log(model, loss.cpu(), prec1.cpu(), prec5.cpu())
+    global test_log
+    test_log.append(log.epoch_state["top_1"] / log.epoch_state["steps"])
     return log.epoch_state["top_1"] / log.epoch_state["steps"], log.epoch_state["loss"] / log.epoch_state["steps"]
 
 
@@ -329,6 +331,9 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
         scheduler.step()
     elif isinstance(scheduler, SchedulerLR):
         scheduler(epoch)
+    global train_log
+    train_log.append(log.epoch_state["top_1"] / log.epoch_state["steps"])
+    loss_log.append(log.epoch_state["loss"] / log.epoch_state["steps"])
     return log.epoch_state["top_1"] / log.epoch_state["steps"], log.epoch_state["loss"] / log.epoch_state["steps"]
 
 
@@ -340,6 +345,9 @@ if __name__ == "__main__":
     yaml = yaml_config_get(args)
     if yaml['set_seed'] is True:
         set_random_seed(yaml)
+    train_log = []
+    test_log = []
+    loss_log = []
     model = merge_layer(set_device(), shape=yaml['shape'], dropout=yaml['parameters']['dropout'])
     writer = SummaryWriter()
     rand_transform = get_rand_transform(yaml['transform'])
@@ -550,4 +558,6 @@ if __name__ == "__main__":
                 #     }, checkpoint_path)
                 #     path = checkpoint_path
         log.flush()
+        result_dict={"train_acc":train_log,"test_acc":test_log,"loss":loss_log}
+        save_log(result_dict)
         print("best_acc:{:.3f}%".format(best_acc))

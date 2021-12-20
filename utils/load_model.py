@@ -2,6 +2,9 @@ import torch
 import torchvision
 import torch.nn as nn
 import torch.nn.functional as F
+import pandas as pd
+import numpy as np
+import datetime
 USE_FUNCTION={}
 def load_model(path,model):
     model_dict=torch.load(path)["snn_state_dict"]
@@ -18,3 +21,13 @@ def load_model(path,model):
     model_state_dict.update(pretrained_dict)
     model.load_state_dict(model_state_dict)
     return model
+def save_log(**kwargs):
+    result=[]
+    name=[]
+    for key,value in kwargs.items():
+        result.append(value)
+        name.append(key)
+    result=np.array(result).T
+    frame=pd.DataFrame(data=result,columns=name)
+    time=str(datetime.datetime.now().strftime("%Y%m%d%H%M%S"))
+    frame.to_csv("./output/"+time+".csv",index=False,header=True)

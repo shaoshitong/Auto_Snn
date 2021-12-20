@@ -46,6 +46,7 @@ parser.add_argument('--log_each', dest='log_each', default=100, type=int,
 parser.add_argument("--load_model",dest="load_model",default=False,type=bool,help="if load model")
 args = parser.parse_args()
 log = Log(log_each=args.log_each)
+iter_nums=0
 scaler = torch.cuda.amp.GradScaler()
 def set_device():
     if torch.cuda.is_available():
@@ -309,15 +310,17 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
             loss.backward()
             optimizer.second_step(zero_grad=False)
         else:
-            optimizer.zero_grad()
-            # unscale 梯度，可以不影响clip的threshol
+            global iter_nums
+            if iter_nums%3==0:
+                optimizer.zero_grad()
             scaler.scale(loss).backward(retain_graph=False)
-            scaler.unscale_(optimizer)
-
-            # clip梯度
-            torch.nn.utils.clip_grad_norm_(model.parameters(),20.)
-            scaler.step(optimizer)
-            scaler.update()
+            if iter_nums%3==2:
+                for param in model.parameters():
+                    if param.grad!=None:
+                        param.grad/=3.
+                scaler.step(optimizer)
+                scaler.update()
+            iter_nums+=1
         if yaml['data'] == 'eeg':
             prec1, prec5 = accuracy(output.data, target, topk=(1, 2))
         elif yaml['data'] in ['mnist', 'fashionmnist', 'cifar10', 'car', 'svhn', 'cifar100', 'stl-10',"imagenet"]:

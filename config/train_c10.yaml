@@ -77,9 +77,9 @@ parameters:
   sigma:
     0.1
   batch_size:
-    64
+    96
   epoch:
-    500
+    1200
   dropout:
     0.0
   filter_tau_m:
@@ -127,7 +127,7 @@ scheduler:
   SchedulerLR:
     milestones:
       - 0.5
-      - 0.8
+      - 0.73
     gamma:
       - 0.1
       - 0.1
