@@ -311,7 +311,7 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
                 optimizer.zero_grad()
             # unscale 梯度，可以不影响clip的threshol
             scaler.scale(loss).backward(retain_graph=False)
-            if iter%8==1:
+            if iter%8==7:
                 scaler.unscale_(optimizer)
                 for parameter in model.parameters():
                     if type(parameter.grad) != type(None):
@@ -508,15 +508,15 @@ if __name__ == "__main__":
     optimizer = get_optimizer([dict_list4], yaml, model)
     scheduler = get_scheduler(optimizer, yaml)
     criterion_loss = make_loss(yaml['parameters'],yaml['num_classes'],None)
-    model.load_state_dict(torch.load("./output/imagenet 3_4_5_6 best epoch63")['snn_state_dict'])
+    model.load_state_dict(torch.load("./output/imagenet 3_4_5_6 best epoch127")['snn_state_dict'])
     model.to(set_device())
-    optimizer.load_state_dict(torch.load("./output/imagenet 3_4_5_6 best epoch63")["optimizer_state_dict"])
+    optimizer.load_state_dict(torch.load("./output/imagenet 3_4_5_6 best epoch127")["optimizer_state_dict"])
     get_params_numeric(model)  # 5.261376
     if torch.cuda.is_available():
         criterion_loss = criterion_loss.cuda()
     if args.train == True:
         best_acc = .0
-        for j in range(101,yaml['parameters']['epoch']):
+        for j in range(128,yaml['parameters']['epoch']):
             model.train()
             """======================"""
             for i, e in enumerate(config_.iter_epoch):
@@ -544,7 +544,6 @@ if __name__ == "__main__":
                         'optimizer_state_dict': optimizer.state_dict(),
                         'loss': loss,
                     }, f"./output/imagenet 3_4_5_6 best epoch{j}")
-                    path = "./output/imagenet 3_4_5_6 best 2"
                 # else:
                 #     torch.save({
                 #         'epoch': j,
