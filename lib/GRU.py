@@ -179,27 +179,32 @@ class DenseLayer(nn.Sequential):
         super(DenseLayer, self).__init__()
         self.nums_input_features = num_input_features
         use_att=(cat_x==cat_y)
+        if width%7==0:
+            nums_head=7
+        else:
+            nums_head=4
         if class_fusion == 0:
-            self.add_module("attn",MultiAttention(num_input_features,width*height,func_div(width*height,4,4),4,bn_size,growth_rate,use_att,cat_x))
+            self.add_module("attn",MultiAttention(num_input_features,width*height,func_div(width*height,nums_head,nums_head),nums_head,bn_size,growth_rate,use_att,cat_x))
             self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate,eps=1e-6)),
             self.add_module('relu2', nn.ReLU(inplace=True)),
             self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
                                                kernel_size=(5, 2), stride=(1, 1), dilation=(1, 2), padding=(2, 1),
                                                bias=False))
         elif class_fusion == 1:
-            self.add_module("attn",MultiAttention(num_input_features,width*height,func_div(width*height,4,4),4,bn_size,growth_rate,use_att,cat_x))
+            self.add_module("attn",MultiAttention(num_input_features,width*height,func_div(width*height,nums_head,nums_head),nums_head,bn_size,growth_rate,use_att,cat_x))
             self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate,eps=1e-6)),
             self.add_module('relu2', nn.ReLU(inplace=True)),
             self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
                                                kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False))
         else:
-            self.add_module("attn",MultiAttention(num_input_features,width*height,func_div(width*height,4,4),4,bn_size,growth_rate,use_att,cat_x))
+            self.add_module("attn",MultiAttention(num_input_features,width*height,func_div(width*height,nums_head,nums_head),nums_head,bn_size,growth_rate,use_att,cat_x))
             self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate,eps=1e-6)),
             self.add_module('relu2', nn.ReLU(inplace=True)),
             self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
                                                kernel_size=(2, 5), stride=(1, 1), dilation=(2, 1), padding=(1, 2),
                                                bias=False))
         self.drop_rate = drop_rate
+
 
     def forward(self, x):
         new_features = super(DenseLayer, self).forward(x)

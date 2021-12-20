@@ -46,9 +46,9 @@ class ImageNetDataset(torchvision.datasets.ImageFolder):
                 mixup_sample = transform(mixup_sample)
             beta = self.beta
             lam = np.random.beta(beta, beta)
-            image = lam * sample + (1 - lam) * mixup_sample
+            sample = lam * sample + (1 - lam) * mixup_sample
             label = lam * label + (1 - lam) * mixup_label
-        return sample, target
+        return sample, label
 class CIFAR10Dataset(torchvision.datasets.CIFAR10):
     def __init__(self,root, train,download, transform):
         super(CIFAR10Dataset, self).__init__(root=root,train=train,download=download,transform=transform)

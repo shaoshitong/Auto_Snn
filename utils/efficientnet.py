@@ -6,6 +6,7 @@ arXiv preprint arXiv:2104.00298.
 import from https://github.com/d-li14/mobilenetv2.pytorch
 """
 
+import torchvision.models.densenet
 import torch
 import torch.nn as nn
 import math
@@ -229,3 +230,15 @@ def effnetv2_xl(**kwargs):
         [6, 640, 8, 1, 1],
     ]
     return EffNetV2(cfgs, **kwargs)
+
+import torch
+import torchvision
+from torch.utils.mobile_optimizer import optimize_for_mobile
+
+if __name__=="__main__":
+    model = torchvision.models.densenet201(pretrained=True)
+    model.eval()
+    example=torch.randn(1,3,224,224)
+    traced_script_module=torch.jit.trace(model,example)
+    optimized_traced_model=optimize_for_mobile(traced_script_module)
+    optimized_traced_model._save_for_lite_interpreter("./densenet201.pt")

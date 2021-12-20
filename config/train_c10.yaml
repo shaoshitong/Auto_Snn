@@ -51,7 +51,7 @@ down_rate:
 mult_k:
   1
 use_standard:
-  False
+  True
 densenetparameter:
   bn_size:
     2

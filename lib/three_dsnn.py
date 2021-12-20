@@ -98,7 +98,24 @@ class Shortcut(nn.Module):
     def forward(self, x):
         return self.shortcut(x)
 
-
+def _make_divisible(v, divisor, min_value=None):
+    """
+    This function is taken from the original tf repo.
+    It ensures that all layers have a channel number that is divisible by 8
+    It can be seen here:
+    https://github.com/tensorflow/models/blob/master/research/slim/nets/mobilenet/mobilenet.py
+    :param v:
+    :param divisor:
+    :param min_value:
+    :return:
+    """
+    if min_value is None:
+        min_value = divisor
+    new_v = max(min_value, int(v + divisor / 2) // divisor * divisor)
+    # Make sure that round down does not go down by more than 10%.
+    if new_v < 0.9 * v:
+        new_v += divisor
+    return new_v
 class block_out(nn.Module):
     def __init__(self, feature, classes, size, use_pool='none'):
         super(block_out, self).__init__()
@@ -406,14 +423,15 @@ class turn_layer(nn.Module):
         super(turn_layer, self).__init__()
         if num_layer != 0:
             self.downsample = nn.Sequential(*[])
+            tmp_init_feature=_make_divisible(int(in_feature/decay_rate),8)
             self.downsample.add_module('norm', nn.BatchNorm2d(in_feature,eps=1e-6))
             self.downsample.add_module("relu", nn.SiLU(inplace=True))
             self.downsample.add_module("conv",
-                                       nn.Conv2d(in_feature,int(in_feature/decay_rate), (1, 1), (1, 1), (0, 0), bias=False))
+                                       nn.Conv2d(in_feature,tmp_init_feature, (1, 1), (1, 1), (0, 0), bias=False))
             self.xsample = nn.Sequential(*[])
             self.xsample.add_module('pool', nn.AvgPool2d(kernel_size=(stride, stride), stride=(stride, stride)))
 
-            in_feature = int(in_feature / decay_rate)
+            in_feature = tmp_init_feature
             if num_layer!=1:
                 self.dense_deep_block = DenseDeepBlock([in_feature] + [out_feature] * num_layer, bn_size, dropout,
                                                        num_layer)
@@ -548,7 +566,6 @@ class merge_layer(nn.Module):
                 x = x.view(self.input_shape)
             else:
                 pass
-
         x = self.inf(x)
         x = self.InputGenerateNet(x)
         x = self.out_classifier(x)
@@ -570,7 +587,9 @@ class merge_layer(nn.Module):
             ('pool0', nn.MaxPool2d(kernel_size=(3,3), stride=(2,2), padding=(1,1))),
             ]))
         else:
-            self.inf = nn.Conv2d(c, feature_list[0], (3, 3), (1,1), (1, 1), bias=False)
+            stride=size_list[1][0]//size_list[0][0]
+            self.inf = nn.Conv2d(c, feature_list[0], (3, 3), (stride,stride), (1, 1), bias=False)
+        self.in_size=size_list[0]
         self._initialize()
         h = self.InputGenerateNet.initiate_layer(data, dataoption,feature_list, size_list, hidden_size_list, path_nums_list,
                                                  nums_layer_list, drop_rate,mult_k,down_rate,breadth_threshold)
