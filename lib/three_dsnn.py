@@ -20,7 +20,7 @@ from lib.featurefocusing_v2 import Feature_forward
 from lib.dimixloss import DimixLoss, DimixLoss_neg,Linear_adaptive_loss
 from lib.PointConv import PointConv
 from lib.GRU import *
-# from lib.DenseNet import DenseBlock as DenseDeepBlock
+from lib.DenseNet import DenseBlock as DenseDeepBlock
 from lib.utils import Multi_Fusion
 import math
 import pandas as pd
