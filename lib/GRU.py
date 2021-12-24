@@ -53,7 +53,7 @@ class MultiAttention(nn.Module):
             # att=att+torch.eye(att.shape[-1]).to(att.device).unsqueeze(0).unsqueeze(0)*torch.sigmoid(self.v)
             x=torch.matmul(att,q).permute(0,2,1,3).contiguous().view(b,c,h,w)
         return x
-Tem=1.04
+Tem=1.01
 
 def cat_result_get(tensor_prev, i, j, b, tag, pre_i, pre_j):
     m = []
@@ -174,6 +174,27 @@ class BasicUnit(nn.Module):
     def forward(self, x):
         return x + self.block(x)
 
+class MultiConv(nn.Module):
+    def __init__(self,bn_size,growth_rate,kernel_size=(3,3)):
+        super(MultiConv,self).__init__()
+        self.kernel_size=kernel_size
+        if kernel_size==(3,3):
+            self.BConv=nn.Conv2d(bn_size*growth_rate,growth_rate,kernel_size=(3,3),stride=(1,1),padding=(1,1),bias=False)
+        elif kernel_size==(5,2):
+            self.MConv=nn.Conv2d(bn_size*growth_rate,growth_rate//2,kernel_size=(3,3),stride=(1,1),padding=(1,1),bias=False)
+            self.BConv=nn.Conv2d(bn_size*growth_rate,growth_rate//2,kernel_size=(5,2),stride=(1,1),dilation=(1,2),padding=(2,1),bias=False)
+        elif kernel_size==(2,5):
+            self.MConv=nn.Conv2d(bn_size*growth_rate,growth_rate//2,kernel_size=(3,3),stride=(1,1),padding=(1,1),bias=False)
+            self.BConv=nn.Conv2d(bn_size*growth_rate,growth_rate//2,kernel_size=(2,5),stride=(1,1),dilation=(2,1),padding=(1,2),bias=False)
+        else:
+            pass
+    def forward(self,x):
+        if self.kernel_size==(3,3):
+            return self.BConv(x)
+        else:
+            M=self.MConv(x)
+            B=self.BConv(x)
+            return torch.cat([M,B],dim=1)
 class DenseLayer(nn.Sequential):
     def __init__(self, num_input_features, growth_rate, bn_size, drop_rate, class_fusion, width,height, cat_x, cat_y,x,y):
         super(DenseLayer, self).__init__()
@@ -187,24 +208,21 @@ class DenseLayer(nn.Sequential):
             self.add_module("attn",MultiAttention(num_input_features,width*height,func_div(width*height,nums_head,nums_head),nums_head,bn_size,growth_rate,use_att,cat_x))
             self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate,eps=1e-6)),
             self.add_module('relu2', nn.ReLU(inplace=True)),
-            self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
-                                               kernel_size=(5, 2), stride=(1, 1), dilation=(1, 2), padding=(2, 1),
-                                               bias=False))
+            self.add_module('conv2', MultiConv(bn_size, growth_rate,(5,2)))
         elif class_fusion == 1:
             self.add_module("attn",MultiAttention(num_input_features,width*height,func_div(width*height,nums_head,nums_head),nums_head,bn_size,growth_rate,use_att,cat_x))
             self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate,eps=1e-6)),
             self.add_module('relu2', nn.ReLU(inplace=True)),
-            self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
-                                               kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False))
+            self.add_module('conv2', MultiConv(bn_size, growth_rate,(3,3)))
+
         else:
             self.add_module("attn",MultiAttention(num_input_features,width*height,func_div(width*height,nums_head,nums_head),nums_head,bn_size,growth_rate,use_att,cat_x))
             self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate,eps=1e-6)),
             self.add_module('relu2', nn.ReLU(inplace=True)),
-            self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
-                                               kernel_size=(2, 5), stride=(1, 1), dilation=(2, 1), padding=(1, 2),
-                                               bias=False))
-        self.drop_rate = drop_rate
+            self.add_module('conv2', MultiConv(bn_size, growth_rate,(2,5)))
 
+        self.drop_rate = drop_rate
+        self.class_fusion=class_fusion
 
     def forward(self, x):
         new_features = super(DenseLayer, self).forward(x)
