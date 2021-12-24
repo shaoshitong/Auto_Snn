@@ -39,7 +39,6 @@ class MultiAttention(nn.Module):
         self.conv=nn.Conv2d(n_model,bn_size*growth_rate,(1,1),(1,1),(0,0),bias=False)
         self.use_att=use_att
         self.num_index=num_index
-        self.v=Parameter(torch.randn(1),requires_grad=True)
         if use_att:
             self.qlinear=nn.Linear(embed_dim,embed_kv)
             self.vlinear=nn.Linear(embed_dim,embed_kv)
@@ -49,11 +48,10 @@ class MultiAttention(nn.Module):
         if self.use_att==True:
             x=x.view(b,c,-1)
             q,k,v=x.view(b,c,self.n_head,-1).permute(0,2,1,3),self.qlinear(x).view(b,c,self.n_head,-1).permute(0,2,1,3),self.vlinear(x).view(b,c,self.n_head,-1).permute(0,2,1,3)
-            att=torch.softmax(torch.matmul(k,v.permute(0,1,3,2))/math.sqrt(k.shape[-1]),dim=1)
-            # att=att+torch.eye(att.shape[-1]).to(att.device).unsqueeze(0).unsqueeze(0)*torch.sigmoid(self.v)
+            att=F.dropout(torch.softmax(torch.matmul(k,v.permute(0,1,3,2))/math.sqrt(k.shape[-1]),dim=1),training=self.training,p=0.05)
             x=torch.matmul(att,q).permute(0,2,1,3).contiguous().view(b,c,h,w)
         return x
-Tem=1.01
+Tem=1.04
 
 def cat_result_get(tensor_prev, i, j, b, tag, pre_i, pre_j):
     m = []
@@ -181,20 +179,21 @@ class MultiConv(nn.Module):
         if kernel_size==(3,3):
             self.BConv=nn.Conv2d(bn_size*growth_rate,growth_rate,kernel_size=(3,3),stride=(1,1),padding=(1,1),bias=False)
         elif kernel_size==(5,2):
-            self.MConv=nn.Conv2d(bn_size*growth_rate,growth_rate//2,kernel_size=(3,3),stride=(1,1),padding=(1,1),bias=False)
+            #self.MConv=nn.Conv2d(bn_size*growth_rate,growth_rate//2,kernel_size=(3,3),stride=(1,1),padding=(1,1),bias=False)
             self.BConv=nn.Conv2d(bn_size*growth_rate,growth_rate//2,kernel_size=(5,2),stride=(1,1),dilation=(1,2),padding=(2,1),bias=False)
         elif kernel_size==(2,5):
-            self.MConv=nn.Conv2d(bn_size*growth_rate,growth_rate//2,kernel_size=(3,3),stride=(1,1),padding=(1,1),bias=False)
+            #self.MConv=nn.Conv2d(bn_size*growth_rate,growth_rate//2,kernel_size=(3,3),stride=(1,1),padding=(1,1),bias=False)
             self.BConv=nn.Conv2d(bn_size*growth_rate,growth_rate//2,kernel_size=(2,5),stride=(1,1),dilation=(2,1),padding=(1,2),bias=False)
         else:
             pass
     def forward(self,x):
-        if self.kernel_size==(3,3):
-            return self.BConv(x)
-        else:
-            M=self.MConv(x)
-            B=self.BConv(x)
-            return torch.cat([M,B],dim=1)
+        return self.BConv(x)
+        # if self.kernel_size==(3,3):
+        #     return self.BConv(x)
+        # else:
+        #     M=self.MConv(x)
+        #     B=self.BConv(x)
+        #     return torch.cat([M,B],dim=1)
 class DenseLayer(nn.Sequential):
     def __init__(self, num_input_features, growth_rate, bn_size, drop_rate, class_fusion, width,height, cat_x, cat_y,x,y):
         super(DenseLayer, self).__init__()

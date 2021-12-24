@@ -19,7 +19,8 @@ class DenseNet_cifar10(torchvision.models.DenseNet):
         num_init_features: int = 64,
         bn_size: int = 4,
         drop_rate: float = 0,
-        num_classes: int = 10,
+        num_classes: int = 100
+            ,
         memory_efficient: bool = False
     ) -> None:
 

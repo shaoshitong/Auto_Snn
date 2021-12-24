@@ -31,7 +31,7 @@ from utils import *
 from lib.parameters_check import parametersgradCheck, parametersNameCheck
 
 parser = argparse.ArgumentParser(description='SNN AUTO MASTER')
-parser.add_argument('--config_file', type=str, default='./config/train_c10.yaml',
+parser.add_argument('--config_file', type=str, default='./config/train_c100.yaml',
                     help='path to configuration file')
 parser.add_argument('--train', dest='train', default=True, type=bool,
                     help='train model')
@@ -376,18 +376,6 @@ if __name__ == "__main__":
         train_dataloader, test_dataloader = load_data_c100(yaml['parameters']['batch_size'],
                                                            yaml['parameters']['batch_size'], args.data_url,
                                                            yaml['use_standard'])
-        model.initiate_layer(    dataoption='cifar100',
-                                 data=torch.randn(yaml['parameters']['batch_size'], 3, 32, 32),
-                                 num_classes=yaml["num_classes"],
-                                 feature_list=yaml["feature_list"],
-                                 size_list=yaml["size_list"],
-                                 hidden_size_list=yaml["hidden_size_list"],
-                                 path_nums_list=yaml["path_nums_list"],
-                                 nums_layer_list=yaml["nums_layer_list"],
-                                 breadth_threshold=yaml["breadth_threshold"],
-                                 down_rate=yaml["down_rate"],
-                                 mult_k=yaml["mult_k"])
-
 
         """
         (self, data, num_classes, fn_channels,feature_list, size_list, hidden_size_list, path_nums_list,
