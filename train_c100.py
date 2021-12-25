@@ -15,7 +15,7 @@ import torch.nn.functional as F
 sys.path.append("D:\Product")
 sys.path.append("F:\Snn_Auto")
 sys.path.append("F:\sst")
-sys.path.append("/home/sst/product")
+sys.path.append("/home/qiuziming/product")
 from lib.accuracy import *
 from lib.criterion import *
 from lib.data_loaders import *
@@ -37,7 +37,7 @@ parser.add_argument('--train', dest='train', default=True, type=bool,
                     help='train model')
 parser.add_argument('--test', dest='test', default=True, type=bool,
                     help='test model')
-parser.add_argument('--data_url', dest='data_url', default='D:\\Product\\data', type=str,
+parser.add_argument('--data_url', dest='data_url', default='/home/qiuziming/data', type=str,
                     help='test model')
 parser.add_argument('--neg_mul', dest='neg_mul', default=0.1, type=float,
                     help='neg_learning')
@@ -312,13 +312,13 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, path="
             optimizer.second_step(zero_grad=False)
         else:
             global iter_nums
-            if iter_nums%3==0:
+            if iter_nums%1==0:
                 optimizer.zero_grad()
             scaler.scale(loss).backward(retain_graph=False)
-            if iter_nums%3==2:
+            if iter_nums%1==0:
                 for param in model.parameters():
                     if param.grad!=None:
-                        param.grad/=3.
+                        param.grad/=1.
                 scaler.step(optimizer)
                 scaler.update()
             iter_nums+=1
