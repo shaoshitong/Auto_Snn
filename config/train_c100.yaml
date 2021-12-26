@@ -10,11 +10,10 @@ data:
 num_classes:
   100
 feature_list:
-  - 64
-  - 32
-  - 32
-  - 32
-  - 32
+  - 80
+  - 40
+  - 40
+  - 40
 #size_list:
 #  - - 32
 #    - 32
@@ -35,25 +34,19 @@ size_list:
     - 16
   - - 8
     - 8
-  - - 4
-    - 4
 hidden_size_list:
   - 4
   - 4
   - 4
-  - 4
 path_nums_list:
-  - 3
-  - 3
+  - 4
   - 5
   - 6
 nums_layer_list:
   - 0
   - 1
   - 1
-  - 1
 breadth_threshold:
-  - 3
   - 4
   - 5
   - 6
@@ -90,7 +83,7 @@ parameters:
   batch_size:
     64
   epoch:
-    1200
+    10
   dropout:
     0.0
   filter_tau_m:

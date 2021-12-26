@@ -39,18 +39,16 @@ class MultiAttention(nn.Module):
         self.conv=nn.Conv2d(n_model,bn_size*growth_rate,(1,1),(1,1),(0,0),bias=False)
         self.use_att=use_att
         self.num_index=num_index
-        self.v=Parameter(torch.randn(1),requires_grad=True)
         if use_att:
-            self.qlinear=nn.Linear(embed_dim,embed_kv)
-            self.vlinear=nn.Linear(embed_dim,embed_kv)
+            self.qlinear=nn.Linear(embed_dim,embed_dim*2)
+            self.vlinear=nn.Linear(embed_dim,embed_dim*2)
     def forward(self,x):
         x=self.conv(self.relu(self.norm(x)))
         b, c, h, w = x.shape
         if self.use_att==True:
             x=x.view(b,c,-1)
             q,k,v=x.view(b,c,self.n_head,-1).permute(0,2,1,3),self.qlinear(x).view(b,c,self.n_head,-1).permute(0,2,1,3),self.vlinear(x).view(b,c,self.n_head,-1).permute(0,2,1,3)
-            att=torch.softmax(torch.matmul(k,v.permute(0,1,3,2))/math.sqrt(k.shape[-1]),dim=1)
-            # att=att+torch.eye(att.shape[-1]).to(att.device).unsqueeze(0).unsqueeze(0)*torch.sigmoid(self.v)
+            att=F.dropout(torch.softmax(torch.matmul(k,v.permute(0,1,3,2))/math.sqrt(k.shape[-1]),dim=1),training=self.training,p=0.00)
             x=torch.matmul(att,q).permute(0,2,1,3).contiguous().view(b,c,h,w)
         return x
 Tem=1.04
