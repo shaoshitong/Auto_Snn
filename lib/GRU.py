@@ -40,8 +40,8 @@ class MultiAttention(nn.Module):
         self.use_att=use_att
         self.num_index=num_index
         if use_att:
-            self.qlinear=nn.Linear(embed_dim,embed_dim*2)
-            self.vlinear=nn.Linear(embed_dim,embed_dim*2)
+            self.qlinear=nn.Linear(embed_dim,embed_dim)
+            self.vlinear=nn.Linear(embed_dim,embed_dim)
     def forward(self,x):
         x=self.conv(self.relu(self.norm(x)))
         b, c, h, w = x.shape
@@ -177,6 +177,9 @@ class DenseLayer(nn.Sequential):
         super(DenseLayer, self).__init__()
         self.nums_input_features = num_input_features
         use_att=(cat_x==cat_y)
+        # if width>=16 or height>=16:
+        #     use_att=False
+        use_att=False
         if width%7==0:
             nums_head=7
         else:
