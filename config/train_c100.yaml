@@ -10,7 +10,7 @@ data:
 num_classes:
   100
 feature_list:
-  - 80
+  - 64
   - 40
   - 40
   - 40
@@ -83,7 +83,7 @@ parameters:
   batch_size:
     64
   epoch:
-    10
+    500
   dropout:
     0.0
   filter_tau_m:
@@ -124,7 +124,7 @@ optimizer:
     lr: 0.0001
     etas: (0.5,1.5)
 
-
+#[[78, 33, 47, 38], [[32, 32], [16, 16], [8, 8]], [5, 5, 4], 67.0554]
 scheduler:
   scheduler_choice:
     'SchedulerLR'
