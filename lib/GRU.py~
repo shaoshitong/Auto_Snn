@@ -40,20 +40,23 @@ class MultiAttention(nn.Module):
         self.use_att=use_att
         self.num_index=num_index
         if use_att:
-            #self.batchnorm=nn.BatchNorm2d(n_model)
-            #self.conv2=nn.Conv2d(n_model,n_model,(3,3),(1,1),(1,1),bias=False)
-            self.klinear=nn.Linear(embed_dim,embed_dim)
-            self.qlinear=nn.Linear(embed_dim,embed_dim)
-            self.vlinear=nn.Linear(embed_dim,embed_dim)
+            self.batchnorm=nn.BatchNorm2d(n_model)
+            self.conv2=nn.Conv2d(n_model,n_model,(3,3),(1,1),(1,1),bias=False)
+            #self.klinear=nn.Linear(embed_dim,embed_dim)
+            #self.qlinear=nn.Linear(embed_dim,embed_dim)
+            #self.vlinear=nn.Linear(embed_dim,embed_dim)
     def forward(self,x):
+        if self.use_att==True:
+            x=self.batchnorm(x)
+            x=self.conv2(x)+x
         x=self.conv(self.relu(self.norm(x)))
         b, c, h, w = x.shape
-        if self.use_att==True:
-            y=x
-            x=x.view(b,c,-1)
-            q,k,v=self.klinear(x).view(b,c,self.n_head,-1).permute(0,2,1,3),self.qlinear(x).view(b,c,self.n_head,-1).permute(0,2,1,3),self.vlinear(x).view(b,c,self.n_head,-1).permute(0,2,1,3)
-            att=torch.softmax(torch.matmul(k,v.permute(0,1,3,2))/math.sqrt(k.shape[-1]),dim=1)
-            x=torch.matmul(att,q).permute(0,2,1,3).contiguous().view(b,c,h,w)+y
+        #if self.use_att==True:
+            #y=x
+            #x=x.view(b,c,-1)
+            #q,k,v=self.klinear(x).view(b,c,self.n_head,-1).permute(0,2,1,3),self.qlinear(x).view(b,c,self.n_head,-1).permute(0,2,1,3),self.vlinear(x).view(b,c,self.n_head,-1).permute(0,2,1,3)
+            #att=torch.softmax(torch.matmul(k,v.permute(0,1,3,2))/math.sqrt(k.shape[-1]),dim=1)
+            #x=torch.matmul(att,q).permute(0,2,1,3).contiguous().view(b,c,h,w)+y
         return x
 Tem=1.02
 
@@ -186,6 +189,7 @@ class DenseLayer(nn.Sequential):
         else:
             nums_head=4
         if width==16 and height==16:
+            print(width,height)
             if class_fusion == 0:
                 self.add_module("attn",MultiAttention(num_input_features,width*height,func_div(width*height,nums_head,nums_head),nums_head,bn_size,growth_rate,use_att,cat_x))
                 self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate,eps=1e-6)),

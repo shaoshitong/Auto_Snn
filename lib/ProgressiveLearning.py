@@ -7,7 +7,7 @@ import random
 from PIL import Image
 import math
 from torchvision.transforms import *
-
+from torchvision.datasets.utils import *
 
 class ImageNetDataset(torchvision.datasets.ImageFolder):
     def __init__(self,root,transform):
@@ -86,6 +86,65 @@ class CIFAR10Dataset(torchvision.datasets.CIFAR10):
             lam=np.random.beta(beta,beta)
             image=lam*image+(1-lam)*mixup_image
             label=lam*label+(1-lam)*mixup_label
+        return image,label
+
+class SVHNDataset(torchvision.datasets.SVHN):
+    def __init__(self,root,split,download, transform):
+        super(SVHNDataset, self).__init__(root=root,split=split,download=download,transform=transform)
+        self.nums=10
+        self.beta=0.2
+        self.trans=self.nums
+        self.train=(split=="train")
+        self.size_rate=1
+        import scipy.io as sio
+        import os,sys
+        # reading(loading) mat file as array
+        print(self.filename)
+        md5 = self.split_list["extra"][2]
+        download_url( self.split_list["extra"][0],self.root , self.split_list["extra"][1], md5)
+        loaded_mat = sio.loadmat(os.path.join(self.root,self.split_list["extra"][1]))
+        extra_data = loaded_mat['X']
+        # loading from the .mat file gives an np array of type np.uint8
+        # converting to np.int64, so that we have a LongTensor after
+        # the conversion from the numpy array
+        # the squeeze is needed to obtain a 1D tensor
+        extra_labels = loaded_mat['y'].astype(np.int64).squeeze()
+
+        # the svhn dataset assigns the class label "10" to the digit 0
+        # this makes it inconsistent with several loss functions
+        # which expect the class labels to be in the range [0, C-1]
+        np.place(extra_labels, extra_labels == 10, 0)
+        extra_data = np.transpose(extra_data, (3, 2, 0, 1))
+        self.data=np.concatenate([self.data,extra_data],axis=0)
+        self.labels=np.concatenate([self.labels,extra_labels],axis=0)
+    def reset_beta(self,beta,size_rate):
+        self.nums=int((1-beta)*10)
+        self.trans=beta
+        self.size_rate=size_rate
+    def __getitem__(self, idx):
+        image, target =np.transpose(self.data[idx], (1, 2, 0)), self.labels[idx]
+        image = Image.fromarray(image)
+        label=torch.zeros(10)
+        label[self.labels[idx]]=1
+        if self.transform:
+            transform=Change_Compose_32(self.transform,self.trans,self.size_rate)
+            image=transform(image)
+            image=image/255.
+        if self.train and idx>0 and idx%self.nums==0:
+            mixup_idx=random.randint(0,len(self.data)-1)
+            mixup_image, mixup_target = np.transpose(self.data[mixup_idx], (1, 2, 0)), self.labels[mixup_idx]
+            mixup_image = Image.fromarray(mixup_image)
+            mixup_label=torch.zeros(10)
+            mixup_label[self.labels[mixup_idx]]=1
+            if self.transform:
+                transform = Change_Compose_32(self.transform, self.trans,self.size_rate)
+                mixup_image=transform(mixup_image)
+                mixup_image=mixup_image/255.
+            beta=self.beta
+            lam=np.random.beta(beta,beta)
+            image=lam*image+(1-lam)*mixup_image
+            label=lam*label+(1-lam)*mixup_label
+
         return image,label
 
 

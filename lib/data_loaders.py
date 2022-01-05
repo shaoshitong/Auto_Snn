@@ -16,7 +16,7 @@ import torch.utils.data
 from lib.dataprocess import CarDateset
 from lib.dataprocess import STLdataprocess
 from torch.utils.data import DataLoader
-from lib.ProgressiveLearning import CIFAR10Dataset,ImageNetDataset,CIFAR100Dataset,RandomErasing
+from lib.ProgressiveLearning import SVHNDataset,CIFAR10Dataset,ImageNetDataset,CIFAR100Dataset,RandomErasing
 import random
 import openpyxl
 
@@ -79,7 +79,7 @@ CIFAR10
 """
 
 
-def load_data_car(train_batch_size, test_batch_size, shuffle=True, transform=True, tmp_size=96, result_size=64, ):
+def load_data_car(train_batch_size, test_batch_size, shuffle=True, transform=True, tmp_size=96, result_size=64,use_standard=True ):
     data_url = os.getcwd()
     train_data = CarDateset(data_url, tmp_size=tmp_size, result_size=result_size, use_transform=transform,
                             training=True)
@@ -89,24 +89,23 @@ def load_data_car(train_batch_size, test_batch_size, shuffle=True, transform=Tru
     test_loader = DataLoader(test_data, test_batch_size, shuffle=shuffle, num_workers=1, drop_last=True)
     return train_loader, test_loader
 
-def load_data_svhn(train_batch_size, test_batch_size, data_url=None):
+def load_data_svhn(train_batch_size, test_batch_size, data_url=None,use_standard=True):
     if data_url == None:
         data_url = './data'
     RGB2Gray = transforms.Lambda(lambda x: x.convert('L'))
-    train_transforms = transforms.Compose([
-        transforms.Resize((32, 32)),
-        transforms.RandomCrop(32, padding=4),
+    train_transform = transforms.Compose([
         transforms.RandomHorizontalFlip(),
+        transforms.AutoAugment(transforms.AutoAugmentPolicy.SVHN),
+        transforms.Resize(32),
         transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
     ])
-    test_transforms = transforms.Compose([
-        transforms.Resize((32, 32)),
+
+    test_transform = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
     ])
-    train_data = torchvision.datasets.SVHN(root=data_url,split="train",download=True,transform=train_transforms)
-    test_data = torchvision.datasets.SVHN(root=data_url, split="test", download=True,transform=test_transforms)
+
+    train_data = SVHNDataset(root=data_url,split="train",download=True,transform=train_transform)
+    test_data = SVHNDataset(root=data_url, split="test", download=True,transform=test_transform)
     train_loader = DataLoader(train_data, train_batch_size, shuffle=True, num_workers=4, drop_last=True)
     test_loader = DataLoader(test_data, test_batch_size, shuffle=True, num_workers=4, drop_last=True)
     return train_loader, test_loader
