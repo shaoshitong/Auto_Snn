@@ -81,9 +81,9 @@ parameters:
   sigma:
     0.1
   batch_size:
-    64
+    54
   epoch:
-    10
+    500
   dropout:
     0.0
   filter_tau_m:

@@ -26,7 +26,6 @@ class reid_xent_triplet(object):
         self.xent=xent
         self.triplet=triplet
     def __call__(self,score,feat,target):
-        print(score.shape,feat.shape,target.shape)
         return self.xent(score,target)+self.triplet(feat,target)[0]
     def cuda(self,):
         return self
@@ -50,7 +49,6 @@ class reid_xent_triplet_center(object):
         xent=self.xent(score, target)
         triplet=self.triplet(feat, target)[0]
         center=self.weight *self.center(feat, target)
-        print(xent,triplet,center)
         return xent+triplet+center*0.00001
     def cuda(self,):
         return self

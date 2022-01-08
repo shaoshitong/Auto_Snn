@@ -5,11 +5,14 @@ import re
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 import torch.utils.checkpoint as cp
 from collections import OrderedDict
 from torchvision.models.densenet import _DenseBlock,_Transition
 from torch import Tensor
 from typing import Any, List, Tuple
+
+from torchvision.models.densenet import *
 class DenseNet_cifar10(torchvision.models.DenseNet):
 
     def __init__(

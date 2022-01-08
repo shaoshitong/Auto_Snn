@@ -109,6 +109,7 @@ def _make_divisible(v, divisor, min_value=None):
     :param min_value:
     :return:
     """
+    return v
     if min_value is None:
         min_value = divisor
     new_v = max(min_value, int(v + divisor / 2) // divisor * divisor)
@@ -340,7 +341,7 @@ class turn_layer(nn.Module):
             self.origin_out_feature =in_feature
             self.num_layer = num_layer
         else:
-            if dataoption=="imagenet":
+            if dataoption=="imagenet" or dataoption=="cuhk03" or dataoption=="market1501":
                 self.origin_out_feature = int(in_feature)
                 self.num_layer = num_layer
                 self.downsample = nn.Sequential(*[])
@@ -533,10 +534,6 @@ class merge_layer(nn.Module):
             if isinstance(layer, nn.Conv2d) and layer.bias is not None:
                 layer: nn.Conv2d
                 loss_bias.append(torch.norm(torch.abs(layer.weight.data), p=2) / layer.weight.data.numel())
-            # elif isinstance(layer, point_cul_Layer):
-            #     layer: point_cul_Layer
-            #     if hasattr(layer,"dis_loss"):
-            #         loss_feature+=layer.dis_loss
         loss_feature = (loss_feature.squeeze(-1)) * sigma[0]
         loss_bias = torch.stack(loss_bias, dim=-1).mean() * sigma[1]
         loss_list = loss_list + [loss_bias, loss_feature]

@@ -18,7 +18,7 @@ class Backone(merge_layer):
                                  nn.BatchNorm2d(feature_list[0]),
                                  nn.MaxPool2d(kernel_size=3, stride=2, padding=1)])
         self._initialize()
-        h = self.InputGenerateNet.initiate_layer(data, feature_list, size_list, hidden_size_list, path_nums_list,
+        h = self.InputGenerateNet.initiate_layer(data,dataoption, feature_list, size_list, hidden_size_list, path_nums_list,
                                                  nums_layer_list, drop_rate,mult_k,down_rate,breadth_threshold)
         self.num_classes=num_classes
         self.neck=neck
@@ -69,7 +69,6 @@ class Backone(merge_layer):
             feat=self.bottleneck(x)
         else:
             raise NotImplementedError("Not Important Neck!")
-
         if feat.requires_grad==True:
             cls_score=self.classifier(feat)
             return cls_score,x

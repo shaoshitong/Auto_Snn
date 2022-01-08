@@ -29,7 +29,7 @@ class LearnedPositionEmbedding(nn.Embedding):
         input=input+weight
         return input
 class MultiAttention(nn.Module):
-    def __init__(self,n_model,embed_dim,embed_kv,n_head,bn_size , growth_rate,use_att ,num_index):
+    def __init__(self,n_model,embed_dim,embed_kv,n_head,bn_size , growth_rate,use_att ,num_index,width,height):
         super(MultiAttention, self).__init__()
         self.embed_dim=embed_dim
         self.embed_kv=embed_kv
@@ -39,17 +39,24 @@ class MultiAttention(nn.Module):
         self.conv=nn.Conv2d(n_model,bn_size*growth_rate,(1,1),(1,1),(0,0),bias=False)
         self.use_att=use_att
         self.num_index=num_index
+        self.width=width
+        self.height=height
         if use_att:
-            self.qlinear=nn.Linear(embed_dim,embed_dim)
-            self.vlinear=nn.Linear(embed_dim,embed_dim)
+            self.qlinear=nn.Linear(embed_dim,embed_kv)
+            self.vlinear=nn.Linear(embed_dim,embed_kv)
+            self.klinear=nn.Linear(embed_dim,embed_dim)
     def forward(self,x):
         x=self.conv(self.relu(self.norm(x)))
         b, c, h, w = x.shape
         if self.use_att==True:
+            y = x
+            x = F.interpolate(x, (self.width, self.height), mode="nearest")
             x=x.view(b,c,-1)
-            q,k,v=x.view(b,c,self.n_head,-1).permute(0,2,1,3),self.qlinear(x).view(b,c,self.n_head,-1).permute(0,2,1,3),self.vlinear(x).view(b,c,self.n_head,-1).permute(0,2,1,3)
-            att=F.dropout(torch.softmax(torch.matmul(k,v.permute(0,1,3,2))/math.sqrt(k.shape[-1]),dim=1),training=self.training,p=0.00)
-            x=torch.matmul(att,q).permute(0,2,1,3).contiguous().view(b,c,h,w)
+            q,k,v=self.klinear(x).view(b,c,self.n_head,-1).permute(0,2,1,3),self.qlinear(x).view(b,c,self.n_head,-1).permute(0,2,1,3),self.vlinear(x).view(b,c,self.n_head,-1).permute(0,2,1,3)
+            att=torch.softmax(F.dropout(torch.matmul(k,v.permute(0,1,3,2))/math.sqrt(k.shape[-1]),training=self.training,p=0.00),dim=1)
+            x=F.interpolate(torch.matmul(att,q).permute(0,2,1,3).contiguous().view(b,c,self.width,self.height),(h,w))+y
+
+
         return x
 Tem=1.04
 
@@ -179,26 +186,25 @@ class DenseLayer(nn.Sequential):
         use_att=(cat_x==cat_y)
         # if width>=16 or height>=16:
         #     use_att=False
-        use_att=False
         if width%7==0:
             nums_head=7
         else:
             nums_head=4
         if class_fusion == 0:
-            self.add_module("attn",MultiAttention(num_input_features,width*height,func_div(width*height,nums_head,nums_head),nums_head,bn_size,growth_rate,use_att,cat_x))
+            self.add_module("attn",MultiAttention(num_input_features,width*height,func_div(width*height,nums_head,nums_head),nums_head,bn_size,growth_rate,use_att,cat_x,width,height))
             self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate,eps=1e-6)),
             self.add_module('relu2', nn.ReLU(inplace=True)),
             self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
                                                kernel_size=(5, 2), stride=(1, 1), dilation=(1, 2), padding=(2, 1),
                                                bias=False))
         elif class_fusion == 1:
-            self.add_module("attn",MultiAttention(num_input_features,width*height,func_div(width*height,nums_head,nums_head),nums_head,bn_size,growth_rate,use_att,cat_x))
+            self.add_module("attn",MultiAttention(num_input_features,width*height,func_div(width*height,nums_head,nums_head),nums_head,bn_size,growth_rate,use_att,cat_x,width,height))
             self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate,eps=1e-6)),
             self.add_module('relu2', nn.ReLU(inplace=True)),
             self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
                                                kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False))
         else:
-            self.add_module("attn",MultiAttention(num_input_features,width*height,func_div(width*height,nums_head,nums_head),nums_head,bn_size,growth_rate,use_att,cat_x))
+            self.add_module("attn",MultiAttention(num_input_features,width*height,func_div(width*height,nums_head,nums_head),nums_head,bn_size,growth_rate,use_att,cat_x,width,height))
             self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate,eps=1e-6)),
             self.add_module('relu2', nn.ReLU(inplace=True)),
             self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,

@@ -6,7 +6,7 @@ set_seed:
 pytorch_seed:
   2021
 data:
-  cuhk03
+  market1501
 num_classes:
   10
 feature_list:
@@ -92,8 +92,8 @@ scheduler:
     "WarmupMultiStepLR"
   WarmupMultiStepLR:
     steps:
-      - 30
-      - 55
+      - 120
+      - 210
     gamma:
       0.1
     warmup_factor:

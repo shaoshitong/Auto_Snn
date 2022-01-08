@@ -25,13 +25,14 @@ from lib.scheduler import *
 from lib.three_dsnn import *
 from lib.loss_utils import *
 from reid_utils import *
+from utils import *
 from lib.config import *
 from utils.getmemcpu import getMemCpu
 from lib.parameters_check import parametersgradCheck, parametersNameCheck
 
 # torch.autograd.set_detect_anomaly(True)
 parser = argparse.ArgumentParser(description='SNN AUTO MASTER')
-parser.add_argument('--config_file', type=str, default='./config/train_cuhk.yaml',
+parser.add_argument('--config_file', type=str, default='./config/train_market.yaml',
                     help='path to configuration file')
 parser.add_argument('--train', dest='train', default=True, type=bool,
                     help='train model')
@@ -152,9 +153,6 @@ def train(model, optimizer, scheduler, data, yaml, epoch, criterion_loss, mAP, o
                 for param in criterion_loss.center.parameters():
                     param.grad.data *= (1. / yaml["center_loss_weight"])
                 optimizer_center.step()
-            # torch.nn.utils.clip_grad_norm_(model.parameters(),20.)
-            # scaler.step(optimizer)
-            # scaler.update()
         prec1, prec5 = accuracy(score.data, target, topk=(1, 5))
         len += 1
         total_prec1 += prec1.cpu().item()
@@ -205,11 +203,40 @@ if __name__ == "__main__":
         scheduler = get_scheduler(optimizer, yaml)
         mAP = R1_mAP(num_query, max_rank=50, feat_norm=cuhk03_config.test_feat_norm)
     elif yaml['data'] == 'market1501':
-        raise NotImplementedError("Not Import Dataset market1501")
+        model = Backone(set_device(), shape=yaml['shape'], dropout=yaml['parameters']['dropout'])
+        cuhk03_config = Config("./reid_utils/config/market.yaml")
+        train_loader, test_loader, num_query, num_classes = get_dataset_and_dataloader(cuhk03_config)
+        model.initiate_layer_reid(dataoption='market',
+                                  data=torch.randn(yaml['parameters']['batch_size'], 3, 32, 32),
+                                  num_classes=num_classes,
+                                  feature_list=yaml["feature_list"],
+                                  size_list=yaml["size_list"],
+                                  hidden_size_list=yaml["hidden_size_list"],
+                                  path_nums_list=yaml["path_nums_list"],
+                                  nums_layer_list=yaml["nums_layer_list"],
+                                  breadth_threshold=yaml["breadth_threshold"],
+                                  down_rate=yaml["down_rate"],
+                                  mult_k=yaml["mult_k"],
+                                  drop_rate=yaml["drop_rate"],
+                                  neck=cuhk03_config.neck,
+                                  neck_feat=cuhk03_config.neck_feat,
+                                  )
+        criterion_loss = make_loss(yaml, num_classes, model.h)
+        optimizer = get_optimizer([model.parameters()], yaml, model)
+        if yaml["loss_type"] == "triplet_center":
+            optimizer_center = torch.optim.AdamW(criterion_loss.center.parameters(),
+                                                 lr=yaml["optimizer"][yaml["optimizer"]["optimizer_choice"]][
+                                                     "center_lr"])
+        else:
+            optimizer_center = None
+        scheduler = get_scheduler(optimizer, yaml)
+        mAP = R1_mAP(num_query, max_rank=50, feat_norm=cuhk03_config.test_feat_norm)
     else:
         raise KeyError('There is no corresponding dataset')
     model.to(device)
+    load_model("./imagenet 3_4_5_6 best epoch185",model)
     get_params_numeric(model)  # 5.261376
+
     if torch.cuda.is_available():
         criterion_loss = criterion_loss.cuda()
     if args.train == True:

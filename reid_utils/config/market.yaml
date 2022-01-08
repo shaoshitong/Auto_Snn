@@ -73,7 +73,7 @@ settings:
     bias_lr_factor: 2
 
   # scheduler
-  steps: [30, 55]
+  steps: [120,210]
   gamma: 0.1
   warmup_factor: 0.3
   warmup_iters: 500
