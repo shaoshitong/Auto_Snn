@@ -2,7 +2,7 @@ settings:
   #################   DATASET CONFIG   ###################
 
   dataset_names: "market1501" #['market1501', 'cuhk03']
-  root_dir: "/data/market1501" #['market1501','cuhk03_release']
+  root_dir: "../../data/market1501" #['market1501','cuhk03_release']
   sampler: "softmax"
   seed: 2021
 

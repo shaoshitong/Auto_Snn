@@ -16,7 +16,7 @@ import torch.nn.functional as F
 sys.path.append("D:\Product")
 sys.path.append("F:\Snn_Auto")
 sys.path.append("F:\sst")
-sys.path.append("/home/sst/product")
+sys.path.append("/home/qiuziming/product")
 from lib.accuracy import *
 from lib.criterion import *
 from lib.data_loaders import *
@@ -38,7 +38,7 @@ parser.add_argument('--train', dest='train', default=True, type=bool,
                     help='train model')
 parser.add_argument('--test', dest='test', default=True, type=bool,
                     help='test model')
-parser.add_argument('--data_url', dest='data_url', default='/data', type=str,
+parser.add_argument('--data_url', dest='data_url', default='../../data', type=str,
                     help='test model')
 parser.add_argument('--neg_mul', dest='neg_mul', default=0.1, type=float,
                     help='neg_learning')
