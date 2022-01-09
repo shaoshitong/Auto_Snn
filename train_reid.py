@@ -234,7 +234,7 @@ if __name__ == "__main__":
     else:
         raise KeyError('There is no corresponding dataset')
     model.to(device)
-    load_model("./imagenet 3_4_5_6 best epoch185",model)
+    #load_model("./imagenet 3_4_5_6 best epoch185",model)
     get_params_numeric(model)  # 5.261376
 
     if torch.cuda.is_available():
