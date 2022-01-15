@@ -16,7 +16,7 @@ import torch.utils.data
 from lib.dataprocess import CarDateset
 from lib.dataprocess import STLdataprocess
 from torch.utils.data import DataLoader
-from lib.ProgressiveLearning import CIFAR10Dataset,ImageNetDataset,CIFAR100Dataset,RandomErasing
+from lib.ProgressiveLearning import *
 import random
 import openpyxl
 
@@ -121,9 +121,10 @@ def load_data(train_batch_size, test_batch_size, data_url=None ,use_standard=Tru
     if use_standard==False:
         mean,std=get_statistics()
     train_transform = transforms.Compose([
-        transforms.RandomCrop(32, padding=4),
+        transforms.RandomCrop(padding=4,size=32),
         transforms.RandomHorizontalFlip(),
-        transforms.AutoAugment(transforms.AutoAugmentPolicy.CIFAR10),
+        CIFAR10Policy(),
+        Cutout(n_holes=1, length=(8)),
         transforms.Resize(32),
         transforms.ToTensor(),
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)) if use_standard==True else
