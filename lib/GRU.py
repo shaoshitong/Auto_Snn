@@ -30,7 +30,7 @@ class LearnedPositionEmbedding(nn.Embedding):
         input=input+weight
         return input
 class MultiAttention(nn.Module):
-    def __init__(self,n_model,embed_dim,embed_kv,n_head,bn_size , growth_rate,use_att ,num_index,compare_index):
+    def __init__(self,n_model,embed_dim,embed_kv,n_head,bn_size , growth_rate,use_att ,num_index):
         super(MultiAttention, self).__init__()
         self.embed_dim=embed_dim
         self.embed_kv=embed_kv

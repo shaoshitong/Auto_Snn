@@ -133,8 +133,6 @@ def Change_Compose_32(compose:torchvision.transforms.Compose,p,size_rate):
     for i in range(len(compose.transforms)):
         if isinstance(compose.transforms[i], torchvision.transforms.Resize):
             z.transforms.append(torchvision.transforms.Resize(int(32 * size_rate)))
-        elif isinstance(compose.transforms[i],AutoAugment):
-            z.transforms.append(torchvision.transforms.RandomApply([compose.transforms[i]],p))
         elif isinstance(compose.transforms[i],RandomErasing):
             z.transforms.append(torchvision.transforms.RandomApply([compose.transforms[i]],p))
         elif isinstance(compose.transforms[i],ToTensor) or isinstance(compose.transforms[i],Normalize):

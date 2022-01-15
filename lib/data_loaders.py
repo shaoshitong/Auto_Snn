@@ -124,9 +124,9 @@ def load_data(train_batch_size, test_batch_size, data_url=None ,use_standard=Tru
         transforms.RandomCrop(padding=4,size=32),
         transforms.RandomHorizontalFlip(),
         CIFAR10Policy(),
-        Cutout(n_holes=1, length=(8)),
         transforms.Resize(32),
         transforms.ToTensor(),
+        Cutout(n_holes=1, length=(8)),
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)) if use_standard==True else
         transforms.Normalize(mean, std) ,
     ])
