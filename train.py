@@ -37,7 +37,7 @@ parser.add_argument('--train', dest='train', default=True, type=bool,
                     help='train model')
 parser.add_argument('--test', dest='test', default=True, type=bool,
                     help='test model')
-parser.add_argument('--data_url', dest='data_url', default='D:\\Product\\data', type=str,
+parser.add_argument('--data_url', dest='data_url', default='/data/data', type=str,
                     help='test model')
 parser.add_argument('--neg_mul', dest='neg_mul', default=0.1, type=float,
                     help='neg_learning')

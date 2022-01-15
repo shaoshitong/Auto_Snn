@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from collections import OrderedDict
 from einops import rearrange
 import math
+import einops
 import numpy as np
 import os, sys
 from torch.nn.parameter import Parameter
@@ -29,7 +30,7 @@ class LearnedPositionEmbedding(nn.Embedding):
         input=input+weight
         return input
 class MultiAttention(nn.Module):
-    def __init__(self,n_model,embed_dim,embed_kv,n_head,bn_size , growth_rate,use_att ,num_index):
+    def __init__(self,n_model,embed_dim,embed_kv,n_head,bn_size , growth_rate,use_att ,num_index,compare_index):
         super(MultiAttention, self).__init__()
         self.embed_dim=embed_dim
         self.embed_kv=embed_kv
@@ -39,19 +40,36 @@ class MultiAttention(nn.Module):
         self.conv=nn.Conv2d(n_model,bn_size*growth_rate,(1,1),(1,1),(0,0),bias=False)
         self.use_att=use_att
         self.num_index=num_index
+        self.embed_dim=embed_dim
         if use_att:
-            self.qlinear=nn.Linear(embed_dim,embed_dim)
-            self.vlinear=nn.Linear(embed_dim,embed_dim)
-    def forward(self,x):
-        x=self.conv(self.relu(self.norm(x)))
+            if embed_dim==16*16:
+                self.klinear = nn.Linear(embed_dim, embed_dim)
+                self.qlinear = nn.Linear(embed_dim, embed_dim)
+                self.vlinear = nn.Linear(embed_dim, embed_dim)
+            else:
+                self.batchnorm = nn.BatchNorm2d(bn_size*growth_rate)
+                self.conv2 = nn.Conv2d(bn_size*growth_rate, bn_size*growth_rate, (3, 3), (1, 1), (1, 1), bias=False)
+
+    def forward(self, x):
+        x = self.conv(self.relu(self.norm(x)))
         b, c, h, w = x.shape
-        if self.use_att==True:
-            x=x.view(b,c,-1)
-            q,k,v=x.view(b,c,self.n_head,-1).permute(0,2,1,3),self.qlinear(x).view(b,c,self.n_head,-1).permute(0,2,1,3),self.vlinear(x).view(b,c,self.n_head,-1).permute(0,2,1,3)
-            att=F.dropout(torch.softmax(torch.matmul(k,v.permute(0,1,3,2))/math.sqrt(k.shape[-1]),dim=1),training=self.training,p=0.00)
-            x=torch.matmul(att,q).permute(0,2,1,3).contiguous().view(b,c,h,w)
+        if self.use_att == True:
+            y = x
+            if self.embed_dim==16*16:
+                x = x.view(b, c, -1)
+                q, k, v = self.klinear(x).view(b,c,h,w), self.qlinear(x).view(b,c,h,w),self.vlinear(x).view(b,c,h,w)
+                head=int(math.sqrt(self.n_head))
+                k = einops.rearrange(k, 'b c (h p1) (w p2) -> b (p1 p2) (h w) (c)', p1=head, p2=head)
+                q = einops.rearrange(q, 'b c (h p1) (w p2) -> b (p1 p2) (h w) (c)', p1=head, p2=head)
+                v = einops.rearrange(v, 'b c (h p1) (w p2) -> b (p1 p2) (h w) (c)', p1=head, p2=head)
+                att = torch.softmax(torch.matmul(k, v.permute(0, 1, 3, 2)) / math.sqrt(k.shape[-1]), dim=1)
+                x = torch.matmul(att, q).contiguous()
+                x= einops.rearrange(x , 'b (p1 p2) (h w) (c) -> b c (h p1) (w p2)', p1=head,h=int(h/head))+y
+            else:
+                x=self.conv2(self.batchnorm(x))+y
         return x
-Tem=1.04
+
+Tem=1.00
 
 def cat_result_get(tensor_prev, i, j, b, tag, pre_i, pre_j):
     m = []
@@ -119,6 +137,7 @@ def numeric_get(x, y, b):
         tensor_check[0][i] = tensor_check[0][i - 1] + int(not (abs(i - 0) < b))
     for i in range(1, x):
         for j in range(1, y):
+
             tensor_check[i][j] = tensor_check[i][j - 1] + tensor_check[i - 1][j] - tensor_check[i - 1][j - 1] + int(
                 not (abs(i - j) < b))
     return tensor_check
@@ -177,9 +196,6 @@ class DenseLayer(nn.Sequential):
         super(DenseLayer, self).__init__()
         self.nums_input_features = num_input_features
         use_att=(cat_x==cat_y)
-        # if width>=16 or height>=16:
-        #     use_att=False
-        use_att=False
         if width%7==0:
             nums_head=7
         else:
